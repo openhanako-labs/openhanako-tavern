@@ -1,0 +1,53 @@
+{
+  "manifestVersion": 2,
+  "id": "eleckoi-tavern",
+  "name": "ElecKoi Tavern",
+  "version": "0.2.0-m8",
+  "description": "ElecKoi Tavern · Hana v2 App — 角色卡、对话、LLM、变量、设定库、提示词预设、工具、迁移。",
+  "entry": "index.js",
+  "icon": "assets/icon.svg",
+  "minAppVersion": "0.982.0",
+  "capabilities": [
+    "app/tools.expose-to-model",
+    "app/ui.open-external",
+    "app/resources.read",
+    "app/models.infer"
+  ],
+  "network": {
+    "allowedHosts": [],
+    "methods": [],
+    "allowLocalhost": false
+  },
+  "contributes": {
+    "cards": [
+      {
+        "id": "characters",
+        "title": "ElecKoi Tavern",
+        "description": "角色卡管理、对话、LLM 角色扮演",
+        "route": "/characters.html",
+        "cardForm": "flush",
+        "realization": "page",
+        "fpFullPanel": true,
+        "siteNavEntry": true,
+        "functionPanel": {
+          "id": "rail",
+          "label": "角色与对话",
+          "route": "/rail.html"
+        },
+        "closable": false,
+        "face": {
+          "image": "assets/cover.svg"
+        }
+      }
+    ],
+    "ui": {
+      "inputStatus": [
+        {
+          "id": "tavern-status",
+          "title": "Tavern",
+          "icon": "check"
+        }
+      ]
+    }
+  }
+}

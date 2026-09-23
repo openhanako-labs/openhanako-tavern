@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>角色与对话</title>
+<!--
+  functionPanel 页：渲染进 Hana 全局左栏（ComfyUI 的 panel.html、Token 的
+  navigation.html 是同一路子）。
+
+  契约要点（比对两份样板得出）：
+    - 背景透明，宿主给外框与边距，不自带大底色
+    - 字号 11–12px，紧凑
+    - 样式自包含，不依赖 card 那套 characters.css
+-->
+<style>
+:root {
+  --t: #3d3427; --tm: #8a7c63; --ac: #e08a3c;
+  --line: rgba(224,138,60,.22); --card: rgba(224,138,60,.07);
+  --ok: #5a9e6f; --bad: #d9534f;
+}
+body.t-dark {
+  --t: #e8e0d0; --tm: #9c8f78; --ac: #f0a94e;
+  --line: rgba(240,169,78,.24); --card: rgba(240,169,78,.10);
+}
+* { box-sizing: border-box; }
+html, body { width: 100%; min-height: 100%; }
+body {
+  margin: 0; padding: 10px 11px;
+  background: transparent; color: var(--t);
+  font: 11.5px/1.5 system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
+}
+h2 {
+  font-size: 11px; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--tm);
+  margin: 12px 2px 6px; display: flex; align-items: center; gap: 6px;
+}
+h2:first-child { margin-top: 0; }
+h2 .n { font-weight: 400; opacity: .7; font-variant-numeric: tabular-nums; }
+h2 .act { margin-left: auto; cursor: pointer; color: var(--ac); font-size: 12px; padding: 0 3px; }
+h2 .act:hover { opacity: .7; }
+
+#q {
+  width: 100%; padding: 5px 9px; font-size: 11.5px; font-family: inherit;
+  border: .5px solid var(--line); border-radius: 7px;
+  background: var(--card); color: var(--t);
+}
+#q:focus { outline: none; border-color: var(--ac); }
+#q::placeholder { color: var(--tm); }
+
+.item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 6px 7px; border-radius: 7px; cursor: pointer;
+  transition: background .15s;
+}
+.item:hover { background: var(--card); }
+.item.on { background: var(--card); box-shadow: inset 2px 0 0 var(--ac); }
+.item img, .item .ph {
+  width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+  object-fit: cover; background: var(--card);
+}
+.item .bd { flex: 1; min-width: 0; }
+.item .nm {
+  font-size: 12px; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.item.on .nm { color: var(--ac); }
+.item .mt {
+  font-size: 10px; color: var(--tm); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.item .dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  background: var(--ok); box-shadow: 0 0 0 3px rgba(90,158,111,.16);
+}
+
+.foot { display: flex; gap: 5px; margin-top: 10px; }
+.foot button {
+  flex: 1; font-size: 11px; padding: 5px 4px; font-family: inherit;
+  border: .5px solid var(--line); border-radius: 7px;
+  background: var(--card); color: var(--ac); cursor: pointer;
+}
+.foot button:hover { background: var(--ac); color: #fff; border-color: var(--ac); }
+.empty { color: var(--tm); font-size: 11px; padding: 10px 4px; line-height: 1.6; }
+.err { color: var(--bad); font-size: 11px; padding: 8px 4px; word-break: break-all; }
+</style>
+</head>
+<body>
+  <input id="q" type="search" placeholder="搜索角色 / 对话…">
+  <div id="chars"></div>
+  <h2>最近对话 <span class="n" id="conv-n"></span><span class="act" id="conv-refresh" title="刷新">↻</span></h2>
+  <div id="convs"></div>
+  <div class="foot">
+    <button id="new-conv">+ 新对话</button>
+    <button id="new-char">+ 角色</button>
+  </div>
+  <script type="module" src="./assets/rail.js"></script>
+</body>
+</html>

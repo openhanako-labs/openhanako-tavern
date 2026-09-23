@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ElecKoi Tavern</title>
+  <link rel="stylesheet" href="./assets/characters.css">
+</head>
+<body>
+<!--
+  U 批次的布局：一屏聊天 + 可折叠左栏（角色与对话混排）。
+  次要功能（设定库/变量/工具/迁移）从右侧抽屉出，不再占 Tab。
+  所有 DOM id 保持原样——改的是容器层级，不是模块挂点。
+-->
+<div class="shell">
+
+  <!-- ── 左栏 ─────────────────────────────────────── -->
+  <!--
+    品牌与 ⋯ 收在左栏顶部，不再单独占一行。
+    这样左栏从面板顶部贴边开始，中间聊天区拿到完整宽度与高度。
+  -->
+  <aside id="sidebar" class="sidebar">
+    <div class="sb-brand">
+      <h1 class="brand">ElecKoi Tavern<span class="tag">M5</span></h1>
+      <div class="sb-brand-actions">
+        <button id="sidebar-collapse" class="btn btn-ghost btn-sm" title="收起侧栏 (Ctrl+B)">‹</button>
+        <div class="more-wrap">
+          <button id="app-more-btn" class="btn btn-ghost btn-sm more-btn" title="更多">⋯</button>
+          <div id="app-more-menu" class="more-menu" hidden>
+            <button data-drawer="settings"><span class="mi">✳</span>设定库</button>
+            <button data-drawer="variables"><span class="mi">◫</span>变量</button>
+            <button data-drawer="presets"><span class="mi">⌗</span>提示词预设</button>
+            <div class="sep"></div>
+            <button data-drawer="tools"><span class="mi">⚙</span>工具</button>
+            <button data-drawer="migration"><span class="mi">⇅</span>迁移</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sb-search">
+      <input id="char-search" class="input" type="search" placeholder="搜索角色 / 描述 / 标签…">
+    </div>
+
+    <div class="sb-tags" id="char-tags"></div>
+
+    <div class="sb-scroll">
+      <div class="sb-section">
+        <div class="sb-head">
+          <span class="sb-title">角色</span>
+          <span id="count" class="count"></span>
+          <button id="refresh-btn" class="btn btn-ghost btn-sm" title="刷新角色卡">↻</button>
+        </div>
+        <div <div class="sb-tags" id="tag-cloud"></div>
+        id="characters-list" class="char-list">
+          <div class="empty">加载中…</div>
+        </div>
+      </div>
+
+      <div class="sb-section">
+        <div class="sb-head">
+          <span class="sb-title">最近对话</span>
+          <button id="refresh-conv-btn" class="btn btn-ghost btn-sm" title="刷新">↻</button>
+        </div>
+        <div id="conversations-list" class="conv-list"></div>
+      </div>
+    </div>
+
+    <div class="sb-foot">
+      <button id="new-conv-btn" class="btn btn-primary btn-sm">+ 新对话</button>
+      <button id="create-btn" class="btn btn-sm" title="新建角色卡">+ 角色</button>
+      <button id="import-btn" class="btn btn-sm" title="导入角色卡">导入</button>
+    </div>
+  </aside>
+
+  <!-- ── 主区 ─────────────────────────────────────── -->
+  <main class="main">
+    <!-- 侧栏收起后，展开钮浮在主区左上角 -->
+    <button id="sidebar-expand" class="btn btn-ghost btn-sm sb-expand" title="展开侧栏 (Ctrl+B)">›</button>
+
+    <!-- 聊天 -->
+    <section id="view-chat" class="chat-view">
+      <div id="chat-header" class="chat-header">
+        <h3 id="chat-title">选择对话开始</h3>
+        <div id="chat-actions" class="chat-actions">
+          <div class="more-wrap">
+            <button id="chat-more-btn" class="btn btn-ghost btn-sm more-btn hidden" title="更多">⋯</button>
+            <div id="more-menu" class="more-menu" hidden>
+              <button data-act="persona"><span class="mi">◍</span>用户人设</button>
+              <button data-act="activation"><span class="mi">✳</span>激活预览</button>
+              <button data-act="prompt"><span class="mi">⌸</span>组装预览</button>
+              <div class="sep"></div>
+              <button data-act="export"><span class="mi">↓</span>导出</button>
+              <button data-act="delete" class="danger"><span class="mi">✕</span>删除</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="messages-container" class="messages">
+        <div class="empty">
+          <div class="empty-title">从左边挑一个角色开始</div>
+          <div class="hint">点头像直接开聊；[编辑] 改设定</div>
+        </div>
+      </div>
+
+      <div id="chat-input-area" class="chat-input-area hidden">
+        <textarea id="chat-input" placeholder="输入消息…" rows="2"></textarea>
+        <div class="input-actions">
+          <button id="send-btn" class="btn btn-primary">发送</button>
+          <button id="stop-btn" class="btn hidden">停止</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 抽屉：设定库 ─────────────────────────────── -->
+    <div id="drawer-settings" class="drawer hidden">
+      <div class="drawer-head">
+        <h2>设定库</h2>
+        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <div class="drawer-toolbar">
+        <button id="create-setting-btn" class="btn btn-primary btn-sm">+ 新建</button>
+        <button id="import-st-btn" class="btn btn-sm">导入 ST</button>
+        <button id="refresh-settings-btn" class="btn btn-ghost btn-sm">刷新</button>
+        <span id="settings-count" class="count"></span>
+      </div>
+      <div id="settings-list" class="list drawer-body">
+        <div class="empty">加载中…</div>
+      </div>
+    </div>
+
+    <!-- ── 抽屉：变量 ───────────────────────────────── -->
+    <div id="drawer-variables" class="drawer hidden">
+      <div class="drawer-head">
+        <h2>变量</h2>
+        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <div class="drawer-toolbar">
+        <button id="create-variable-btn" class="btn btn-primary btn-sm">+ 新建</button>
+        <button id="refresh-variables-btn" class="btn btn-ghost btn-sm">刷新</button>
+        <span id="variables-count" class="count"></span>
+      </div>
+      <div id="variables-list" class="list drawer-body">
+        <div class="empty">加载中…</div>
+      </div>
+      <textarea id="vf-test-input" rows="2" placeholder="输入含 {{宏}} 的文本"></textarea>
+        <pre id="vf-test-output" class="test-out"></pre>
+        <div class="panel">
+        <h3>测试替换</h3>
+        <div class="field">
+          <label>输入文本（支持 {{variable}}）</label>
+          <textarea id="replace-test-input" rows="3" placeholder="你好 {{name}}，今天是 {{date}}"></textarea>
+        </div>
+        <div class="field">
+          <label>变量值（JSON）</label>
+          <textarea id="replace-test-vars" rows="3" placeholder='{"name": "月曦夜", "date": "2026-09-15"}'></textarea>
+        </div>
+        <button id="test-replace-btn" class="btn btn-primary">测试</button>
+        <div id="replace-test-result" class="result hidden"></div>
+      </div>
+    </div>
+
+    <!-- ── 抽屉：提示词预设 ─────────────────────────── -->
+    <div id="drawer-presets" class="drawer hidden">
+      <div class="drawer-head">
+        <h2>提示词预设</h2>
+        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <div class="drawer-toolbar">
+        <button id="preset-new-btn" class="btn btn-primary btn-sm">+ 新建</button>
+        <button id="preset-duplicate-btn" class="btn btn-sm">复制当前</button>
+        <button id="preset-refresh-btn" class="btn btn-ghost btn-sm">刷新</button>
+        <span id="preset-count" class="count"></span>
+      </div>
+      <div id="preset-list" class="list drawer-body">
+        <div class="empty">加载中…</div>
+      </div>
+    </div>
+
+    <!-- ── 抽屉：工具 ───────────────────────────────── -->
+    <div id="drawer-tools" class="drawer hidden">
+      <div class="drawer-head">
+        <h2>工具</h2>
+        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <div class="drawer-toolbar">
+        <button id="refresh-tools-btn" class="btn btn-ghost btn-sm">刷新</button>
+        <span id="tools-count" class="count"></span>
+      </div>
+      <div id="tools-list" class="list drawer-body">
+        <div class="empty">加载中…</div>
+      </div>
+      <div class="panel">
+        <h3>工具组</h3>
+        <div id="tool-groups-list" class="tool-groups"></div>
+      </div>
+    </div>
+
+    <!-- ── 抽屉：迁移 ───────────────────────────────── -->
+    <div id="drawer-migration" class="drawer hidden">
+      <div class="drawer-head">
+        <h2>迁移</h2>
+        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <div class="drawer-toolbar">
+        <button id="export-all-btn" class="btn btn-primary btn-sm">导出全部</button>
+        <button id="import-file-btn" class="btn btn-sm">导入文件</button>
+        <button id="refresh-exports-btn" class="btn btn-ghost btn-sm">刷新导出</button>
+      </div>
+      <div class="drawer-body">
+        <div class="panel">
+          <h3>导出记录</h3>
+          <div id="exports-list" class="exports-list">
+            <div class="empty">暂无导出记录</div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>导出信息</h3>
+          <div id="export-info" class="export-info hidden">
+            <div class="info-grid">
+              <div class="info-item"><span class="label">角色卡</span><span class="value" id="export-char-count">-</span></div>
+              <div class="info-item"><span class="label">对话</span><span class="value" id="export-conv-count">-</span></div>
+              <div class="info-item"><span class="label">变量</span><span class="value" id="export-var-count">-</span></div>
+              <div class="info-item"><span class="label">设定</span><span class="value" id="export-set-count">-</span></div>
+            </div>
+            <div class="info-actions">
+              <button id="download-export-btn" class="btn btn-primary">下载</button>
+              <button id="copy-export-btn" class="btn">复制 JSON</button>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>导入选项</h3>
+          <div class="field">
+            <label class="checkbox-label">
+              <input type="checkbox" id="skip-existing-check" checked>
+              跳过已存在的数据
+            </label>
+          </div>
+          <div id="import-result" class="result hidden"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<footer class="app-foot">
+  <a id="reload-link" href="#">刷新界面</a>
+</footer>
+
+<!-- ── 编辑弹窗（角色 / 设定 / 变量共用） ───────────── -->
+<div id="modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="modal-title">编辑</h2>
+      <button id="modal-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="character-form" class="form hidden">
+        <input type="hidden" id="f-id">
+        <div class="field"><label>名称 *</label><input type="text" id="f-name" required></div>
+        <div class="field"><label>描述 *</label><textarea id="f-description" rows="3" required></textarea></div>
+        <div class="field"><label>开场白 *</label><textarea id="f-first-mes" rows="3" required></textarea></div>
+        <div class="field"><label>性格</label><textarea id="f-personality" rows="2"></textarea></div>
+        <div class="field"><label>场景</label><textarea id="f-scenario" rows="2"></textarea></div>
+        <div class="field"><label>对话示例</label><textarea id="f-mes-example" rows="3"></textarea></div>
+        <div class="field"><label>系统提示</label><textarea id="f-system-prompt" rows="3"></textarea></div>
+        <div class="field"><label>后处理指令</label><textarea id="f-post-history" rows="2"></textarea></div>
+        <div class="field-row">
+          <div class="field"><label>作者</label><input type="text" id="f-creator"></div>
+          <div class="field"><label>版本</label><input type="text" id="f-version" value="1.0"></div>
+        </div>
+        <div class="field"><label>标签（逗号分隔）</label><input type="text" id="f-tags"></div>
+        <div class="field"><label>备注</label><textarea id="f-notes" rows="2"></textarea></div>
+      </form>
+
+      <form id="setting-form" class="form hidden">
+        <input type="hidden" id="sf-id">
+        <div class="field"><label>名称 *</label><input type="text" id="sf-name" required></div>
+        <div class="field-row">
+          <div class="field">
+            <label>类型</label>
+            <select id="sf-type">
+              <option value="character">角色</option>
+              <option value="location">场景</option>
+              <option value="object">物品</option>
+              <option value="event">事件</option>
+              <option value="custom">自定义</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>优先级</label>
+            <input type="number" id="sf-priority" value="100" min="0" max="1000">
+          </div>
+        </div>
+        <div class="field"><label>描述</label><textarea id="sf-description" rows="2"></textarea></div>
+        <div class="field"><label>内容 *</label><textarea id="sf-content" rows="5" required></textarea></div>
+        <div class="field">
+          <label>触发类型</label>
+          <select id="sf-trigger-type">
+            <option value="keyword">关键词</option>
+            <option value="regex">正则</option>
+            <option value="always">始终</option>
+            <option value="never">从不</option>
+          </select>
+        </div>
+        <div class="field" id="sf-keywords-field">
+          <label>关键词（逗号分隔）</label>
+          <input type="text" <div class="field">
+            <label>副键逻辑</label>
+            <select id="sf-logic">
+              <option value="and_any">AND · 任一命中</option>
+              <option value="and_all">AND · 全部命中</option>
+              <option value="not_any">NOT ANY · 任一不中</option>
+              <option value="not_all">NOT ALL · 不全中</option>
+            </select>
+          </div>
+          id="sf-keywords">
+        </div>
+        <div class="field hidden" id="sf-regex-field">
+          <label>正则表达式</label>
+          <input type="text" id="sf-regex">
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="sf-enabled" checked>
+            启用
+          </label>
+        </div>
+      </form>
+
+      <form id="variable-form" class="form hidden">
+        <input type="hidden" id="vf-id">
+        <div class="field"><label>名称 *</label><input type="text" id="vf-name" required></div>
+        <div class="field-row">
+          <div class="field">
+            <label>标签</label>
+            <input type="text" id="vf-label">
+          </div>
+          <div class="field">
+            <label>类型</label>
+            <select id="vf-type">
+              <option value="text">文本</option>
+              <option value="number">数字</option>
+              <option value="boolean">布尔</option>
+              <option value="object">对象</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><label>默认值</label><input type="text" id="vf-default"></div>
+        <div class="field"><label>描述</label><textarea id="vf-description" rows="2"></textarea></div>
+        <div class="field-row">
+          <div class="field">
+            <label class="checkbox-label">
+              <input type="checkbox" id="vf-visible" checked>
+              显示
+            </label>
+          </div>
+          <div class="field">
+            <label class="checkbox-label">
+              <input type="checkbox" id="vf-editable" checked>
+              可编辑
+            </label>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button id="modal-save" class="btn btn-primary">保存</button>
+      <button id="modal-export-json" class="btn">导出</button>
+      <button id="modal-export-st" class="btn hidden">ST</button>
+      <button id="modal-delete" class="btn btn-sm danger hidden">删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 导入预览 ───────────────────────────────────── -->
+<div id="import-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>导入预览</h2>
+      <button id="import-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="import-preview" class="import-preview"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="import-confirm" class="btn btn-primary">导入</button>
+      <button id="import-cancel" class="btn">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 新对话 ─────────────────────────────────────── -->
+<div id="new-conv-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>新对话</h2>
+      <button id="new-conv-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>选择角色</label>
+        <select id="conv-character-select">
+          <option value="">加载中…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>我的称呼</label>
+        <input type="text" id="conv-user-name" placeholder="User">
+      </div>
+      <div class="field">
+        <label>我的人设 <span class="hint">可选</span></label>
+        <textarea id="conv-persona" rows="2" placeholder="你是谁、在故事里是什么身份"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="new-conv-confirm" class="btn btn-primary">创建</button>
+      <button id="new-conv-cancel" class="btn">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 角色卡：选择要开哪个对话（一角色多存档） ────── -->
+<div id="conv-picker-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="conv-picker-title">选择对话</h2>
+      <button id="conv-picker-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="conv-picker-list" class="picker-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="conv-picker-new" class="btn btn-primary">开新对话</button>
+      <button id="conv-picker-cancel" class="btn">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 用户人设 ───────────────────────────────────── -->
+<div id="persona-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>用户人设</h2>
+      <button id="persona-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="persona-form" class="form">
+        <div class="field">
+          <label>我的称呼</label>
+          <input type="text" id="pf-user-name" placeholder="User">
+          <p class="hint">角色卡里写 {{user}} 的地方会替换成它。空着则用 User。</p>
+        </div>
+        <div class="field">
+          <label>我的人设</label>
+          <textarea id="pf-persona" rows="4" placeholder="你是谁、在故事里是什么身份、说话什么风格"></textarea>
+          <p class="hint">会作为独立的 prompt 块发给模型，位置由当前预设的 persona 块决定。</p>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button id="persona-save" class="btn btn-primary">保存</button>
+      <button id="persona-cancel" class="btn">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 预览（激活 / 组装） ────────────────────────── -->
+<div id="preview-modal" class="modal hidden">
+  <div class="modal-content modal-wide">
+    <div class="modal-header">
+      <h2 id="preview-title">预览</h2>
+      <button id="preview-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="preview-body" class="preview-body"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="preview-refresh" class="btn">刷新</button>
+      <button id="preview-ok" class="btn btn-primary">知道了</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 预设编辑器 ──────────────────────────────── -->
+<div id="preset-editor-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="preset-editor-title">编辑预设</h2>
+      <button id="preset-editor-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="preset-form" class="form">
+        <input type="hidden" id="pe-id">
+        <div class="field"><label>名称 *</label><input type="text" id="pe-name"></div>
+        <div class="field"><label>说明</label><input type="text" id="pe-description" placeholder="这套预设做什么用"></div>
+        <div class="field-row">
+          <div class="field"><label>温度</label><input type="number" id="pe-temperature" min="0" max="2" step="0.1" value="0.8"></div>
+          <div class="field"><label>最大 tokens</label><input type="number" id="pe-max-tokens" min="1" step="100" value="1000"></div>
+        </div>
+        <div class="field">
+          <label>块（从上到下即进 prompt 的顺序）</label>
+          <div id="pe-blocks" class="pe-blocks"></div>
+          <p class="hint">顺序即拼接顺序。世界书若配了锚点（at_depth 等），位置由锚点决定，不在这里。</p>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button id="pe-save" class="btn btn-primary">保存</button>
+      <button id="pe-cancel" class="btn">取消</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-input" multiple accept=".json,.png" style="display:none">
+<input type="file" id="st-import-input" accept=".json" style="display:none">
+
+<script type="module" src="./assets/modules/main.js"></script>
+</body>
+</html>

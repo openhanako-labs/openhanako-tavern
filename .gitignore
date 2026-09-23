@@ -1,0 +1,6 @@
+# App 数据由 app-data 目录持有，不进仓库
+app-data/
+_recovery/
+node_modules/
+*.log
+
