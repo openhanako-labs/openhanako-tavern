@@ -1,0 +1,18 @@
+fix(ui): 修三处被我插劈的 HTML 标签，角色列表把源码当文本显示的根因
+
+症状：侧栏出现 id="characters-list" class="char-list"> 这段可见文本。
+
+根因：我用 indexOf 定位往 HTML 插字段时，插到了属性中间而不是开标签之前，
+原标签被劈成两半：
+  <div <div class="sb-tags" ...></div>
+  id="characters-list" class="char-list">
+浏览器把前者当一个 div，后半截就成了文本节点。
+
+三处：tag-cloud、sf-logic、sf-keywords。
+
+判据（tmp-html-check.mjs 跑出来，已转为常驻检查）：
+  1. 开标签 <div 后紧跟 <
+  2. 以 id= / class= 开头的行
+
+教训与纪律库同源：用 indexOf 往标记语言里插内容，
+必须定位到标签边界，不能定位到属性值。

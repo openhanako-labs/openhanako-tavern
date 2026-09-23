@@ -51,8 +51,8 @@
           <span id="count" class="count"></span>
           <button id="refresh-btn" class="btn btn-ghost btn-sm" title="刷新角色卡">↻</button>
         </div>
-        <div <div class="sb-tags" id="tag-cloud"></div>
-        id="characters-list" class="char-list">
+        <div class="sb-tags" id="tag-cloud"></div>
+        <div id="characters-list" class="char-list">
           <div class="empty">加载中…</div>
         </div>
       </div>
@@ -307,16 +307,16 @@
         </div>
         <div class="field" id="sf-keywords-field">
           <label>关键词（逗号分隔）</label>
-          <input type="text" <div class="field">
-            <label>副键逻辑</label>
-            <select id="sf-logic">
-              <option value="and_any">AND · 任一命中</option>
-              <option value="and_all">AND · 全部命中</option>
-              <option value="not_any">NOT ANY · 任一不中</option>
-              <option value="not_all">NOT ALL · 不全中</option>
-            </select>
-          </div>
-          id="sf-keywords">
+          <input type="text" id="sf-keywords">
+        </div>
+        <div class="field">
+          <label>副键逻辑</label>
+          <select id="sf-logic">
+            <option value="and_any">AND · 任一命中</option>
+            <option value="and_all">AND · 全部命中</option>
+            <option value="not_any">NOT ANY · 任一不中</option>
+            <option value="not_all">NOT ALL · 不全中</option>
+          </select>
         </div>
         <div class="field hidden" id="sf-regex-field">
           <label>正则表达式</label>
