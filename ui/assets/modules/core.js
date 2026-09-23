@@ -44,6 +44,20 @@ export function confirmDialog(message) {
   });
 }
 
+/**
+ * 拿一个 App 内路由的完整 URL（带 appSurfaceSession）。
+ *
+ * 流式请求必须走这个：它要裸 fetch 一个 URL，而 session 在 URL 上，
+ * hana.api.fetch 那套封装帮不上。SDK 的 api.url() 负责拼。
+ */
+export function apiUrl(path) {
+  const fn = hana?.api?.url;
+  if (typeof fn !== "function") {
+    throw new Error("宿主未提供 hana.api.url：这个页面可能不在 App surface 里运行");
+  }
+  return fn(String(path ?? "").replace(/^\/+/, ""));
+}
+
 /** 单次请求的超时。App 内请求都是本地回环，10 秒足够；卡住不放比失败更糟。 */
 const FETCH_TIMEOUT_MS = 10_000;
 

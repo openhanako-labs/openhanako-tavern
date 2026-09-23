@@ -1,7 +1,11 @@
 // chat.js — 由 characters.js 按功能拆分（B5）
 
-import { apiFetch, confirmDialog, escapeHtml, extractArray, formatTime, friendlyError, toast } from "./core.js";
+import { hana } from "../sdk.js";
+import { apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatTime, friendlyError, toast } from "./core.js";
 import { renderMarkdown } from "./markdown.js";
+// 宏引擎复用 lib/ 下那一份：它是纯 JS，两端共用一处实现。
+// 从 ui/assets/modules/ 到 app 根要上三级。
+import { createMacroProcessor, contextFromCharacter } from "../../../lib/macros/index.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
 
@@ -11,10 +15,19 @@ export function renderMessages() {
     dom.messagesContainer.innerHTML = '<div class="empty">暂无消息</div>';
     return;
   }
+
+  // 消息文本先过宏，再进渲染。不跑的后果是 {{char}} 原样出现在气泡里——
+  // 玩家看到的是模板而不是角色在说话。
+  const macro = state.macro || null;
+  const expand = (text) => {
+    const raw = String(text ?? "");
+    return macro ? macro.process(raw) : raw;
+  };
+
   dom.messagesContainer.innerHTML = state.currentConv.messages.map(m => {
     const body = m.role === "assistant"
-      ? renderMarkdown(String(m.content || ""))
-      : escapeHtml(String(m.content || ""));
+      ? renderMarkdown(expand(m.content))
+      : escapeHtml(expand(m.content));
     const acts = `<div class="msg-acts">
         <button class="mini" data-act="copy" data-id="${m.id}" title="复制">复制</button>
         <button class="mini" data-act="edit" data-id="${m.id}">编辑</button>
@@ -102,7 +115,11 @@ export async function sendMessage() {
 
 export async function sendMessageStream(content) {
   // 使用原生 fetch 实现流式接收
-  const url = `${hana?.api?.baseUrl || '/api/apps/eleckoi-tavern/routes'}/conversations/${state.currentConv.id}/messages/stream`;
+  // URL 由 hana.api.url() 拼：它带上 appSurfaceSession，
+  // 而裸 fetch 到 /api/apps/... 拿不到 session，会被宿主当未授权。
+  // 早期这里写的是 hana?.api?.baseUrl || 硬编码路径，既没 import hana
+  // （ReferenceError），baseUrl 在 SDK 里也不存在。
+  const url = hana.api.url(`conversations/${state.currentConv.id}/messages/stream`);
   
   try {
     const response = await fetch(url, {
@@ -423,6 +440,15 @@ export async function openConversation(id) {
   try {
     const res = await apiFetch(`conversations/${encodeURIComponent(id)}`);
     state.currentConv = res.data || res;
+
+    // 建宏上下文。消息渲染与发送都要用它，缺了它 {{char}} 会原样出现在气泡里。
+    // 变量从对话记录取——那是唯一真源。
+    const char = await apiFetch(`characters/${encodeURIComponent(state.currentConv.characterId)}`)
+      .then(r => r.data || r)
+      .catch(() => null);
+    state.currentCharacter = char;
+    state.macro = buildMacroContext(char, state.currentConv);
+
     renderConversations();
     renderMessages();
     if (dom.chatTitle) dom.chatTitle.textContent = state.currentConv.title || "（无标题）";
@@ -434,4 +460,20 @@ export async function openConversation(id) {
     console.error("[Conversations] open failed:", e);
     toast("打开对话失败: " + friendlyError(e), "error");
   }
+}
+
+/**
+ * 建宏处理器与上下文。
+ *
+ * 复用同一个处理器实例（无状态，可复用），上下文随角色/对话重建。
+ */
+function buildMacroContext(character, conv) {
+  const mp = createMacroProcessor();
+  const ctx = contextFromCharacter(character || {}, {
+    userName: conv?.userName || "User",
+    persona: conv?.persona || "",
+    variables: conv?.variables && typeof conv.variables === "object" ? conv.variables : {},
+    globalVariables: {}
+  });
+  return { mp, ctx, process: (t) => mp.process(t, ctx) };
 }
