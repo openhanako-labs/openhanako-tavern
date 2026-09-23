@@ -25,8 +25,16 @@ const $ = (id) => document.getElementById(id);
 
 async function apiJson(p, init) {
   const r = await API(p, init);
-  if (typeof r?.json === "function") return r.json();
-  return r;
+  const data = (typeof r?.json === "function") ? await r.json() : r;
+  // 后端 route() 统一把响应包成 {ok, data}；本文件旧版裸判 Array.isArray，
+  // 结果请求明明成功、永远走不进数组分支，空态就是这么演了三帧。
+  // 主区 core.js 的 extractArray 处理同一件事——两边各写一份的教训：
+  // 同一个响应格式，解析假设必须同一个。
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.results)) return data.results;
+  return data;
 }
 
 /** 主题跟随宿主。 */

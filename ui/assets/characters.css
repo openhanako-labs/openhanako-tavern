@@ -651,9 +651,15 @@ h1 {
  */
 .message.user {
   align-self: flex-end;
-  background: var(--surface-1, rgba(255, 255, 255, 0.04));
+  /*
+   * 不用宿主的 --surface-1：它名字叫 surface 听着该是中性面，
+   * 在 warm-paper 主题里却是饱和橙——撞名撞出一根橙柱，
+   * 写死的白 fallback 在变量存在时根本不生效。
+   * 拿不准语义的宿主变量不碰：固定中性值，两主题下都是柔和浮层。
+   */
+  background: rgba(122, 122, 132, 0.10);
   color: var(--fg);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(122, 122, 132, 0.22);
   border-bottom-right-radius: 5px;
   animation: slide-out var(--t-slow) var(--ease) backwards;
 }
