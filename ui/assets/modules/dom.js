@@ -50,3 +50,17 @@ export const DRAWERS = {
   tools: document.getElementById("drawer-tools"),
   migration: document.getElementById("drawer-migration"),
 };
+
+/* ── 外壳与浮层 ─────────────────────────────────────
+ * 这三个是 read 分页恢复时尾部丢掉的一批引用。dom.js 少一项，
+ * shell.js 里对应的功能就是死的——而 optional chaining 让它
+ * 连报错都没有（dom.x?.addEventListener 静默跳过）。
+ * 这类「静默失效」比抛错难查十倍。
+ */
+
+dom.shellEl = document.querySelector(".shell");
+dom.sidebarCollapseBtn = document.getElementById("sidebar-collapse");
+dom.sidebarExpandBtn = document.getElementById("sidebar-expand");
+dom.convPickerEl = document.getElementById("conv-picker-modal");
+dom.convPickerListEl = document.getElementById("conv-picker-list");
+dom.convPickerTitleEl = document.getElementById("conv-picker-title");

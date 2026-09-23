@@ -464,20 +464,50 @@ h1 {
 
 /* ── 空状态 ───────────────────────────────────────── */
 
+/*
+ * 空态占位。提示不是内容——再淡一档，且不加 <br> 硬撑高度，
+ * 让它读起来像一句说明而不是一段正文。
+ */
 .empty {
   grid-column: 1 / -1;
   text-align: center;
-  padding: 72px 20px;
+  padding: 56px 20px;
   color: var(--fg-muted);
-  font-size: 13.5px;
+  font-size: 13px;
+  opacity: .62;
 }
 
 .empty .hint {
   display: block;
   margin-top: 6px;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--fg-muted);
-  opacity: .7;
+  opacity: .8;
+}
+
+/* 卡片描述空缺位：同样降噪，不跟真实描述抢注意力 */
+.card-desc.is-empty {
+  opacity: .5;
+  font-style: italic;
+}
+
+/* 卡片脚：建于何时 + id 尾号。同名卡靠它区分。 */
+.card-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  opacity: .72;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .02em;
+  opacity: .8;
 }
 
 /* ── 对话布局 ─────────────────────────────────────── */
@@ -613,12 +643,18 @@ h1 {
 
 .message .content { white-space: pre-wrap; word-break: break-word; }
 
+/*
+ * 气泡的视觉重量：主体是角色，用户是次要的。
+ * 早期把用户消息做成渐变强调色 + 投影，结果整屏最亮的是玩家自己
+ * 打的那几个字，角色的回复反而退成灰底——主次倒了。
+ * 现在反过来：assistant 带极淡的主题色染边与左侧色条，user 用素底。
+ */
 .message.user {
   align-self: flex-end;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  color: #fff;
+  background: var(--surface-1, rgba(255, 255, 255, 0.04));
+  color: var(--fg);
+  border: 1px solid var(--border);
   border-bottom-right-radius: 5px;
-  box-shadow: 0 4px 12px var(--accent-glow);
   animation: slide-out var(--t-slow) var(--ease) backwards;
 }
 
@@ -627,6 +663,8 @@ h1 {
   background: var(--surface-2);
   color: var(--fg);
   border: 1px solid var(--border);
+  /* 左侧色条：不用整块染色，也能一眼看出「这是角色在说」 */
+  border-left: 2px solid var(--accent);
   border-bottom-left-radius: 5px;
   box-shadow: var(--sh-1);
   animation: slide-in var(--t-slow) var(--ease) backwards;
@@ -649,7 +687,8 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
-.message.user .time { color: rgba(255, 255, 255, .75); }
+/* user 气泡改成素底后，这两条白字会看不见 —— 跟随全局 muted。 */
+.message.user .time { color: var(--fg-muted); }
 
 /* ── 用量徽标 ─────────────────────────────────────── */
 
@@ -662,7 +701,7 @@ h1 {
   opacity: .85;
 }
 
-.message.user .usage-badge { color: rgba(255, 255, 255, .75); }
+.message.user .usage-badge { color: var(--fg-muted); }
 
 /* ── 消息级操作（悬停显现） ───────────────────────── */
 
@@ -1326,6 +1365,41 @@ footer a:hover { color: var(--accent); }
 }
 
 /* 侧栏底部状态条 */
+.sb-foot-marker { display: none; }
+
+/* 侧栏收起/展开：原来是裸的 ‹ ›，挂在标题旁像没画完。
+   给一个方形键面，收起态换箭头方向， hover 有反馈。 */
+.sb-expand,
+#sidebar-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  border-radius: 7px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--dim, rgba(255, 255, 255, 0.55));
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.sb-expand:hover,
+#sidebar-collapse:hover {
+  border-color: var(--accent, #7dd3fc);
+  color: var(--fg, #e8edf5);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* 收起时那个 › 浮在侧栏原位，不占布局 */
+.sb-expand {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 5;
+  background: var(--panel, rgba(255, 255, 255, 0.03));
+}
 .sb-foot {
   display: flex;
   align-items: center;

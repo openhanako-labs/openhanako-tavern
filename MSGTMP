@@ -1,0 +1,29 @@
+fix(ui): dom.js 补回被截断的四个引用 + 视觉主次对调
+
+一、功能性：四个 dom.* 引用在 shell.js 里被用，dom.js 里一个都没有
+
+shell.js 引用 dom.shellEl / sidebarCollapseBtn / sidebarExpandBtn /
+convPickerEl，dom.js 全无定义。而调用方写的是 dom.x?.addEventListener，
+optional chaining 让整条绑定静默跳过——于是侧栏收起、Ctrl+B、
+对话选择器全是死的，控制台一片干净。
+
+这类静默失效比抛错难查十倍。已按 HTML 的真实 id 补齐
+（并多带三个 picker 子元素引用）。
+
+新增 test/check-dom-refs.mjs（常驻）：扫所有模块引用的 dom.*
+是否都定义。第一版跑出 36 个引用全部对得上，这条现在有护栏了。
+
+二、视觉：气泡主次对调
+
+原设计把用户消息做成渐变强调色 + 投影，整屏最亮的是玩家自己
+打的那几个字，角色的回复退成灰底——主次倒了。
+现在反过来：assistant 带左侧色条与极淡主题染边，user 用素底。
+
+三、视觉：列表信息密度
+
+- 描述为空时退到开场白，不再一排「（无描述）」
+- 卡片脚加「建于 XXXX + id 尾号」，同名卡终于能区分
+- 空态与描述空缺位降到 opacity .5~.62，提示不再冒充内容
+- 侧栏收起按钮从裸的 ‹ 改成带键面的方形按钮
+
+结果：32/32 测试全过，check-u1-wiring 仍通过。

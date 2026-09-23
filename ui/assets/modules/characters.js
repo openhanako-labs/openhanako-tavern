@@ -8,24 +8,38 @@ import { state } from "./state.js";
 export function renderCharacters(characters) {
   dom.countEl.textContent = characters.length > 0 ? `${characters.length} 个` : "";
   if (characters.length === 0) {
-    dom.listEl.innerHTML = '<div class="empty">暂无角色卡<br><span class="hint">点击"+ 新建"开始</span></div>';
+    dom.listEl.innerHTML = '<div class="empty">暂无角色卡<span class="hint">点右上角「+ 新建」开始</span></div>';
     return;
   }
-  dom.listEl.innerHTML = characters.map(c => `
+  dom.listEl.innerHTML = characters.map(c => {
+    // 描述为空时退到开场白：列表是用来扫的，一排「（无描述）」等于没有信息。
+    const desc = String(c.description || "").trim();
+    const fallback = String(c.first_mes || "").trim();
+    const shown = desc || fallback;
+    const descHtml = shown
+      ? `<div class="card-desc">${escapeHtml(shown.slice(0, 120))}</div>`
+      : `<div class="card-desc is-empty">还没有描述</div>`;
+    // 同名卡靠创建时间与 id 尾号区分，否则列表里几行一模一样
+    const stamp = c.created_at ? formatDate(c.created_at) : "";
+    return `
     <div class="card" data-id="${c.id}">
       <div class="card-header">
-        <h3>${escapeHtml(c.name || "（无名称）")}</h3>
-        <span class="card-date">${formatDate(c.updated_at)}</span>
+        <h3>${escapeHtml(c.name || "（未命名）")}</h3>
+        <span class="card-date">${formatDate(c.updated_at || c.created_at)}</span>
       </div>
-      <div class="card-desc">${escapeHtml(c.description || "（无描述）")}</div>
+      ${descHtml}
       ${c.tags && c.tags.length > 0 ? `<div class="card-tags">${c.tags.slice(0, 3).map(t => `<span>${escapeHtml(t)}</span>`).join("")}</div>` : ""}
+      <div class="card-foot">
+        <span class="card-since">建于 ${stamp}</span>
+        <span class="card-id">…${escapeHtml(String(c.id || "").slice(-4))}</span>
+      </div>
       <div class="card-actions">
         <button class="btn-sm" data-action="edit">编辑</button>
         <button class="btn-sm" data-action="export">导出</button>
         <button class="btn-sm danger" data-action="delete">删除</button>
       </div>
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
   dom.listEl.querySelectorAll(".card").forEach(card => {
     card.addEventListener("click", (e) => {
       const action = e.target.dataset.action;
