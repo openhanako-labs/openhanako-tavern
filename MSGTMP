@@ -1,0 +1,25 @@
+fix(ui): apiFetch 不再吞真实错误 + 补回被 read 截断丢掉的 FETCH_TIMEOUT_MS
+
+界面「加载失败: All fetch attempts failed」的根因：
+
+core.js 里 FETCH_TIMEOUT_MS 的定义被 read 分页整段丢掉，而引用它的
+代码还在。apiFetch 一调用就 ReferenceError，两条 attempt 全废，
+最后 throw 那句万能错误——真实原因被吞得一点不剩。
+
+node --check 查不出未定义变量（它只查语法），
+check-frontend-modules 只查 import 名对不对，所以这类错直达运行时。
+
+改动三处：
+1. 补回 FETCH_TIMEOUT_MS = 10_000
+2. apiFetch 重写：先确认 hana.api.fetch 是不是函数（不是就明说
+   「宿主未提供」，而不是静默跳过），失败时把真实 message 带出来
+3. 路径处理保留两种候选（带/不带前导斜杠），但注释写清 SDK 的
+   pluginApiUrl 是从 iframe route 读 appId，所以不该带 App id 前缀
+
+新增 test/check-undefined-refs.mjs（常驻）：
+只查 UPPER_SNAKE 常量的「引用了但没定义」。判据收得很窄——
+第一版把所有标识符都收，报出 let/const/res/s 一大堆噪音，差点埋掉真信号。
+
+与 comfyui-hana 的 sdk.js 逐字节比对过（hash 相同），通道本身没问题。
+
+结果：30/30 测试全过。

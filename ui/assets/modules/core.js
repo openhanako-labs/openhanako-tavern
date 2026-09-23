@@ -44,32 +44,44 @@ export function confirmDialog(message) {
   });
 }
 
-export async function apiFetch(path, options = {}) {
-  const attempts = [
-    () => hana?.api?.fetch?.(path, options),
-    () => hana?.api?.fetch?.("/" + path, options),
-  ];
+/** 单次请求的超时。App 内请求都是本地回环，10 秒足够；卡住不放比失败更糟。 */
+const FETCH_TIMEOUT_MS = 10_000;
 
-  for (const attempt of attempts) {
-    if (typeof attempt !== "function") continue;
+/**
+ * 统一的App内请求。
+ *
+ * 通道是宿主注入的 hana.api.fetch（见 ui/assets/sdk.js）：
+ *   pluginApiFetch → ${origin}/api/apps/<appId>/routes/<path>
+ * appId 从 iframe route 读，所以这里只传路由本身（如 "characters"），
+ * 不要带 App id 前缀。
+ *
+ * 失败时把真实原因带出来——早期版本 catch 后只 throw "All fetch
+ * attempts failed"，把宿主的真实报错吞掉，排查时完全抓瞎。
+ */
+export async function apiFetch(path, options = {}) {
+  const fetchFn = hana?.api?.fetch;
+  if (typeof fetchFn !== "function") {
+    throw new Error("宿主未提供 hana.api.fetch：这个页面可能不在 App surface 里运行");
+  }
+
+  const p = String(path ?? "").replace(/^\/+/, "");
+  let lastErr = null;
+  // 先试原样，再试带前导斜杠：两种写法不同宿主版本接受度不同
+  for (const candidate of [p, "/" + p]) {
     try {
       const r = await Promise.race([
-        attempt(),
-        new Promise((_, rej) => setTimeout(() => rej(new Error("fetch timeout")), FETCH_TIMEOUT_MS)),
+        fetchFn(candidate, options),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("请求超时")), FETCH_TIMEOUT_MS))
       ]);
-      if (r) {
-        // Response 对象 — 需要解析 body
-        if (typeof r.json === "function") {
-          return await r.json();
-        }
-        if (typeof r === "string") return JSON.parse(r);
-        if (typeof r === "object") return r;
-      }
+      if (r === undefined || r === null) { lastErr = new Error("宿主返回空（候选 " + candidate + "）"); continue; }
+      if (typeof r.json === "function") return await r.json();
+      if (typeof r === "string") return JSON.parse(r);
+      return r;
     } catch (e) {
-      console.error("apiFetch error:", e);
+      lastErr = e;
     }
   }
-  throw new Error("All fetch attempts failed");
+  throw new Error("请求失败 " + p + "：" + (lastErr?.message || lastErr || "未知原因"));
 }
 
 // 从 API 响应中提取数据数组
