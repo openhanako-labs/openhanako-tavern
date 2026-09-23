@@ -67,7 +67,10 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-main { max-width: 1180px; margin: 0 auto; padding: 24px 24px 40px; }
+/* 六 Tab 时代的全局 main 规则（max-width:1180 + margin auto + padding:24）
+   已删：main 现在是 .shell 两栏 grid 的第二列，居中缩窄会把聊天区
+   推离侧栏、四周还灌一圈空隙。列宽交给 grid，内距交给子元素
+   （header/messages/input 各有自己的 padding）。 */
 
 /* ── 动效 ─────────────────────────────────────────── */
 
@@ -433,8 +436,25 @@ h1 {
 .card-actions {
   display: flex;
   gap: 4px;
+  /*
+   * 按钮常驻时五张卡十五个按钮，列表像工具栏不像名片——
+   * 信息密度被操作噪音吃掉。默认收起（连分隔线一起），
+   * hover / 键盘聚焦时再展开。
+   */
+  padding-top: 0;
+  border-top: none;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height var(--t) var(--ease), opacity var(--t) var(--ease), padding-top var(--t) var(--ease);
+}
+
+.card:hover .card-actions,
+.card:focus-within .card-actions {
   padding-top: 12px;
   border-top: 1px solid var(--border);
+  max-height: 52px;
+  opacity: 1;
 }
 
 .card-actions .btn-sm {
