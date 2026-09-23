@@ -3,9 +3,10 @@
 import { hana } from "../sdk.js";
 import { apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatTime, friendlyError, toast } from "./core.js";
 import { renderMarkdown } from "./markdown.js";
-// 宏引擎复用 lib/ 下那一份：它是纯 JS，两端共用一处实现。
-// 从 ui/assets/modules/ 到 app 根要上三级。
-import { createMacroProcessor, contextFromCharacter } from "../../../lib/macros/index.js";
+// 宏引擎用 ui/assets/lib/macros.js（/ui/ 可达域内的镜像）。
+// 早期写成 ../../../lib/... —— URL 层级多 _surface/<token> 两级，且 lib/
+// 不在 /ui/ 暴露域：整张模块图 404，页面停在"加载中"的静态初始态。
+import { createMacroProcessor, contextFromCharacter } from "../lib/macros.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
 
