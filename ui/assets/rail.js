@@ -94,13 +94,22 @@ function renderChars() {
     return;
   }
   el.innerHTML = chars.map(c => `
-    <div class="item" data-char="${c.id}" title="${esc(c.name || "")}">
+    <div class="item" data-char="${c.id}" role="button" tabindex="0" title="${esc(c.name || "")}">
       ${avatar(c)}
       <div class="bd"><div class="nm">${esc(c.name || "（无名称）")}</div></div>
     </div>
   `).join("");
   el.querySelectorAll(".item").forEach(item => {
     item.addEventListener("click", () => openChar(item.dataset.char));
+    // 键盘与无障碍：role=button 必须可 Tab 可回车。
+    // UIA 靠它拿 Invoke——裸 div 只有 text pattern，点击派发不到，
+    // nav 链看起来像断了，其实是链头没起火。
+    item.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openChar(item.dataset.char);
+      }
+    });
   });
 }
 
@@ -113,7 +122,7 @@ function renderConvs() {
     return;
   }
   el.innerHTML = convs.map(c => `
-    <div class="item ${activeConv === c.id ? "on" : ""}" data-conv="${c.id}">
+    <div class="item ${activeConv === c.id ? "on" : ""}" data-conv="${c.id}" role="button" tabindex="0"${activeConv === c.id ? ' aria-current="true"' : ""}>
       <div class="bd">
         <div class="nm">${esc(c.title || "（无标题）")}</div>
         <div class="mt">${c.messageCount || 0} 条 · ${fmtDate(c.updatedAt)}</div>
@@ -122,6 +131,12 @@ function renderConvs() {
   `).join("");
   el.querySelectorAll(".item").forEach(item => {
     item.addEventListener("click", () => openConv(item.dataset.conv));
+    item.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openConv(item.dataset.conv);
+      }
+    });
   });
 }
 
