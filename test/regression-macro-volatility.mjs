@@ -131,24 +131,19 @@ await okAsync("工具路径落盘的助手消息也冻结", async () => {
   assert.ok(!stored.content.includes("{{"), `工具路径落盘的内容还带着宏：${stored.content}`);
 });
 
-// ── 5. 已知问题（待定）：卡字段里的 volatile 宏每轮重算 ──
+// ── 5. 卡字段里的一次性宏按对话冻结 ──
 //
-// 这一条**断的是现状**，不是期望——所以留着它是有意的：
-// 它在测试套件里占一个显眼的位置，好过只躺在某次对话记录里。
+// 卡字段最终落进**静态前缀**。前缀里一旦有会变的东西，
+// 从它出现的位置往后整段都对不上缓存——不是只损失那几个字符。
+// 所以冻结点是「首算」：同一场对话里前缀逐字节不动。
 //
-// 现状：applyMacrosToCharacter 在每次请求时跑，卡字段里的 {{roll}}/{{time}}
-// 于是在每一轮重算 → **静态前缀每轮都变 → prefix cache 永远不可能命中**。
-//
-// 修法要定一个产品问题（不是技术问题）：
-//   `{{time}}` 在一个会话里该不该刷新？
-//     刷新 → 前缀不稳，缓存白给
-//     冻住 → 一个长会话里时钟停在开场那一刻
-// 我倾向「按会话冻结」（一处按会话缓存已处理的卡字段，卡变了才失效），
-// 但那是个会改变体感的选择，得由人来定。定完之后把下面这条断言翻过来。
-await okAsync("（已知问题）卡字段里的 volatile 宏目前每轮重算", async () => {
+// 代价（已接受，写在这里以防后人以为是 bug）：卡里的 `{{time}}`
+// 会在首次求值那一刻定住，**整场对话不再走**。想要会走的钟，
+// 它就不能待在前缀里，得改成往动态尾部注入当前时刻——那是另一条路。
+await okAsync("卡字段里的一次性宏按对话冻结（不污染静态前缀）", async () => {
   const wild = await charRepo.create({
     name: "掷骰者",
-    description: "她的编号是 {{roll 1d1000}}。",
+    description: "她的编号是 {{roll 1d1000}}，现在是 {{time}}。",
     first_mes: "「你来了。」"
   });
   const c2 = await convRepo.create(wild.id);
@@ -157,11 +152,12 @@ await okAsync("（已知问题）卡字段里的 volatile 宏目前每轮重算"
   const a = await buildGenerationInput(repos, one, applyMacrosToCharacter(wild, one, {}), "一。", {});
   const b = await buildGenerationInput(repos, one, applyMacrosToCharacter(wild, one, {}), "二。", {});
 
-  assert.notStrictEqual(
+  assert.strictEqual(
     a.systemPrompt,
     b.systemPrompt,
-    "现状变了（转为稳定）——那是好事：把这条断言翻成 strictEqual，并把上面的注释改成「已修」"
+    `静态前缀每轮都变 → 前缀缓存永远不可能命中。\n     A: ${a.systemPrompt.slice(0, 90)}\n     B: ${b.systemPrompt.slice(0, 90)}`
   );
+  assert.ok(!/\{\{/.test(a.systemPrompt), `前缀里还留着没结算的宏：${a.systemPrompt.slice(0, 120)}`);
 });
 
 fs.rmSync(tmp, { recursive: true, force: true });
