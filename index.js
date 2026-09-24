@@ -31,6 +31,9 @@ import { registerRegexRoutes } from "./lib/regex/routes.js";
 import { PresetRepo } from "./lib/presets/repo.js";
 import { registerPresetRoutes } from "./lib/presets/routes.js";
 
+import { BoardRepo } from "./lib/board/repo.js";
+import { registerBoardRoutes } from "./lib/board/routes.js";
+
 import { registerToolRoutes } from "./lib/tools/routes.js";
 import { loadGroupState, isGroupEnabled } from "./lib/tools/group.js";
 
@@ -134,6 +137,13 @@ export default defineApp(async (sdk) => {
     s.presets = { repoInitialized: true, presetsDir: path.join(dataDir, "presets") };
   }
 
+  let boardRepo = null;
+  if (dataDir) {
+    boardRepo = new BoardRepo(dataDir);
+    await probe.safe(() => boardRepo.init(), "boardRepo.init");
+    s.board = { repoInitialized: true, worldCellsFile: path.join(dataDir, "board-cells.json") };
+  }
+
   // ── LLM 服务 ──
   let llmService = null;
   if (s.modelsAvailable) {
@@ -215,6 +225,9 @@ export default defineApp(async (sdk) => {
     if (presetRepo) {
       registerPresetRoutes(app, presetRepo);
     }
+    if (boardRepo) {
+      registerBoardRoutes(app, boardRepo);
+    }
 
     registerToolRoutes(app, sdk);
 
@@ -230,32 +243,12 @@ export default defineApp(async (sdk) => {
   // 等到用户点到那个功能才炸。这里启动后直接调一次关键路径，
   // 结果落 probe-state.json——坏没坏一眼可查，不用等用户踩。
   //
-  // fire-and-forget：自检再慢也不能拖住 App 启动
-  //（早先 cache-probe 就因为 await 在 defineApp 里把 bootstrap 堵死过）。
-  if (conversationRepo && characterRepo) {
-    runSelfCheck({ conversationRepo, characterRepo, settingRepo })
-      .then((result) => {
-        s.selfCheck = result;
-        probe.record(
-          result.ok
-            ? `self-check OK (${result.checks.length} 项)`
-            : `self-check FAILED: ${result.checks.filter(c => !c.ok).map(c => c.name).join(", ")}`
-        );
-      })
-      .catch((e) => {
-        s.selfCheck = { ok: false, error: e?.message || String(e), at: new Date().toISOString() };
-        probe.record(`self-check threw: ${e?.message || e}`);
-      });
-  }
-
-  // ── 启动自检 ──
-  //
-  // 治的是 BUG-043 那类问题：函数用了但没 import，语法查不出来，
-  // 等到用户点到那个功能才炸。这里启动后直接调一次关键路径，
-  // 结果落 probe-state.json——坏没坏一眼可查，不用等用户踩。
-  //
   // 自检本身只是纯函数 + 一两次读盘，正常几毫秒。给它一个上限，
   // 超时就当"本次没验"，绝不拖住启动。
+  //
+  // 注：早先这里有两份自检（一份 fire-and-forget + 一份 await），
+  // 每次启动跑两遍。合并成下面这一份——既然已经设了超时，
+  // 就不需要 fire-and-forget 那份来"避免拖住启动"了。
   let selfCheck = null;
   if (conversationRepo && characterRepo) {
     selfCheck = await probe.safe(
