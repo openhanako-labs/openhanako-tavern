@@ -271,8 +271,16 @@ export function bindShell() {
   // 恢复上次打开的右栏面板：刷新后接着上次的位置继续改
   try {
     const saved = localStorage.getItem("eleckoi:ctx-open");
-    if (saved && DRAWERS[saved]) openDrawer(saved, { reload: true });
-  } catch { /* ignore */ }
+    if (saved && DRAWERS[saved]) {
+      openDrawer(saved, { reload: true }).catch((e) => {
+        // 之前是 silent ignore——恢复失败时右栏半死还不吭声
+        console.error("[ctx] restore failed:", e);
+        toast(`右栏恢复失败: ${friendlyError(e)}`, "error");
+      });
+    }
+  } catch (e) {
+    console.error("[ctx] restore read failed:", e);
+  }
 
   // 多存档选择器
   document.getElementById("conv-picker-close")?.addEventListener("click", closeConvPicker);
@@ -289,8 +297,15 @@ export function bindShell() {
   // ── 接收左栏（functionPanel）的导航意图 ──
   onNavigation(async (msg) => {
     if (msg.t === "open-conv" && msg.id) {
-      const { openConversation } = await import("./chat.js");
-      await openConversation(msg.id);
+      // 可见出口：这条链从 rail 跨 iframe 过来，断在哪一跳都要露脸——
+      // 之前无 catch，链路断在半路时页面一声不吭，最难查
+      try {
+        const { openConversation } = await import("./chat.js");
+        await openConversation(msg.id);
+      } catch (e) {
+        console.error("[nav] open-conv failed:", e);
+        toast(`打开对话失败: ${friendlyError(e)}`, "error");
+      }
     } else if (msg.t === "new-char" && msg.id) {
       await startNewConversation(msg.id);
     } else if (msg.t === "pick-char" && msg.id) {
