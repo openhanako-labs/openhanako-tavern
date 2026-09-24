@@ -169,6 +169,11 @@ export async function sendMessageStream(content) {
               if (assistantMsgEl) {
                 assistantMsgEl.querySelector(".content").innerHTML = escapeHtml(fullContent);
               }
+            } else if (data.type === "usage") {
+              // 观测链：缓存命中率的数字从这里来。两系字段都认——
+              // Anthropic: cache_read_input_tokens；OpenAI 兼容: prompt_tokens_details.cached_tokens
+              state.lastUsage = data.usage || null;
+              renderUsageBar();
             } else if (data.type === "error") {
               console.error("Stream error:", data.error);
               return null;
@@ -434,6 +439,38 @@ export function renderConversations() {
   el.querySelectorAll(".conv-item").forEach(item => {
     item.addEventListener("click", () => openConversation(item.dataset.id));
   });
+}
+
+/**
+ * 输入区上方的生成状态条：本轮 token 与缓存命中率。
+ *
+ * 缓存命中是钱和延迟的直读数——本地 vLLM 的 prefix cache、
+ * API 侧的 prompt cache 都反映在两系字段里，这里统一收口显示。
+ * 没有缓存字段的后端显示 “—”，不装作有。
+ */
+export function renderUsageBar() {
+  const bar = document.getElementById("gen-meta");
+  if (!bar) return;
+  const u = state.lastUsage;
+  const prompt = u?.prompt_tokens ?? u?.input_tokens ?? null;
+  const cached = u?.cache_read_input_tokens ?? u?.prompt_tokens_details?.cached_tokens ?? 0;
+
+  const tEl = document.getElementById("gen-tokens");
+  const cEl = document.getElementById("gen-cache");
+  if (prompt == null) { bar.classList.add("hidden"); return; }
+
+  bar.classList.remove("hidden");
+  if (tEl) tEl.textContent = `上下文 ${prompt >= 1000 ? (prompt / 1000).toFixed(1) + "k" : prompt}`;
+  if (cEl) {
+    if (cached > 0 && prompt > 0) {
+      const pct = Math.round((cached / prompt) * 100);
+      cEl.textContent = `缓存 ${pct}%`;
+      cEl.classList.toggle("hit", pct >= 60);   // 60% 是行业基准线：低于它=结构病
+    } else {
+      cEl.textContent = "缓存 —";
+      cEl.classList.remove("hit");
+    }
+  }
 }
 
 /** 打开一个对话：拉全文、渲染、显示输入区。 */

@@ -1046,6 +1046,25 @@ h1 {
   line-height: 1.5;
 }
 
+/* ── 生成状态条（token / 缓存命中） ───────────────── */
+.gen-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 19px 0;
+  font-size: 11px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.gen-meta.hidden { display: none; }
+
+/* 命中率 ≥60% 才亮——低于这条线是结构病，不是值得高兴的数 */
+#gen-cache.hit {
+  color: #6E9462;
+  font-weight: 600;
+}
+
 /* ── 输入区 ───────────────────────────────────────── */
 
 .chat-input-area {

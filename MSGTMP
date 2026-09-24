@@ -1,0 +1,16 @@
+feat(ui): 缓存观测链落地——状态条显示 token 与缓存命中率
+
+缓存处方的第一刀（可观测先行：没仪表盘的优化是盲改）：
+
+- chat.js 流解析补 usage 分支（原只有 chunk/done/error，
+  {type:"usage"} 事件一直被静默丢弃）→ state.lastUsage
+- renderUsageBar：输入区上方状态条显示「上下文 x.xk / 缓存 xx%」
+  两系字段都认——Anthropic cache_read_input_tokens、
+  OpenAI 兼容 prompt_tokens_details.cached_tokens；无字段显示 "—"
+- 命中率 ≥60% 才亮绿：这是行业基准线，低于它是结构病不是好数字
+- HTML 状态条容器 + CSS（贴输入上沿，与提案卡位置一致）
+
+后端本来就是全的：routes 流式端点一直在发 usage 事件、
+每条消息也持久化了 usage——断的只是前端监听这一环。
+
+34/34 全绿。后续：静态/动态前缀分层重组（处方 1-3 的大刀）。
