@@ -604,6 +604,18 @@ h1 {
   box-shadow: var(--sh-1);
 }
 
+/*
+ * 对话视图：flex column + 满高。缺了这组规则，删侧栏后
+ * messages/input 都是内容高堆顶，主区下面坠出 60% 空白——
+ * .messages 的 flex:1 只有在父级是 flex column 时才叫撑开。
+ */
+.chat-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
 .chat-header {
   padding: 14px 19px;
   border-bottom: 1px solid var(--border);
