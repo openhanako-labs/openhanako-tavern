@@ -62,11 +62,15 @@ const noLore = {
   ]
 };
 
-async function build(input, preset) {
-  await convRepo.addMessage(conv.id, "user", input);
-  const fresh = await convRepo.get(conv.id);
+async function buildIn(convId, input, preset) {
+  await convRepo.addMessage(convId, "user", input);
+  const fresh = await convRepo.get(convId);
   const r = await buildGenerationInput(repos, fresh, card, input, preset ? { preset } : {});
   return r.systemPrompt;
+}
+
+async function build(input, preset) {
+  return buildIn(conv.id, input, preset);
 }
 
 // 场景 1：同输入两次，逐字节相等
@@ -108,6 +112,23 @@ await okAsync("预设禁用 lore 块 → 世界书整段不拼", async () => {
   const sp = await build("塔顶的风再起。", noLore);
   assert.ok(!sp.includes(LORE_MARK), "禁用后不应出现世界书段");
   assert.ok(sp.includes(STATIC_ANCHOR), "静态段照常");
+});
+
+// 场景 5：无尾巴那次，应当是有尾巴那次的**字节前缀**
+//
+// 这是缓存真正依赖的性质：provider 比的是最长公共前缀。
+// 曾经这里错过——分隔符 `\n\n` 写在前缀那一侧，于是本轮没尾巴时前缀少
+// 两个字节、有尾巴时多两个字节，「前缀」变成了一个依赖尾巴是否存在的量。
+// 只差 2 字节、命中不受影响，但那种表述一旦被后人当真就会出事。
+await okAsync("无尾巴那次 → 是有尾巴那次的字节前缀（分隔符归尾部）", async () => {
+  // 干净历史：扫描窗口是最近 8 条，旧消息里的「北境」会继续命中
+  const fresh = await convRepo.create(card.id);
+  const cold = await buildIn(fresh.id, "一句没有关键词的话。", withLore);
+  const hot = await buildIn(fresh.id, "北境的夜。", withLore);
+
+  assert.ok(!cold.includes(LORE_MARK), "这一句不该命中世界书");
+  assert.ok(hot.includes(LORE_MARK), "这一句应当命中世界书");
+  assert.ok(hot.startsWith(cold), "有尾巴时，无尾巴那次的内容不是它的字节前缀");
 });
 
 fs.rmSync(tmp, { recursive: true, force: true });

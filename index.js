@@ -174,7 +174,7 @@ export default defineApp(async (sdk) => {
   }
   if (conversationRepo && characterRepo) {
     for (const t of createConversationTools({
-      conversationRepo, characterRepo, settingRepo, llmService, regexRepo
+      conversationRepo, characterRepo, settingRepo, llmService, regexRepo, boardRepo
     })) await registerTool(t, "conversations");
   }
   if (variableRepo) {
@@ -211,7 +211,7 @@ export default defineApp(async (sdk) => {
       registerCharacterRoutes(app, characterRepo, characterTransfer, settingRepo);
     }
     if (conversationRepo && characterRepo) {
-      registerConversationRoutes(app, conversationRepo, llmService, characterRepo, settingRepo, regexRepo, presetRepo);
+      registerConversationRoutes(app, conversationRepo, llmService, characterRepo, settingRepo, regexRepo, presetRepo, boardRepo);
     }
     if (variableRepo && conversationRepo) {
       registerVariableRoutes(app, variableRepo, conversationRepo, characterRepo);
