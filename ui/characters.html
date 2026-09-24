@@ -23,6 +23,21 @@
   <!-- ── 主区 ─────────────────────────────────────── -->
   <main class="main">
 
+    <!--
+      右栏标签条：六个面板的常驻入口。
+      之前它们全塞在 ⋯ 菜单里——功能都在，但看不见就等于没有。
+      对照示例稿时最刺眼的就是这一处：标签是骨架，菜单是抽屉。
+    -->
+    <nav class="ctx-tabs" id="ctx-tabs" aria-label="右栏面板">
+      <button class="ctx-tab" data-drawer="character"><span class="mi">👤</span>角色</button>
+      <button class="ctx-tab" data-drawer="settings"><span class="mi">✳</span>设定库</button>
+      <button class="ctx-tab" data-drawer="variables"><span class="mi">◫</span>变量</button>
+      <button class="drawer-close ctx-close" title="收起右栏" aria-label="收起右栏">✕</button>
+      <button class="ctx-tab" data-drawer="presets"><span class="mi">⌗</span>预设</button>
+      <button class="ctx-tab" data-drawer="tools"><span class="mi">⚙</span>工具</button>
+      <button class="ctx-tab" data-drawer="migration"><span class="mi">⇅</span>迁移</button>
+    </nav>
+
     <!-- 聊天 -->
     <section id="view-chat" class="chat-view">
       <!-- App 标题行：原本在侧栏品牌区，侧栏删后归主区顶部（m8 徽章随行） -->

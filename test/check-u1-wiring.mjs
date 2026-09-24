@@ -60,12 +60,27 @@ ok("五个抽屉容器 id 齐全");
 if (!shellSrc.includes('data-drawer')) fail("topbar 菜单没绑 data-drawer");
 else ok("顶栏菜单 → 抽屉的事件源存在");
 
+// ── 4b. 右栏标签条：六个面板的常驻入口，必须一一对上 ──
+// （2026-09-23 v3 结构落地：面板从 ⋯ 菜单里搬出来，变成看得见的标签）
+const tabStrip = html.match(/<nav class="ctx-tabs"[\s\S]*?<\/nav>/);
+if (!tabStrip) fail("缺右栏标签条 .ctx-tabs");
+else {
+  const tabs = [...tabStrip[0].matchAll(/data-drawer="([^"]+)"/g)].map(m => m[1]);
+  for (const name of ["character", "settings", "variables", "presets", "tools", "migration"]) {
+    if (!tabs.includes(name)) fail(`标签条缺面板入口: ${name}`);
+  }
+  if (tabs.length !== 6) fail(`标签条应有 6 个入口，实为 ${tabs.length}`);
+  if (!tabStrip[0].includes('class="drawer-close ctx-close"')) fail("标签条缺收起键（.ctx-close）");
+  if (errors === 0) ok("右栏标签条六入口 + 收起键齐全");
+}
+
 // ── 5. 一屏结构的关键类 ──
 const mustHave = [
   ["shell 外壳", 'class="shell"'],
   // 页内侧栏已按产品决定删除（2026-09-23：列表归宿主 rail 独家），
   // sidebar / collapse / expand / characters-list / conversations-list
   // 五项随设计移除——测试断言的是结构，结构变了断言跟着变。
+  ["右栏标签条", 'id="ctx-tabs"'],
   ["顶栏 ⋯", 'id="app-more-btn"'],
   ["多存档选择器", 'id="conv-picker-modal"'],
   ["预设编辑器", 'id="preset-editor-modal"']
@@ -92,7 +107,7 @@ if (errors === 0) ok("旧六 Tab 结构已清干净");
 
 // ── 7. CSS 里新布局的锚点 ──
 const css = fs.readFileSync(path.join(root, "ui/assets/characters.css"), "utf8");
-for (const needle of [".shell {", ".char-list .card", ".drawer {", ".sb-foot", ".pe-blocks", ".picker-item"]) {
+for (const needle of [".shell {", ".ctx-tabs {", ".char-list .card", ".drawer {", ".sb-foot", ".pe-blocks", ".picker-item"]) {
   if (!css.includes(needle)) fail(`CSS 缺 ${needle}`);
 }
 if (errors === 0) ok("CSS 新布局锚点齐全");

@@ -16,6 +16,13 @@ import { onNavigation, askRailRefresh, setActiveConv, railAlive } from "./nav-bu
 /** 当前打开的抽屉名；null = 都关着。 */
 let openDrawerName = null;
 
+/** 标签条高亮跟着当前面板走——面板可以来自标签、⋯ 菜单或开聊时自动站出。 */
+function syncTabs() {
+  document.querySelectorAll("#ctx-tabs .ctx-tab").forEach((btn) => {
+    btn.classList.toggle("on", !!openDrawerName && btn.dataset.drawer === openDrawerName);
+  });
+}
+
 // ── 侧栏折叠 ──────────────────────────────────────────
 
 /**
@@ -52,7 +59,7 @@ function restoreSidebar() {
  * 是实打实的宽度。聊天区本来就被左右夹着，再被抽屉盖掉一截就更窄了。
  * 用户随时能点 ‹ 把左栏放回来。
  *
- * @param {"settings"|"variables"|"presets"|"tools"|"migration"} name
+ * @param {"character"|"settings"|"variables"|"presets"|"tools"|"migration"} name
  * @param {{ reload?: boolean }} [opts]
  */
 export async function openDrawer(name, opts = {}) {
@@ -70,6 +77,7 @@ export async function openDrawer(name, opts = {}) {
   }
   el.classList.remove("hidden");
   openDrawerName = name;
+  syncTabs();
 
   // 展开右栏列：聊天区不被盖，面板从右缘滑出（grid 列宽变化即动画）
   document.querySelector("main")?.classList.add("ctx-open");
@@ -104,6 +112,7 @@ export async function openDrawer(name, opts = {}) {
 export function closeDrawer() {
   for (const node of Object.values(DRAWERS)) node?.classList.add("hidden");
   openDrawerName = null;
+  syncTabs();
   document.querySelector("main")?.classList.remove("ctx-open");
   try { localStorage.removeItem("eleckoi:ctx-open"); } catch { /* ignore */ }
 }
@@ -249,6 +258,16 @@ export function bindShell() {
     btn.addEventListener("click", () => {
       document.getElementById("app-more-menu").hidden = true;
       openDrawer(btn.dataset.drawer);
+    });
+  });
+
+  // 右栏标签条：点标签切面板。点当前标签不做事——
+  // “同名再点=收起”是给 ⋯ 菜单的，放在标签条上算误触。
+  document.querySelectorAll("#ctx-tabs .ctx-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const name = btn.dataset.drawer;
+      if (!name || openDrawerName === name) return;
+      openDrawer(name, { reload: true });
     });
   });
 

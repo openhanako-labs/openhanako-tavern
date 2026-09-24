@@ -84,7 +84,7 @@ body {
 main {
   display: grid;
   grid-template-columns: 1fr var(--ctx-w, 0px);
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   position: relative;
   min-height: 0;
   min-width: 0;
@@ -95,9 +95,77 @@ main.ctx-open {
   --ctx-w: 344px;
 }
 
+/*
+ * ── 右栏标签条 ─────────────────────────────────────
+ * 六个面板的常驻入口，与抽屉同住 grid 第二列：
+ * 标签条占第 1 行（3 列挤 6 个标签 + 右上角关闭），
+ * 面板占第 2 行，聊天列跨满两行。列宽 0（收起）时整列不可见，
+ * 开面板时随列宽一起滑出。
+ */
+.ctx-tabs {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 26px;
+  gap: 4px;
+  padding: 11px 12px 9px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #fffdf7, #fdf8ec);
+  visibility: hidden;
+}
+
+main.ctx-open .ctx-tabs { visibility: visible; }
+
+.ctx-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 7px 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+
+.ctx-tab .mi { font-size: 13px; opacity: .85; }
+.ctx-tab:hover { background: var(--surface-2); color: var(--fg); }
+
+.ctx-tab.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ctx-tab.on .mi { opacity: 1; }
+
+.ctx-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ctx-close:hover { background: var(--surface-2); color: var(--fg); }
+
 #view-chat {
   grid-column: 1;
-  grid-row: 1;
+  grid-row: 1 / -1;
   min-width: 0;
 }
 
@@ -1611,7 +1679,7 @@ footer a:hover { color: var(--accent); }
   inset: auto;
   z-index: auto;
   grid-column: 2;
-  grid-row: 1;
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1627,6 +1695,13 @@ main.ctx-open .drawer:not(.hidden) {
 }
 
 .drawer.hidden { display: none; }
+
+/*
+ * 标签条上线后，面板头里的标题是重复信息（标签上已经写着名字），
+ * 抽屉级关闭也挪到了标签条右上角。旧的面板头样式原样留在下面，
+ * 要回退只需删掉这一行覆盖。
+ */
+.drawer-head { display: none; }
 
 .drawer-head {
   display: flex;
