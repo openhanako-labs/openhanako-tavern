@@ -60,6 +60,9 @@ const STRUCTURAL = /is not a function|Cannot read propert|not a constructor|of u
  * 契约那一条不是形式：前端按 respond.js 的约定解析，
  * 一个 ok 不是 true 的 200 响应，前端只会看成「数据是空的」——
  * 与「真的没数据」完全无法区分。
+ *
+ * 注意：SSE 那几条走 raw() 绕开 JSON 包装，形状不是 {ok,data}，
+ * 那种只查「有内容」——契约不适用于它们。
  */
 function healthy(r, where, expected = 200) {
   assert.ok(r, `${where}：路由没匹配上`);
@@ -68,7 +71,11 @@ function healthy(r, where, expected = 200) {
   }
   assert.strictEqual(r.status, expected, `${where}：实为 ${r.status}（${r.error || "无错误信息"}）`);
   if (expected === 200) {
-    assert.strictEqual(r.ok, true, `${where}：200 但 ok 不是 true（契约破了：${JSON.stringify(r.payload).slice(0, 120)}）`);
+    if (r.payload && typeof r.payload === "object" && "ok" in r.payload) {
+      assert.strictEqual(r.ok, true, `${where}：200 但 ok 不是 true（契约破了：${JSON.stringify(r.payload).slice(0, 120)}）`);
+    } else {
+      assert.ok(r.payload !== undefined && r.payload !== null, `${where}：raw 响应没有内容`);
+    }
   }
   return r;
 }
@@ -96,8 +103,22 @@ const apps = {
   migration: makeApp()
 };
 
+// 假 llm。生成路由需要它，而**不能因为麻烦就跳过这一段**——
+// 上一版冒烟就是跳过了它（注释里写着「需要真 llm，跳过」），
+// 而「withRealWindow 未定义 → 四条生成路由全死」那个 bug 正好住在里面。
+// 难测的那一段，正是最容易烂掉的那一段。
+const fakeLlm = {
+  available: true,
+  lastTarget: { model: "fake-model" },
+  resolveContextWindow: async () => 32000,
+  generate: async () => ({
+    content: "「我在。」她没回头。",
+    usage: { prompt_tokens: 120, completion_tokens: 18 }
+  })
+};
+
 registerCharacterRoutes(apps.characters, charRepo, transfer, setRepo);
-registerConversationRoutes(apps.conversations, convRepo, null, charRepo, setRepo, regexRepo, presetRepo, boardRepo);
+registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo);
 registerSettingRoutes(apps.settings, setRepo, convRepo);
 registerVariableRoutes(apps.variables, varRepo, convRepo, charRepo);
 registerPresetRoutes(apps.presets, presetRepo);
@@ -236,6 +257,48 @@ await okAsync("conversations：建 / 读 / 列 / 消息增删改 / 删", async (
   healthy(await request(apps.conversations, "PUT", `/conversations/${convId}/persona`, {
     body: { userName: "月曦夜", persona: "旅人（改）" }
   }), "PUT persona");
+});
+
+// 四条生成路由。这一段是上一版漏掉的，而 withRealWindow 那个 bug 就住在这里：
+// 它只剩调用、定义整段消失，一调用就 ReferenceError——
+// 也就是「发消息」这个主操作从路由层整个是死的。
+await okAsync("conversations：发消息真落盘（含一次性宏冻结）", async () => {
+  const before = (await convRepo.get(convId)).messages.length;
+
+  const sent = healthy(await request(apps.conversations, "POST", `/conversations/${convId}/messages`, {
+    body: { content: "你在吗？" }
+  }), "POST /conversations/:id/messages");
+
+  assert.ok(sent.data.assistantMessage, "没返回助手消息");
+  assert.strictEqual(sent.data.assistantMessage.role, "assistant");
+  assert.ok(sent.data.meta, "没返回组装 meta");
+
+  const conv = await convRepo.get(convId);
+  assert.ok(conv.messages.length >= before + 2, `消息没落盘（${before} → ${conv.messages.length}）`);
+});
+
+await okAsync("conversations：流式与重生成三条能被打到（不报结构错）", async () => {
+  healthy(await request(apps.conversations, "POST", `/conversations/${convId}/messages/stream`, {
+    body: { content: "再说一句。" }
+  }), "POST messages/stream");
+
+  healthy(await request(apps.conversations, "POST", `/conversations/${convId}/regenerate`, {
+    body: {}
+  }), "POST regenerate");
+
+  healthy(await request(apps.conversations, "POST", `/conversations/${convId}/regenerate/stream`, {
+    body: {}
+  }), "POST regenerate/stream");
+});
+
+await okAsync("conversations：两个预览端点能打通", async () => {
+  healthy(await request(apps.conversations, "POST", `/conversations/${convId}/prompt-preview`, {
+    body: { text: "预览一下。" }
+  }), "POST prompt-preview");
+
+  healthy(await request(apps.conversations, "POST", `/conversations/${convId}/activation-preview`, {
+    body: { text: "预览一下。" }
+  }), "POST activation-preview");
 });
 
 // 设定库
