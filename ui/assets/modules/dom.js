@@ -15,6 +15,7 @@ export const dom = {
   conversationsListEl: null, // 页内侧栏已删，对话列表由宿主 rail 独家承担
   messagesContainer: document.getElementById("messages-container"),
   chatTitle: document.getElementById("chat-title"),
+  chatMeta: document.getElementById("chat-meta"),
   chatInputArea: document.getElementById("chat-input-area"),
   chatInput: document.getElementById("chat-input"),
   sendBtn: document.getElementById("send-btn"),

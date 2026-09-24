@@ -88,6 +88,13 @@ main {
   position: relative;
   min-height: 0;
   min-width: 0;
+  /*
+   * 面板要浮在一层底色上，所以四周得留出缝。
+   * 没有这一圈 padding，聊天块的描边就贴在窗口边上——
+   * 眼睛看不到「一块面板」，只看到一整片平坦的米色。
+   */
+  padding: 10px;
+  gap: 10px;
   transition: grid-template-columns .2s var(--ease);
 }
 
@@ -636,13 +643,10 @@ h1 {
 
 /* ── 对话布局 ─────────────────────────────────────── */
 
-.chat-layout {
-  display: grid;
-  grid-template-columns: 224px 1fr;
-  gap: 14px;
-  height: calc(100vh - 215px);
-  min-height: 420px;
-}
+/*
+ * （原本这里有一条 .chat-layout：224px 侧栏 + 1fr 的两列壳。
+ *  页内侧栏删后就没有元素再用它了——占位规则已清。）
+ */
 
 .sidebar {
   background: var(--surface);
@@ -698,15 +702,11 @@ h1 {
 
 /* ── 对话主区 ─────────────────────────────────────── */
 
-.chat-main {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: var(--sh-1);
-}
+/*
+ * （原本这里有一条 .chat-main，面板样式就写在它上面。
+ *  DOM 里从来没有这个类——真正在用的是 #view-chat.chat-view，
+ *  于是一整套「聊天是一块面板」的样式一直是死的（已搬进 .chat-view）。）
+ */
 
 /*
  * 对话视图：flex column + 满高。缺了这组规则，删侧栏后
@@ -718,7 +718,35 @@ h1 {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  /*
+   * 面板样式。
+   *
+   * 这一整套原本写在 `.chat-main` 上——**而 DOM 里从来没这个类**，
+   * 真正在用的是 `#view-chat.chat-view`。于是「聊天是一块浮在底色上的面板」
+   * 这件事一直没有发生，看起来就是「一整片米色」。
+   * 现在搬到真正生效的选择器上（并先把 `.chat-main` 那条死规则删了）。
+   */
+  background: #fffefb;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  overflow: hidden;
 }
+
+/*
+ * 顶栏的小字：角色名右边补一句场次。
+ * 卡里那一行还有「地点 · 在场」——引擎里没这两个字段，不编。
+ */
+.hdr-meta {
+  flex-shrink: 0;
+  margin-left: 9px;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-header h3 { flex: 1; min-width: 0; }
 
 .chat-header {
   padding: 14px 19px;
@@ -762,7 +790,16 @@ h1 {
   flex-direction: column;
   gap: 15px;
   scroll-behavior: smooth;
+  /*
+   * 话少的时候，对话应该贴着底部长起来（最新一条在输入框上方），
+   * 而不是挂在顶上、下面空一大片。
+   *
+   * 用 first-child 的 margin-top:auto 而不是容器的 justify-content:flex-end：
+   * 后者在内容溢出时会把顶部推到滚不出去的地方。
+   */
 }
+
+.messages > :first-child { margin-top: auto; }
 
 .message {
   position: relative;
@@ -773,8 +810,23 @@ h1 {
   line-height: 1.68;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  /* 角色卡的回复大量依赖换行与缩进，必须保留原始空白 */
+  /*
+   * 这里**不能**用 pre-wrap。
+   *
+   * 渲染模板是缩进过的（为了好读），`<div>` 之间那些"换行 + 空格"文本节点
+   * 在 pre-wrap 下会各生成一条真空行：每个气泡白拖 6～8 条、共 ~190px。
+   * 罪证是：内容只有 104.8px，盒子量出来 293.925px，而 HTML 里根本没有设高度——
+   * 换行被当成了内容。
+   *
+   * 角色卡回复确实依赖换行与缩进，但那要保留的是**气泡里那段文本**的空白，
+   * 不是模板的缩进——所以 pre-wrap 下移到 .bubble / .content。
+   */
+  white-space: normal;
+}
+
+.message .bubble {
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .message .content { white-space: pre-wrap; word-break: break-word; }
@@ -1857,9 +1909,26 @@ main.ctx-open .drawer:not(.hidden) {
 .msg-acts {
   display: flex;
   gap: 4px;
-  margin-top: 6px;
+  /*
+   * 绝对定位：hover 前**不占位**。
+   *
+   * 原来它是文档流里的一行（margin-top:6px 的 flex），只靠 opacity:0 隐形——
+   * 于是每个气泡中间永远空着 32px，配上时间行就是 60px 的空洞，
+   * 看上去像「内容没加载出来」。
+   */
+  position: absolute;
+  bottom: 4px;
+  right: 8px;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s;
+}
+
+.message.assistant .msg-acts { left: 8px; right: auto; }
+
+.message:hover .msg-acts {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .message:hover .msg-acts { opacity: 1; }

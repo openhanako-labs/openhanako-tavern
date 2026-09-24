@@ -607,7 +607,21 @@ export async function openConversation(id) {
 
     renderConversations();
     renderMessages();
-    if (dom.chatTitle) dom.chatTitle.textContent = state.currentConv.title || "（无标题）";
+    if (dom.chatTitle) {
+      /*
+       * 写「你在跟谁说话」，不写自动生成的对话名。
+       *
+       * 后端会把首条消息截成对话标题（repo.js:158，那是给列表用的），
+       * 直接摆到顶栏当大标题，读起来就是「用户那句话成了这一场的题目」。
+       */
+      dom.chatTitle.textContent =
+        state.currentCharacter?.name || state.currentConv.characterName || state.currentConv.title || "（无标题）";
+    }
+    if (dom.chatMeta) {
+      const n = state.currentConv.messages?.length || 0;
+      dom.chatMeta.textContent = n > 0 ? `第 ${Math.ceil(n / 2)} 轮` : "还没开始";
+      dom.chatMeta.classList.remove("hidden");
+    }
     dom.chatInputArea?.classList.remove("hidden");
     dom.chatActions?.querySelector("#export-chat-btn")?.classList.remove("hidden");
     dom.chatActions?.querySelector("#delete-conv-btn")?.classList.remove("hidden");
