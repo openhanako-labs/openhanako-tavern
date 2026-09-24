@@ -1,0 +1,19 @@
+feat(ui): 右栏真码落地——抽屉从全屏遮罩改道为聊天旁的面板
+
+v3 提案的四刀合一批（容器/改道/持久化，角色上下文态留作下一刀）：
+
+结构（零 DOM 搬移）：
+- main 变两列 grid：聊天列 1fr + 右栏列 var(--ctx-w)
+- 五个 drawer 原地转正（grid-column:2）：不再是 position:absolute
+  全屏遮罩——聊天区永远可见，列宽 0 时 visibility 兜底不可见
+- ⋯ 菜单即 v3 的那排 tab：五个菜单项与五个面板一一对应，
+  语义等价，五处 tab 改造归零
+
+行为：
+- openDrawer/closeDrawer 改道 main.ctx-open（344px），grid 列宽
+  过渡即滑出动画；旧的 shell.roomy"左栏让位"逻辑删除——
+  右栏不盖聊天，就不需要谁让位
+- 状态持久化 eleckoi:ctx-open：刷新后接着上次的面板继续改
+- Esc 收右栏（原逻辑，自动继承）
+
+35/35 全绿。

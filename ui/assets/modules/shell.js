@@ -71,8 +71,9 @@ export async function openDrawer(name, opts = {}) {
   el.classList.remove("hidden");
   openDrawerName = name;
 
-  // 让位：抽屉开着时左栏收窄，内容拿满宽度
-  dom.shellEl?.classList.add("roomy");
+  // 展开右栏列：聊天区不被盖，面板从右缘滑出（grid 列宽变化即动画）
+  document.querySelector("main")?.classList.add("ctx-open");
+  try { localStorage.setItem("eleckoi:ctx-open", name); } catch { /* ignore */ }
 
   // 懒加载
   try {
@@ -100,8 +101,8 @@ export async function openDrawer(name, opts = {}) {
 export function closeDrawer() {
   for (const node of Object.values(DRAWERS)) node?.classList.add("hidden");
   openDrawerName = null;
-  // 抽屉关了就把让位撤掉，左栏回到用户设的宽度
-  dom.shellEl?.classList.remove("roomy");
+  document.querySelector("main")?.classList.remove("ctx-open");
+  try { localStorage.removeItem("eleckoi:ctx-open"); } catch { /* ignore */ }
 }
 
 export function currentDrawer() {
@@ -263,6 +264,12 @@ export function bindShell() {
     if (e.key !== "Escape") return;
     if (openDrawerName) closeDrawer();
   });
+
+  // 恢复上次打开的右栏面板：刷新后接着上次的位置继续改
+  try {
+    const saved = localStorage.getItem("eleckoi:ctx-open");
+    if (saved && DRAWERS[saved]) openDrawer(saved, { reload: true });
+  } catch { /* ignore */ }
 
   // 多存档选择器
   document.getElementById("conv-picker-close")?.addEventListener("click", closeConvPicker);

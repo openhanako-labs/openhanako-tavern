@@ -67,10 +67,30 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* 六 Tab 时代的全局 main 规则（max-width:1180 + margin auto + padding:24）
-   已删：main 现在是 .shell 两栏 grid 的第二列，居中缩窄会把聊天区
-   推离侧栏、四周还灌一圈空隙。列宽交给 grid，内距交给子元素
-   （header/messages/input 各有自己的 padding）。 */
+/*
+ * 主区两列：聊天列吃满，右栏列宽由 --ctx-w 控制（0 = 收起）。
+ * 五个 drawer 原地转正成为右栏面板（grid 第二列），不搬家、
+ * 不盖聊天——点 ⋯ 菜单开面板，聊天始终可见。
+ */
+main {
+  display: grid;
+  grid-template-columns: 1fr var(--ctx-w, 0px);
+  grid-template-rows: minmax(0, 1fr);
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  transition: grid-template-columns .2s var(--ease);
+}
+
+main.ctx-open {
+  --ctx-w: 344px;
+}
+
+#view-chat {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+}
 
 /* ── 动效 ─────────────────────────────────────────── */
 
@@ -1564,13 +1584,26 @@ footer a:hover { color: var(--accent); }
 
 /* 侧边抽屉（设定库/变量/预设/工具/迁移共用） */
 .drawer {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
+  /* 全屏遮罩退役：抽屉是主区右栏的面板（grid 第二列），
+     聊天区不再被盖。列宽 0 时不可见，开面板时 main.ctx-open
+     展开到 344px。 */
+  position: static;
+  inset: auto;
+  z-index: auto;
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   background: var(--bg, #0f1115);
+  border-left: 1px solid var(--border);
+  overflow: hidden;
+  visibility: hidden;
+}
+
+main.ctx-open .drawer:not(.hidden) {
+  visibility: visible;
 }
 
 .drawer.hidden { display: none; }
