@@ -1,0 +1,93 @@
+// test/lib/route-harness.mjs — 离线跑路由的小台子
+//
+// 为什么需要：整条 HTTP 面（路由注册 + handler + 状态码 + 响应形状）此前
+// 在任何测试里都没被跑过。静态检查只能证明「路由写在那儿」，证明不了
+// 「打过去会有正确的回应」。而宿主把 App 的 HTTP 面锁在鉴权后面
+//（直接打 /api/apps/<id>/... 是 403），所以真环境也点不着。
+//
+// 这个台子按 Hono 的语义做最小复刻：
+//   - 按注册顺序匹配，先匹配先赢（与 Hono 一致）
+//   - 段数不同不匹配；:param 吃一整段
+//   - c.req.query / c.req.param / c.req.json / c.json / c.body 够路由用
+//
+// route() 包装过的 handler 会调 c.json(payload, status)，这里收下来，
+// 于是「状态码 + {ok,data} 响应形状」也能被断言——那是 respond.js 的契约，
+// 前端按它解析，破了会全线静默失效。
+
+export function makeApp() {
+  const routes = [];
+  const app = {};
+
+  for (const method of ["get", "post", "put", "delete", "patch"]) {
+    app[method] = (routePath, handler) => {
+      routes.push({ method: method.toUpperCase(), path: routePath, handler });
+    };
+  }
+
+  app.routes = routes;
+
+  /** 找第一条能匹配的路由。返回 { route, params } 或 null。 */
+  app.match = (method, reqPath) => {
+    const segs = String(reqPath).split("/").filter(Boolean);
+    for (const r of routes) {
+      if (r.method !== String(method).toUpperCase()) continue;
+      const rs = r.path.split("/").filter(Boolean);
+      if (rs.length !== segs.length) continue;
+
+      const params = {};
+      let hit = true;
+      for (let i = 0; i < rs.length; i++) {
+        if (rs[i].startsWith(":")) { params[rs[i].slice(1)] = decodeURIComponent(segs[i]); continue; }
+        if (rs[i] !== segs[i]) { hit = false; break; }
+      }
+      if (hit) return { route: r, params };
+    }
+    return null;
+  };
+
+  return app;
+}
+
+export function makeCtx({ query = {}, params = {}, body } = {}) {
+  const out = { payload: undefined, status: 200, headers: undefined };
+
+  const ctx = {
+    req: {
+      query: (k) => (k === undefined ? { ...query } : query[k]),
+      param: (k) => (k === undefined ? { ...params } : params[k]),
+      json: async () => {
+        if (body === undefined) throw new Error("no body");
+        return body;
+      }
+    },
+    json: (payload, status = 200) => { out.payload = payload; out.status = status; return out; },
+    body: (payload, status = 200, headers) => {
+      out.payload = payload; out.status = status; out.headers = headers; return out;
+    }
+  };
+
+  return { ctx, out };
+}
+
+/**
+ * 打一次请求。
+ * @returns {Promise<{status:number, ok:boolean, data:any, error?:string, code?:string}|null>}
+ *          找不到路由返回 null（而不是断言失败）——「路由没注册」本身就是一种结论。
+ */
+export async function request(app, method, reqPath, opts = {}) {
+  const hit = app.match(method, reqPath);
+  if (!hit) return null;
+
+  const { ctx, out } = makeCtx({ ...opts, params: hit.params });
+  await hit.route.handler(ctx);
+
+  const p = out.payload || {};
+  return {
+    status: out.status,
+    ok: p.ok === true,
+    data: p.data,
+    error: p.error,
+    code: p.code,
+    payload: p
+  };
+}
