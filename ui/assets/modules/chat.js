@@ -7,6 +7,7 @@ import { renderMarkdown } from "./markdown.js";
 // 早期写成 ../../../lib/... —— URL 层级多 _surface/<token> 两级，且 lib/
 // 不在 /ui/ 暴露域：整张模块图 404，页面停在"加载中"的静态初始态。
 import { createMacroProcessor, contextFromCharacter } from "../lib/macros.js";
+import { openDrawer } from "./shell.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
 
@@ -494,6 +495,9 @@ export async function openConversation(id) {
     dom.chatActions?.querySelector("#export-chat-btn")?.classList.remove("hidden");
     dom.chatActions?.querySelector("#delete-conv-btn")?.classList.remove("hidden");
     dom.chatInput?.focus();
+    // 角色上下文态：开对话 = 右栏自动站出角色卡。
+    // reload:true 绕开 openDrawer 的同名 toggle——连续开会话不该被误关。
+    openDrawer("character", { reload: true });
   } catch (e) {
     console.error("[Conversations] open failed:", e);
     toast("打开对话失败: " + friendlyError(e), "error");

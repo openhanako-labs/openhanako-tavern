@@ -49,6 +49,7 @@ export const DRAWERS = {
   presets: document.getElementById("drawer-presets"),
   tools: document.getElementById("drawer-tools"),
   migration: document.getElementById("drawer-migration"),
+  character: document.getElementById("drawer-character"),
 };
 
 /* ── 外壳与浮层 ─────────────────────────────────────

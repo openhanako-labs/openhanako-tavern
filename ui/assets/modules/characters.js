@@ -1,6 +1,6 @@
 // characters.js — 由 characters.js 按功能拆分（B5）
 
-import { apiFetch, confirmDialog, escapeHtml, extractArray, formatDate, friendlyError, toast } from "./core.js";
+import { apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatDate, friendlyError, toast } from "./core.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
 
@@ -347,4 +347,81 @@ export async function commitImport() {
     console.error("[Import] commit failed:", e);
     toast("导入失败: " + friendlyError(e), "error");
   }
+}
+
+// ── 右栏 · 当前角色上下文 ────────────────────────────
+
+/**
+ * 渲染右栏的"当前角色"面板。
+ *
+ * v3 的灵魂：开对话时右栏自动站出角色卡——身份、设定、开场白
+ * 随时可瞥，不再埋进二级抽屉。数据来自 openConversation 已拉好的
+ * state.currentCharacter，这里只做渲染。
+ *
+ * @param {number} [greetIdx] - 开场白轮换的当前下标（默认 0）
+ */
+export async function renderCharContext(greetIdx = 0) {
+  const box = document.getElementById("char-ctx-body");
+  if (!box) return;
+
+  const c = state.currentCharacter;
+  if (!c) {
+    box.innerHTML = '<div class="empty">尚未打开对话</div>';
+    return;
+  }
+
+  // 开场白集：主 + 备选，与 seedGreeting 的取材一致
+  const greets = [String(c.first_mes || "").trim(),
+    ...(Array.isArray(c.alternate_greetings) ? c.alternate_greetings : [])]
+    .map(x => String(x || "").trim())
+    .filter(Boolean);
+  const gi = greets.length === 0 ? 0 : ((greetIdx % greets.length) + greets.length) % greets.length;
+
+  const initial = String(c.name || "?").trim().slice(0, 1) || "?";
+  const tags = (Array.isArray(c.tags) ? c.tags : []).slice(0, 8);
+  const desc = String(c.description || "").trim();
+  const ver = String(c.character_version || "1.0");
+  const creator = String(c.creator || "ophelia");
+
+  const greetHtml = greets.length > 0
+    ? `
+      <div class="greet-box">
+        <div class="greet-head">
+          <span>开场白 <b id="greet-idx">${gi + 1}/${greets.length}</b> · 新建对话时随机取一条</span>
+          <span class="greet-nav">
+            <button id="greet-prev" title="上一条">‹</button>
+            <button id="greet-next" title="下一条">›</button>
+          </span>
+        </div>
+        <div class="greet-text" id="greet-text">${escapeHtml(greets[gi])}</div>
+      </div>`
+    : "";
+
+  box.innerHTML = `
+    <div class="char-ctx-head">
+      <div class="char-ctx-ava">${escapeHtml(initial)}</div>
+      <div>
+        <div class="char-ctx-name">${escapeHtml(c.name || "（未命名）")}</div>
+        <div class="char-ctx-sub">${escapeHtml(creator)} · v${escapeHtml(ver)}</div>
+      </div>
+    </div>
+    <div class="char-ctx-desc${desc ? "" : " is-empty"}">${desc ? escapeHtml(desc) : "还没有描述"}</div>
+    ${tags.length > 0 ? `<div class="char-ctx-tags">${tags.map(t => `<span>${escapeHtml(t)}</span>`).join("")}</div>` : ""}
+    ${greetHtml}
+    <div class="char-ctx-actions">
+      <button class="btn btn-sm" data-ctx="edit">编辑</button>
+      <button class="btn btn-sm" data-ctx="export">导出</button>
+      <button class="btn btn-sm danger" data-ctx="delete">删除</button>
+    </div>`;
+
+  // 动作：复用角色域已有分派（编辑/导出/删除三个真动作，不摆没实现的按钮）
+  box.querySelectorAll("[data-ctx]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      handleCharacterAction(btn.dataset.ctx, c.id);
+    });
+  });
+
+  // 开场白轮换：只换预览，不动数据（真生效在建对话时随机取）
+  box.querySelector("#greet-prev")?.addEventListener("click", () => renderCharContext(gi - 1));
+  box.querySelector("#greet-next")?.addEventListener("click", () => renderCharContext(gi + 1));
 }

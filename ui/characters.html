@@ -34,6 +34,7 @@
           <div class="more-wrap">
             <button id="app-more-btn" class="btn btn-ghost btn-sm more-btn" title="更多">⋯</button>
             <div id="app-more-menu" class="more-menu" hidden>
+              <button data-drawer="character"><span class="mi">👤</span>当前角色</button>
               <button data-drawer="settings"><span class="mi">✳</span>设定库</button>
               <button data-drawer="variables"><span class="mi">◫</span>变量</button>
               <button data-drawer="presets"><span class="mi">⌗</span>提示词预设</button>
@@ -211,6 +212,17 @@
     </div>
   </main>
 </div>
+
+    <!-- 右栏 · 当前角色（开对话时自动站出；⋯ 菜单可手动切） -->
+    <div id="drawer-character" class="drawer hidden">
+      <div class="drawer-head">
+        <h2>当前角色</h2>
+        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <div class="drawer-body" id="char-ctx-body">
+        <div class="empty">尚未打开对话</div>
+      </div>
+    </div>
 
 <!-- ── 编辑弹窗（角色 / 设定 / 变量共用） ───────────── -->
 <div id="modal" class="modal hidden">

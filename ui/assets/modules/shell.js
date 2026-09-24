@@ -83,6 +83,9 @@ export async function openDrawer(name, opts = {}) {
     } else if (name === "variables") {
       const { loadVariables } = await import("./variables.js");
       await loadVariables();
+    } else if (name === "character") {
+      const { renderCharContext } = await import("./characters.js");
+      await renderCharContext();
     } else if (name === "presets") {
       const { loadPresets } = await import("./presets.js");
       await loadPresets();
