@@ -4,15 +4,15 @@
 
 export const dom = {
 
-  listEl: document.getElementById("characters-list"),
-  countEl: document.getElementById("count"),
+  listEl: null,   // 页内侧栏已删，角色列表由宿主 rail 承担
+  countEl: null,
   modalEl: document.getElementById("modal"),
   importModalEl: document.getElementById("import-modal"),
   newConvModalEl: document.getElementById("new-conv-modal"),
   fileInput: document.getElementById("file-input"),
   stImportInput: document.getElementById("st-import-input"),
 
-  conversationsListEl: document.getElementById("conversations-list"),
+  conversationsListEl: null, // 页内侧栏已删，对话列表由宿主 rail 独家承担
   messagesContainer: document.getElementById("messages-container"),
   chatTitle: document.getElementById("chat-title"),
   chatInputArea: document.getElementById("chat-input-area"),
@@ -59,8 +59,8 @@ export const DRAWERS = {
  */
 
 dom.shellEl = document.querySelector(".shell");
-dom.sidebarCollapseBtn = document.getElementById("sidebar-collapse");
-dom.sidebarExpandBtn = document.getElementById("sidebar-expand");
+dom.sidebarCollapseBtn = null;   // 页内侧栏已删，收/展无对象（键保留防 shell.js 引用断裂）
+dom.sidebarExpandBtn = null;
 dom.convPickerEl = document.getElementById("conv-picker-modal");
 dom.convPickerListEl = document.getElementById("conv-picker-list");
 dom.convPickerTitleEl = document.getElementById("conv-picker-title");

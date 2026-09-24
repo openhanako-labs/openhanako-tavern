@@ -177,8 +177,12 @@ function bind() {
     timer = setTimeout(() => { query = $("q").value.trim(); loadChars(); loadConvs(); }, 200);
   });
   $("conv-refresh").addEventListener("click", () => { loadChars(); loadConvs(); });
-  $("new-conv").addEventListener("click", () => nav({ t: "new-conv" }));
-  $("new-char").addEventListener("click", () => nav({ t: "new-char" }));
+  $("new-conv")?.addEventListener("click", () => nav({ t: "new-conv" }));
+  $("new-char")?.addEventListener("click", () => nav({ t: "new-char" }));
+  // 页内侧栏删了，"导入"从此只能从 rail 进——链路：nav → card 页 shell
+  // 消费 import-char → 点隐藏的 file-input → change → handleImport（那条链一直活着，
+  // 只是过去三个人抢着当入口却一个都没绑）。
+  $("rail-import")?.addEventListener("click", () => nav({ t: "import-char" }));
 
   // card 页新建/删除对话后，可能通知左栏刷新
   window.addEventListener("storage", (e) => {

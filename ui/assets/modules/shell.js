@@ -285,6 +285,9 @@ export function bindShell() {
       await startNewConversation(msg.id);
     } else if (msg.t === "pick-char" && msg.id) {
       await pickCharacter(msg.id);
+    } else if (msg.t === "import-char") {
+      // rail 的导入按钮：触发隐藏 file-input，change 已由 main.js 绑好 handleImport
+      dom.fileInput?.click();
     } else if (msg.t === "new-conv") {
       const { createConversation } = await import("./chat.js");
       await createConversation();

@@ -19,70 +19,27 @@
     品牌与 ⋯ 收在左栏顶部，不再单独占一行。
     这样左栏从面板顶部贴边开始，中间聊天区拿到完整宽度与高度。
   -->
-  <aside id="sidebar" class="sidebar">
-    <div class="sb-brand">
-      <h1 class="brand">ElecKoi Tavern<span class="tag">m8</span></h1>
-      <div class="sb-brand-actions">
-        <button id="sidebar-collapse" class="btn btn-ghost btn-sm" title="收起侧栏 (Ctrl+B)">‹</button>
-        <div class="more-wrap">
-          <button id="app-more-btn" class="btn btn-ghost btn-sm more-btn" title="更多">⋯</button>
-          <div id="app-more-menu" class="more-menu" hidden>
-            <button data-drawer="settings"><span class="mi">✳</span>设定库</button>
-            <button data-drawer="variables"><span class="mi">◫</span>变量</button>
-            <button data-drawer="presets"><span class="mi">⌗</span>提示词预设</button>
-            <div class="sep"></div>
-            <button data-drawer="tools"><span class="mi">⚙</span>工具</button>
-            <button data-drawer="migration"><span class="mi">⇅</span>迁移</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="sb-search">
-      <input id="char-search" class="input" type="search" placeholder="搜索角色 / 描述 / 标签…">
-    </div>
-
-    <div class="sb-tags" id="char-tags"></div>
-
-    <div class="sb-scroll">
-      <div class="sb-section">
-        <div class="sb-head">
-          <span class="sb-title">角色</span>
-          <span id="count" class="count"></span>
-          <button id="refresh-btn" class="btn btn-ghost btn-sm" title="刷新角色卡">↻</button>
-        </div>
-        <div class="sb-tags" id="tag-cloud"></div>
-        <div id="characters-list" class="char-list">
-          <div class="empty">加载中…</div>
-        </div>
-      </div>
-
-      <div class="sb-section">
-        <div class="sb-head">
-          <span class="sb-title">最近对话</span>
-          <button id="refresh-conv-btn" class="btn btn-ghost btn-sm" title="刷新">↻</button>
-        </div>
-        <div id="conversations-list" class="conv-list"></div>
-      </div>
-    </div>
-
-    <div class="sb-foot">
-      <button id="new-conv-btn" class="btn btn-primary btn-sm">+ 新对话</button>
-      <button id="create-btn" class="btn btn-sm" title="新建角色卡">+ 角色</button>
-      <button id="import-btn" class="btn btn-sm" title="导入角色卡">导入</button>
-    </div>
-  </aside>
 
   <!-- ── 主区 ─────────────────────────────────────── -->
   <main class="main">
-    <!-- 侧栏收起后，展开钮浮在主区左上角 -->
-    <button id="sidebar-expand" class="btn btn-ghost btn-sm sb-expand" title="展开侧栏 (Ctrl+B)">›</button>
 
     <!-- 聊天 -->
     <section id="view-chat" class="chat-view">
       <div id="chat-header" class="chat-header">
         <h3 id="chat-title">选择对话开始</h3>
         <div id="chat-actions" class="chat-actions">
+          <!-- 抽屉入口（从已删的页内侧栏搬来：它本就叫顶栏菜单） -->
+          <div class="more-wrap">
+            <button id="app-more-btn" class="btn btn-ghost btn-sm more-btn" title="更多">⋯</button>
+            <div id="app-more-menu" class="more-menu" hidden>
+              <button data-drawer="settings"><span class="mi">✳</span>设定库</button>
+              <button data-drawer="variables"><span class="mi">◫</span>变量</button>
+              <button data-drawer="presets"><span class="mi">⌗</span>提示词预设</button>
+              <div class="sep"></div>
+              <button data-drawer="tools"><span class="mi">⚙</span>工具</button>
+              <button data-drawer="migration"><span class="mi">⇅</span>迁移</button>
+            </div>
+          </div>
           <div class="more-wrap">
             <button id="chat-more-btn" class="btn btn-ghost btn-sm more-btn hidden" title="更多">⋯</button>
             <div id="more-menu" class="more-menu" hidden>

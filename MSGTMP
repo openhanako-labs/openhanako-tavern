@@ -1,0 +1,32 @@
+feat(ui): 删页内侧栏（产品决定）+ 清 6 条孤儿对话
+
+两道都执行了：
+
+【数据】按判据清孤儿（characterId 不在现存角色集合）：
+删 6 条，涉及四个已删角色的 id；保留 1 条挂在现存薇拉上的对话。
+一发未冤枉，脚本落 ephemeral 不进仓库。
+
+【结构】页内侧栏删除，列表归宿主 rail 独家：
+- characters.html：删 aside 整块（22-74）+ sidebar-expand 浮钮
+- dom.js：listEl/countEl/conversationsListEl → null（键保留防引用断裂），
+  sidebarCollapse/ExpandBtn → null
+- characters.js：renderCharacters 加宿主缺失守卫；
+  loadTagCloud 整族拆除（函数+调用+main.js import 名）——它的宿主
+  tag-cloud 随侧栏没了
+- main.js：删左栏死绑定块（refresh/search/tag 委托）与首屏
+  loadCharacters/loadConversations（rail 自己拉自己的）
+- characters.css：shell 从两列 grid 收成单列，主区满宽
+- rail.html + rail.js：补「导入」按钮（nav → import-char）
+- shell.js：onNavigation 消费 import-char → 点隐藏 file-input，
+  change → handleImport 那条一直活着的链终于有了开关
+
+【发现】原侧栏底部三个按钮（+新对话/+角色/导入）从来没绑过——
+一直是死按钮；文件框的导入链活着但没人替它打开。侧栏一删全水落石出。
+
+【搬家】抽屉入口 ⋯+菜单（app-more 一族）从侧栏搬进 chat-header：
+它本来就叫顶栏菜单，此前只住错了楼。shell.js 绑定原样复活。
+
+【测试】check-u1-wiring 的 mustHave 断言随设计同步：删 sidebar 等
+五项、保留顶栏 ⋯（已搬回）。测试断言结构，结构变了断言跟着变。
+
+34/34 全绿。

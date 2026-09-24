@@ -1368,7 +1368,8 @@ footer a:hover { color: var(--accent); }
 /* 外壳：左侧栏 + 右侧主区，撑满视口 */
 .shell {
   display: grid;
-  grid-template-columns: 264px 1fr;
+  /* 页内侧栏已删：单列，主区铺满（rail 是宿主层，不占这里） */
+  grid-template-columns: 1fr;
   height: 100%;
   min-height: 0;
   overflow: hidden;

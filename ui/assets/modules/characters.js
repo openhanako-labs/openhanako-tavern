@@ -6,6 +6,10 @@ import { state } from "./state.js";
 
 
 export function renderCharacters(characters) {
+  // 页内侧栏已按产品决定删除（列表由宿主 rail 独家承担）——
+  // 元素不在就整段空转，保留函数是为存住 main.js 的 import 与
+  // saveCharacter 后的刷新调用链，不为真渲染。
+  if (!dom.listEl || !dom.countEl) return;
   dom.countEl.textContent = characters.length > 0 ? `${characters.length} 个` : "";
   if (characters.length === 0) {
     dom.listEl.innerHTML = '<div class="empty">暂无角色卡<span class="hint">点右上角「+ 新建」开始</span></div>';
@@ -257,46 +261,6 @@ export async function loadCharacters() {
   }
 }
 
-/**
- * 统计标签，渲染成可点的筛选条。
- *
- * 用 document.getElementById 而非 dom.* —— dom.js 里没有这一项，
- * 而 HTML 确有该容器。容器不存在就静默跳过：辅助筛选不该让
- * 缺一个元素炸掉整页。
- */
-export async function loadTagCloud() {
-  const el = document.getElementById("tag-cloud");
-  if (!el) return;
-  try {
-    const res = await apiFetch("characters");
-    const list = extractArray(res);
-    const counts = new Map();
-    for (const c of list) {
-      for (const t of (c.tags || [])) counts.set(t, (counts.get(t) || 0) + 1);
-    }
-    if (counts.size === 0) { el.innerHTML = ""; return; }
-
-    el.innerHTML = [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 30)
-      .map(([tag, n]) => {
-        const active = state.tagFilter === tag ? " active" : "";
-        return '<button type="button" class="tag-chip' + active + '" data-tag="' + escapeHtml(tag) + '">'
-          + escapeHtml(tag) + '<span class="n">' + n + '</span></button>';
-      })
-      .join("");
-
-    el.querySelectorAll(".tag-chip").forEach(btn => {
-      btn.addEventListener("click", () => {
-        state.tagFilter = state.tagFilter === btn.dataset.tag ? null : btn.dataset.tag;
-        loadTagCloud();
-        loadCharacters();
-      });
-    });
-  } catch (e) {
-    console.error("[TagCloud] failed:", e);
-  }
-}
 
 // ── 导入预览与提交 ───────────────────────────────────
 
@@ -379,7 +343,6 @@ export async function commitImport() {
 
     closeImportModal();
     await loadCharacters();
-    await loadTagCloud();
   } catch (e) {
     console.error("[Import] commit failed:", e);
     toast("导入失败: " + friendlyError(e), "error");

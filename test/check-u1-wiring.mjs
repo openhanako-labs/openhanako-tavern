@@ -63,11 +63,9 @@ else ok("顶栏菜单 → 抽屉的事件源存在");
 // ── 5. 一屏结构的关键类 ──
 const mustHave = [
   ["shell 外壳", 'class="shell"'],
-  ["左栏", 'id="sidebar"'],
-  ["侧栏折叠按钮", 'id="sidebar-collapse"'],
-  ["侧栏展开按钮", 'id="sidebar-expand"'],
-  ["左栏角色列表", 'id="characters-list" class="char-list"'],
-  ["左栏对话列表", 'id="conversations-list"'],
+  // 页内侧栏已按产品决定删除（2026-09-23：列表归宿主 rail 独家），
+  // sidebar / collapse / expand / characters-list / conversations-list
+  // 五项随设计移除——测试断言的是结构，结构变了断言跟着变。
   ["顶栏 ⋯", 'id="app-more-btn"'],
   ["多存档选择器", 'id="conv-picker-modal"'],
   ["预设编辑器", 'id="preset-editor-modal"']

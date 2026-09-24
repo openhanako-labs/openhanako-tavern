@@ -8,7 +8,7 @@ import { dom } from "./dom.js";
 import { state } from "./state.js";
 import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, formatDate, formatTime } from "./core.js";
 
-import { loadCharacters, loadTagCloud, renderCharacters, openCharacterEditor, saveCharacter, deleteCharacter, exportCharacter, handleCharacterAction, handleImport, commitImport, closeImportModal, renderImportPreview } from "./characters.js";
+import { loadCharacters, renderCharacters, openCharacterEditor, saveCharacter, deleteCharacter, exportCharacter, handleCharacterAction, handleImport, commitImport, closeImportModal, renderImportPreview } from "./characters.js";
 import { loadConversations, renderConversations, openConversation, renderMessages, sendMessage, stopGeneration, bindScrollFollow, createConversation, confirmNewConversation, closeNewConvModal, deleteMessage, startEditMessage, copyMessage, swipeVariant, regenerateFrom, findMessage } from "./chat.js";
 import { bindChatMore, syncChatMore } from "./chat-more.js";
 import { bindShell, toggleSidebar } from "./shell.js";
@@ -55,39 +55,6 @@ export async function handleDelete() {
 
 
 // ── 事件绑定 ──────────────────────────────────────────
-
-// 左栏：角色卡
-document.getElementById("refresh-btn")?.addEventListener("click", loadCharacters);
-
-// 搜索：防抖 + Enter 立即 + Esc 清空
-let searchTimer = null;
-const searchEl = document.getElementById("char-search");
-
-searchEl?.addEventListener("input", () => {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(loadCharacters, 250);
-});
-
-searchEl?.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") {
-    e.preventDefault();
-    clearTimeout(searchTimer);
-    loadCharacters();
-  } else if (e.key === "Escape") {
-    e.preventDefault();
-    searchEl.value = "";
-    clearTimeout(searchTimer);
-    loadCharacters();
-  }
-});
-
-// 标签云（事件委托）
-document.getElementById("char-tags")?.addEventListener("click", (e) => {
-  const chip = e.target.closest(".tag-chip");
-  if (!chip) return;
-  state.activeTag = chip.dataset.tag || "";
-  loadCharacters();
-});
 
 // 聊天
 document.getElementById("send-btn")?.addEventListener("click", sendMessage);
@@ -190,8 +157,6 @@ export async function init() {
     }
   });
 
-  loadCharacters();
-  loadConversations();
 }
 
 init();
