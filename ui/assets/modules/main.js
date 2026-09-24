@@ -9,7 +9,7 @@ import { state } from "./state.js";
 import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, formatDate, formatTime } from "./core.js";
 
 import { loadCharacters, renderCharacters, openCharacterEditor, saveCharacter, deleteCharacter, exportCharacter, handleCharacterAction, handleImport, commitImport, closeImportModal, renderImportPreview } from "./characters.js";
-import { loadConversations, renderConversations, openConversation, renderMessages, sendMessage, stopGeneration, bindScrollFollow, createConversation, confirmNewConversation, closeNewConvModal, deleteMessage, startEditMessage, copyMessage, swipeVariant, regenerateFrom, findMessage } from "./chat.js";
+import { loadConversations, renderConversations, openConversation, renderMessages, sendMessage, stopGeneration, bindScrollFollow, createConversation, confirmNewConversation, closeNewConvModal, deleteMessage, startEditMessage, copyMessage, swipeVariant, regenerateFrom, findMessage, hideUsageBar } from "./chat.js";
 import { bindChatMore, syncChatMore } from "./chat-more.js";
 import { bindShell, toggleSidebar } from "./shell.js";
 import { bindPresets } from "./presets.js";
@@ -17,6 +17,7 @@ import { loadSettings, renderSettings, openSettingEditor, saveSetting, deleteSet
 import { loadVariables, renderVariables, openVariableEditor, saveVariable, deleteVariable, handleVariableAction, testReplace } from "./variables.js";
 import { loadTools, renderToolGroups, renderTools } from "./tools.js";
 import { importFile, loadExports, renderExports, downloadExport, downloadExportFile, deleteExportFile, copyExport, formatFileSize, exportAll } from "./migration.js";
+import { saveBoardCell, deleteBoardCell, bindBoard } from "./board.js";
 
 
 // ── 通用弹窗 ──────────────────────────────────────────
@@ -26,6 +27,7 @@ export function closeEditModal() {
   state.currentCharacter = null;
   state.currentSetting = null;
   state.currentVariable = null;
+  state.currentBoardCell = null;
   state.currentForm = null;
 }
 
@@ -33,6 +35,7 @@ export async function handleSave() {
   if (state.currentForm === 'character') await saveCharacter();
   else if (state.currentForm === 'setting') await saveSetting();
   else if (state.currentForm === 'variable') await saveVariable();
+  else if (state.currentForm === 'board') await saveBoardCell();
 }
 
 export async function handleExport() {
@@ -51,6 +54,7 @@ export async function handleDelete() {
   if (state.currentForm === 'character' && state.currentCharacter) await deleteCharacter(state.currentCharacter.id);
   else if (state.currentForm === 'setting' && state.currentSetting) await deleteSetting(state.currentSetting.id);
   else if (state.currentForm === 'variable' && state.currentVariable) await deleteVariable(state.currentVariable.id);
+  else if (state.currentForm === 'board' && state.currentBoardCell) await deleteBoardCell(state.currentBoardCell.id);
 }
 
 
@@ -59,6 +63,7 @@ export async function handleDelete() {
 // 聊天
 document.getElementById("send-btn")?.addEventListener("click", sendMessage);
 document.getElementById("stop-btn")?.addEventListener("click", stopGeneration);
+document.getElementById("gen-meta-close")?.addEventListener("click", hideUsageBar);
 
 // 设定库 / 变量 / 预设 / 工具 / 迁移（抽屉在 shell.js 里开，这里绑它们内部按钮）
 document.getElementById("create-setting-btn")?.addEventListener("click", () => openSettingEditor(null));
@@ -148,6 +153,9 @@ export async function init() {
 
   // 预设抽屉内的按钮
   bindPresets();
+
+  // 世界（黑板）抽屉内的按钮
+  bindBoard();
 
   // 快捷键：Ctrl/Cmd+B 折侧栏
   document.addEventListener("keydown", (e) => {

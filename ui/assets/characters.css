@@ -106,7 +106,7 @@ main.ctx-open {
   grid-column: 2;
   grid-row: 1;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) 26px;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) 26px;
   gap: 4px;
   padding: 11px 12px 9px;
   border-bottom: 1px solid var(--border);
@@ -2003,3 +2003,127 @@ main.ctx-open .drawer:not(.hidden) {
   margin-top: 14px;
   border-top: 1px solid var(--border);
 }
+
+
+/* ── 读数条：默认显示，× 可关 ────────────────────────
+ * 缓存命中率与上下文用量是钱和延迟的直读数，用户明确要求看得见。
+ * × 只是把这条藏起来，不改任何采集——下次刷新它按记忆决定来不来。
+ */
+.gen-readings {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  min-width: 0;
+}
+
+.gen-close {
+  flex: none;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.gen-close:hover { background: var(--surface-2); color: var(--fg); }
+
+/* ── 世界（黑板） ───────────────────────────────────
+ * 一格用三个 chip 表达三个正交标签：活多久 / 谁看得见 / 何时醒。
+ * 不做成三段折叠——折叠会把「一眼看全」这件事弄丢，
+ * 而黑板的全部价值就是一眼看全此刻的世界。
+ */
+.board-note {
+  margin-bottom: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--fg-muted);
+}
+
+.board-cell {
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 10px);
+  background: var(--surface);
+  transition: border-color var(--t) var(--ease), opacity var(--t) var(--ease);
+}
+
+.board-cell:hover { border-color: var(--accent-line); }
+.board-cell.off { opacity: .5; }
+
+.bc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bc-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bc-body {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.bc-tag {
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: 10.5px;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+
+/* 私密格与「只有你」的格子在视觉上必须先跳出来——
+   它们和公开格长得一样，是最容易误判的一处 */
+.bc-tag.private {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.bc-acts {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* 通用小按钮：变量抽屉里的 class="mini" 一直是裸的（没有对应规则），
+   这里补上，顺手把它一起救活 */
+.mini {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.mini:hover { border-color: var(--accent-line); color: var(--fg); }
+.mini.danger:hover { border-color: #f87171; color: #f87171; }

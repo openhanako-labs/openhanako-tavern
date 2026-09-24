@@ -52,26 +52,42 @@ if (domMissing.length === 0) ok(`dom.js 的 ${domRefs.length + domClassRefs.leng
 else for (const m of domMissing) fail(`dom.js 引用了不存在的东西: ${m}`);
 
 // ── 4. 抽屉 id 与 shell.js 的 DRAWERS 键 ──
+// （2026-09-24 加上 board：黑板从数据层接到界面，成为第七个面板）
 const shellSrc = fs.readFileSync(path.join(modDir, "shell.js"), "utf8");
-for (const name of ["settings", "variables", "presets", "tools", "migration"]) {
+for (const name of ["character", "settings", "board", "variables", "presets", "tools", "migration"]) {
   if (!htmlIds.has(`drawer-${name}`)) fail(`缺抽屉 #drawer-${name}`);
 }
-ok("五个抽屉容器 id 齐全");
+ok("七个抽屉容器 id 齐全");
 if (!shellSrc.includes('data-drawer')) fail("topbar 菜单没绑 data-drawer");
 else ok("顶栏菜单 → 抽屉的事件源存在");
 
-// ── 4b. 右栏标签条：六个面板的常驻入口，必须一一对上 ──
+// ── 4b. 右栏标签条：七个面板的常驻入口，必须一一对上 ──
 // （2026-09-23 v3 结构落地：面板从 ⋯ 菜单里搬出来，变成看得见的标签）
+// （2026-09-24 世界加入：设定库是静态资料，黑板是会变的状态，
+//   两者同属「模型看到的世界」那一层，所以放在相邻位置）
+//
+// 列数也要一并断言：栅格列数要装得下「标签 + 收起键」。少一列，
+// 多出来的标签会被挤进 26px 的收起列——布局静默崩掉，不报错。
+const cssSrc = fs.readFileSync(path.join(root, "ui/assets/characters.css"), "utf8");
 const tabStrip = html.match(/<nav class="ctx-tabs"[\s\S]*?<\/nav>/);
 if (!tabStrip) fail("缺右栏标签条 .ctx-tabs");
 else {
   const tabs = [...tabStrip[0].matchAll(/data-drawer="([^"]+)"/g)].map(m => m[1]);
-  for (const name of ["character", "settings", "variables", "presets", "tools", "migration"]) {
+  for (const name of ["character", "settings", "board", "variables", "presets", "tools", "migration"]) {
     if (!tabs.includes(name)) fail(`标签条缺面板入口: ${name}`);
   }
-  if (tabs.length !== 6) fail(`标签条应有 6 个入口，实为 ${tabs.length}`);
+  if (tabs.length !== 7) fail(`标签条应有 7 个入口，实为 ${tabs.length}`);
   if (!tabStrip[0].includes('class="drawer-close ctx-close"')) fail("标签条缺收起键（.ctx-close）");
-  if (errors === 0) ok("右栏标签条六入口 + 收起键齐全");
+
+  const items = tabs.length + 1;   // 标签 + 收起键
+  const cols = Number((cssSrc.match(/\.ctx-tabs \{[\s\S]*?grid-template-columns:\s*repeat\((\d+)/) || [])[1] || 0);
+  if (!cols) fail("读不出 .ctx-tabs 的栅格列数");
+  else {
+    const rows = Math.ceil(items / cols);
+    if (rows > 2) fail(`标签条 ${items} 个元素按 ${cols} 列要排 ${rows} 行，超出两行`);
+    else if (cols * rows - items >= cols) fail(`标签条按 ${cols} 列会空出整行`);
+    else if (errors === 0) ok(`右栏标签条 ${tabs.length} 个入口 + 收起键齐全（${cols} 列 × ${rows} 行）`);
+  }
 }
 
 // ── 5. 一屏结构的关键类 ──

@@ -10,6 +10,10 @@ export const state = {
   charList: [],
   settingList: null,
   variableList: null,
+  // 世界（黑板）：世界级 + 本场的格子，以及正在编辑的那一格
+  boardWorld: [],
+  boardChat: [],
+  currentBoardCell: null,
   toolGroups: null,
   toolList: null,
   exportList: null,

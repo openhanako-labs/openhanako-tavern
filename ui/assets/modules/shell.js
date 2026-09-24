@@ -59,7 +59,7 @@ function restoreSidebar() {
  * 是实打实的宽度。聊天区本来就被左右夹着，再被抽屉盖掉一截就更窄了。
  * 用户随时能点 ‹ 把左栏放回来。
  *
- * @param {"character"|"settings"|"variables"|"presets"|"tools"|"migration"} name
+ * @param {"character"|"settings"|"board"|"variables"|"presets"|"tools"|"migration"} name
  * @param {{ reload?: boolean }} [opts]
  */
 export async function openDrawer(name, opts = {}) {
@@ -88,6 +88,9 @@ export async function openDrawer(name, opts = {}) {
     if (name === "settings") {
       const { loadSettings } = await import("./settings.js");
       await loadSettings();
+    } else if (name === "board") {
+      const { loadBoard } = await import("./board.js");
+      await loadBoard();
     } else if (name === "variables") {
       const { loadVariables } = await import("./variables.js");
       await loadVariables();

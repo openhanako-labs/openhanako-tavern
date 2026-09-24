@@ -30,6 +30,11 @@ export const dom = {
   toolsCountEl: document.getElementById("tools-count"),
   toolGroupsEl: document.getElementById("tool-groups-list"),
 
+  // 世界（黑板）
+  boardListEl: document.getElementById("board-list"),
+  boardCountEl: document.getElementById("board-count"),
+  boardNoteEl: document.getElementById("board-note"),
+
   exportsListEl: document.getElementById("exports-list"),
   exportInfoEl: document.getElementById("export-info"),
   importResultEl: document.getElementById("import-result"),
@@ -45,6 +50,7 @@ export const dom = {
  */
 export const DRAWERS = {
   settings: document.getElementById("drawer-settings"),
+  board: document.getElementById("drawer-board"),
   variables: document.getElementById("drawer-variables"),
   presets: document.getElementById("drawer-presets"),
   tools: document.getElementById("drawer-tools"),

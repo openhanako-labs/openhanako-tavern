@@ -442,6 +442,21 @@ export function renderConversations() {
   });
 }
 
+// 读数条「关掉」是记忆，不是这一次的临时状态——刷新后不该自己冒回来。
+const GEN_META_OFF_KEY = "eleckoi:gen-meta-off";
+
+function genMetaOff() {
+  try { return localStorage.getItem(GEN_META_OFF_KEY) === "1"; } catch { return false; }
+}
+
+/**
+ * 关掉读数条。只藏，不改任何采集——下次生成照样记 usage，只是不摆出来。
+ */
+export function hideUsageBar() {
+  try { localStorage.setItem(GEN_META_OFF_KEY, "1"); } catch { /* 隐身模式 */ }
+  document.getElementById("gen-meta")?.classList.add("hidden");
+}
+
 /**
  * 输入区上方的生成状态条：本轮 token 与缓存命中率。
  *
@@ -452,16 +467,22 @@ export function renderConversations() {
 export function renderUsageBar() {
   const bar = document.getElementById("gen-meta");
   if (!bar) return;
+
+  // 关掉了（用户按过 ×），或者还没有对话 → 不占位。
+  // 有对话但还没生成过 → 显示「—」：说不知道，比不显示诚实。
+  if (genMetaOff() || !state.currentConv) { bar.classList.add("hidden"); return; }
+
   const u = state.lastUsage;
   const prompt = u?.prompt_tokens ?? u?.input_tokens ?? null;
   const cached = u?.cache_read_input_tokens ?? u?.prompt_tokens_details?.cached_tokens ?? 0;
 
   const tEl = document.getElementById("gen-tokens");
   const cEl = document.getElementById("gen-cache");
-  if (prompt == null) { bar.classList.add("hidden"); return; }
 
   bar.classList.remove("hidden");
-  if (tEl) tEl.textContent = `上下文 ${prompt >= 1000 ? (prompt / 1000).toFixed(1) + "k" : prompt}`;
+  if (tEl) tEl.textContent = prompt == null
+    ? "上下文 —"
+    : `上下文 ${prompt >= 1000 ? (prompt / 1000).toFixed(1) + "k" : prompt}`;
   if (cEl) {
     if (cached > 0 && prompt > 0) {
       const pct = Math.round((cached / prompt) * 100);
@@ -495,6 +516,18 @@ export async function openConversation(id) {
     dom.chatActions?.querySelector("#export-chat-btn")?.classList.remove("hidden");
     dom.chatActions?.querySelector("#delete-conv-btn")?.classList.remove("hidden");
     dom.chatInput?.focus();
+
+    // 上一条对话的 usage 摆在新的对话头上是假读数——清掉，等这一场生成时再出数
+    state.lastUsage = null;
+    renderUsageBar();
+
+    // 换了对话，本场的黑板格也换了。面板开着就重拉，
+    // 否则显示的是上一场的格子——私密格尤其不能快照错对象。
+    if (!document.getElementById("drawer-board")?.classList.contains("hidden")) {
+      const { loadBoard } = await import("./board.js");
+      await loadBoard();
+    }
+
     // 角色上下文态：开对话 = 右栏自动站出角色卡。
     // reload:true 绕开 openDrawer 的同名 toggle——连续开会话不该被误关。
     openDrawer("character", { reload: true });
