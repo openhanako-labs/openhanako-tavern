@@ -169,7 +169,8 @@ const EXPECTED = {
     "POST /conversations/:id/messages", "POST /conversations/:id/messages/stream",
     "POST /conversations/:id/regenerate", "POST /conversations/:id/regenerate/stream",
     "GET /characters-for-conv",
-    "POST /conversations/:id/activation-preview", "POST /conversations/:id/prompt-preview"
+    "POST /conversations/:id/activation-preview", "POST /conversations/:id/prompt-preview",
+    "POST /conversations/:id/suggestions"
   ],
   settings: [
     "GET /settings", "GET /settings/:id", "POST /settings", "PUT /settings/:id",

@@ -2247,3 +2247,30 @@ main.ctx-open .drawer:not(.hidden) {
   width: 3px;
   background: var(--accent);
 }
+
+/* ── 行动候选项 ────────────────────────────────────────
+   正文之后的岔路。点一下填进输入框，不直接发。 */
+.suggest-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px 0;
+}
+
+.suggest-chip {
+  max-width: 47%;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+}
+
+.suggest-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

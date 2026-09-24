@@ -84,10 +84,28 @@ const fakeLlm = {
   available: true,
   lastTarget: { model: "ui-host-stub" },
   resolveContextWindow: async () => 32000,
-  generate: async () => ({
-    content: "「我在。」她没回头。",
-    usage: { prompt_tokens: 120, completion_tokens: 18 }
-  }),
+  // 按系统提示分流：要候选项就给一份清单，否则给一句正文。
+  // （桩要能跑完两条路，不然「点了没反应」会被误当成界面 bug）
+  generate: async (messages, options) => {
+    const sys = String(options?.systemPrompt || "");
+    if (/候选项/.test(sys)) {
+      return {
+        content: [
+          "- 推开哨塔的门往里走",
+          "- 站在门口听一会儿风",
+          "- 问她左眼那道疤的来历",
+          "- 掉头下山，不等天亮"
+        ].join("\n"),
+        usage: { prompt_tokens: 90, completion_tokens: 40 },
+        target: { model: "ui-host-stub" }
+      };
+    }
+    return {
+      content: "「我在。」她没回头。",
+      usage: { prompt_tokens: 120, completion_tokens: 18 },
+      target: { model: "ui-host-stub" }
+    };
+  },
   async *streamEvents() {
     yield { type: "text-delta", delta: "「我在。」" };
     yield { type: "done", usage: { prompt_tokens: 120, completion_tokens: 18 }, stopReason: "end_turn" };

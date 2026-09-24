@@ -81,4 +81,5 @@ dom.sidebarCollapseBtn = null;   // 页内侧栏已删，收/展无对象（键�
 dom.sidebarExpandBtn = null;
 dom.convPickerEl = document.getElementById("conv-picker-modal");
 dom.convPickerListEl = document.getElementById("conv-picker-list");
-dom.convPickerTitleEl = document.getElementById("conv-picker-title");
+dom.suggestRowEl = document.getElementById("suggest-row");
+dom.suggestBtn = document.getElementById("suggest-btn");

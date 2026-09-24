@@ -1,7 +1,7 @@
 // chat.js — 由 characters.js 按功能拆分（B5）
 
 import { hana } from "../sdk.js";
-import { apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatTime, friendlyError, toast } from "./core.js";
+import { apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatTime, friendlyError, toast, unwrap } from "./core.js";
 import { renderMarkdown } from "./markdown.js";
 // 宏引擎用 ui/assets/lib/macros.js（/ui/ 可达域内的镜像）。
 // 早期写成 ../../../lib/... —— URL 层级多 _surface/<token> 两级，且 lib/
@@ -55,6 +55,10 @@ export function renderMessages() {
   });
 
   dom.messagesContainer.scrollTop = dom.messagesContainer.scrollHeight;
+
+  // 候选项跟着消息走：最后一条 assistant 换了（发新消息、重生、删），
+  // 这里就自动跟着换或消失。
+  renderSuggestions();
 }
 
 
@@ -461,6 +465,89 @@ function genMetaOff() {
 /**
  * 关掉读数条。只藏，不改任何采集——下次生成照样记 usage，只是不摆出来。
  */
+// ── 行动候选项（正文之后的岔路）────────────────────
+
+/** 正在向模型要方向——防连点。 */
+let suggesting = false;
+
+/**
+ * 画候选项。
+ *
+ * 只取**最后一条 assistant 消息**上的那一组：候选项属于「这一轮之后能做什么」，
+ * 附在消息上就不会出现「三轮前的选项还挂在输入框上方」。
+ */
+export function renderSuggestions() {
+  const el = dom.suggestRowEl || document.getElementById("suggest-row");
+  if (!el) return;
+
+  const msgs = state.currentConv?.messages || [];
+  const lastAssistant = [...msgs].reverse().find(m => m.role === "assistant");
+  const items = Array.isArray(lastAssistant?.suggestions) ? lastAssistant.suggestions : [];
+
+  if (items.length === 0) {
+    el.innerHTML = "";
+    el.classList.add("hidden");
+    return;
+  }
+
+  el.classList.remove("hidden");
+  el.innerHTML = items
+    .map((s, i) => `<button type="button" class="suggest-chip" data-i="${i}">${escapeHtml(s.text || "")}</button>`)
+    .join("");
+
+  el.querySelectorAll(".suggest-chip").forEach((btn, i) => {
+    btn.addEventListener("click", () => {
+      // 点一下**填进输入框**，不直接发。
+      // 候选项是起点不是命令——人常常想改两个字再发。
+      dom.chatInput.value = items[i].text || "";
+      dom.chatInput.focus();
+    });
+  });
+}
+
+/** 向模型要几个方向。独立一次调用，结果挂在消息上、不进正文 prompt。 */
+export async function requestSuggestions() {
+  const conv = state.currentConv;
+  const btn = dom.suggestBtn || document.getElementById("suggest-btn");
+  if (!conv || suggesting) return;
+
+  suggesting = true;
+  if (btn) { btn.disabled = true; btn.textContent = "在想…"; }
+  try {
+    const res = await apiFetch(`conversations/${conv.id}/suggestions`, {
+      method: "POST",
+      body: JSON.stringify({})
+    });
+    const data = unwrap(res);
+    const items = Array.isArray(data?.items) ? data.items : [];
+
+    // 服务端已经落盘，这里只补内存里那一条，不整场重拉
+    const lastAssistant = [...(conv.messages || [])].reverse().find(m => m.role === "assistant");
+    if (lastAssistant && items.length > 0) lastAssistant.suggestions = items;
+    renderSuggestions();
+
+    if (items.length === 0) {
+      toast(data?.note ? `没给出可用的方向：${data.note}` : "没给出可用的方向", "error");
+    } else if (data?.note) {
+      toast(data.note, "info");
+    }
+  } catch (e) {
+    toast("拿方向失败: " + friendlyError(e), "error");
+  } finally {
+    suggesting = false;
+    if (btn) { btn.disabled = false; btn.textContent = "给点方向"; }
+  }
+}
+
+/** 输入区上的绑定。main.js 的 init 里调一次。 */
+export function bindComposer() {
+  const btn = dom.suggestBtn || document.getElementById("suggest-btn");
+  if (btn && btn.dataset.bound !== "1") {
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", () => requestSuggestions());
+  }
+}
+
 export function hideUsageBar() {
   try { localStorage.setItem(GEN_META_OFF_KEY, "1"); } catch { /* 隐身模式 */ }
   document.getElementById("gen-meta")?.classList.add("hidden");

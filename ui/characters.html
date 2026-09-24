@@ -96,9 +96,14 @@
         <button id="gen-meta-close" class="gen-close" title="隐藏读数" aria-label="隐藏读数">×</button>
       </div>
 
+      <!-- 行动候选项：正文之后的岔路。
+           它不属于「正文」，所以不进 prompt，只在这里出现（点一下填进输入框）。 -->
+      <div id="suggest-row" class="suggest-row hidden"></div>
+
       <div id="chat-input-area" class="chat-input-area hidden">
         <textarea id="chat-input" placeholder="输入消息…" rows="2"></textarea>
         <div class="input-actions">
+          <button type="button" id="suggest-btn" class="btn" title="让模型给几个下一步的方向">给点方向</button>
           <button id="send-btn" class="btn btn-primary">发送</button>
           <button id="stop-btn" class="btn hidden">停止</button>
         </div>

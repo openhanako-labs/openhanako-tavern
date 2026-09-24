@@ -9,7 +9,7 @@ import { state } from "./state.js";
 import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, formatDate, formatTime } from "./core.js";
 
 import { loadCharacters, renderCharacters, openCharacterEditor, saveCharacter, deleteCharacter, exportCharacter, handleCharacterAction, handleImport, commitImport, closeImportModal, renderImportPreview } from "./characters.js";
-import { loadConversations, renderConversations, openConversation, renderMessages, sendMessage, stopGeneration, bindScrollFollow, createConversation, confirmNewConversation, closeNewConvModal, deleteMessage, startEditMessage, copyMessage, swipeVariant, regenerateFrom, findMessage, hideUsageBar } from "./chat.js";
+import { loadConversations, renderConversations, openConversation, renderMessages, sendMessage, stopGeneration, bindScrollFollow, bindComposer, createConversation, confirmNewConversation, closeNewConvModal, deleteMessage, startEditMessage, copyMessage, swipeVariant, regenerateFrom, findMessage, hideUsageBar } from "./chat.js";
 import { bindChatMore, syncChatMore } from "./chat-more.js";
 import { bindShell, toggleSidebar } from "./shell.js";
 import { bindPresets } from "./presets.js";
@@ -148,6 +148,9 @@ export async function init() {
 
   // 滚动跟随（只在用户已在底部时自动跟随）
   bindScrollFollow();
+
+  // 输入区：「给点方向」那一个按钮
+  bindComposer();
 
   // 一屏外壳：侧栏折叠 / 抽屉 / 点卡开聊
   bindShell();
