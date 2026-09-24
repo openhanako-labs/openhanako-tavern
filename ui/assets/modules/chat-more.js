@@ -299,10 +299,27 @@ function renderPrompt(res, scanText = "") {
     const warns = (audit.warnings || []).map(w => `<div class="pv-entry">
       <span class="tag">⚠</span><span class="content">${escapeHtml(w)}</span>
     </div>`).join("");
+
+    // 稳定前缀：这一场里逐字节不变的那一段。
+    // 它是缓存命中与否的全部依据，所以单独一行：指纹 + 本轮变没变。
+    const pfx = audit.prefix;
+    const pfxRow = pfx ? `<div class="pv-entry">
+      <span class="tag">前缀</span>
+      <span class="content">
+        <code class="mono">${escapeHtml(String(pfx.fingerprint || ""))}</code>
+        ${pfx.changed
+          ? `<span class="why">本轮变了：${escapeHtml((pfx.changed.parts || []).join(" + "))}——缓存从变化点往后全废</span>`
+          : (pfx.baseline === "已知"
+            ? `<span class="dim">本轮没变</span>`
+            : `<span class="dim">没有可比的上一次（本进程第一次见这一场）</span>`)}
+        <span class="dim">${(pfx.parts || []).map(p => `${escapeHtml(LABEL[p.kind] || p.kind)} ${p.chars}字符`).join(" · ")}</span>
+      </span>
+    </div>` : "";
+
     parts.push(`<div class="pv-section">
       <div class="pv-head">这一轮的账
         <span class="dim">共 ${audit.totalChars ?? 0} 字符${audit.regexChanged ? " · 正则改写后有变化" : ""}</span></div>
-      ${rows}${outs}${warns}
+      ${pfxRow}${rows}${outs}${warns}
     </div>`);
   }
 

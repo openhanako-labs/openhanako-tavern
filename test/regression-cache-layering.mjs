@@ -15,7 +15,8 @@ import path from "node:path";
 const { ConversationRepo } = await import("../lib/conversations/repo.js");
 const { CharacterRepo } = await import("../lib/characters/repo.js");
 const { SettingRepo } = await import("../lib/settings/repo.js");
-const { buildGenerationInput, applyMacrosToCharacter } = await import("../lib/conversations/pipeline.js");
+const { buildGenerationInput, applyMacrosToCharacter, buildStablePrefix, resetPrefixWatch } =
+  await import("../lib/conversations/pipeline.js");
 
 let pass = 0, fail = 0;
 async function okAsync(name, fn) {
@@ -176,6 +177,55 @@ await okAsync("账：卡里用了时间宏 → time 进系统栏，且不再出�
   const out = await buildGenerationInput(repos, c2, applyMacrosToCharacter(timed, c2, {}), "嗯。", {});
   assert.ok(out.audit.included.some(x => x.kind === "time" && x.where === "system"), "时间块没进账");
   assert.ok(!out.audit.omitted.some(x => x.kind === "time"), "时间块进了，却还报着没进");
+});
+
+// ── 稳定前缀：有名字、有指纹、变的时候说得出是哪一块 ──
+//
+// 「前缀变了」本身没有用——有用的是「因为 base 变了」。
+// 以前前缀是流程里现拼的一个字符串，没有身份，也就没人能回答
+// 「它什么时候会变、刚刚是不是变了」。
+
+await okAsync("buildStablePrefix：块间两行空行、无首尾分隔符、空块丢掉", () => {
+  const a = buildStablePrefix([
+    { kind: "base", text: "甲" },
+    { kind: "x", text: "" },
+    { kind: "board-static", text: "乙" }
+  ]);
+  assert.strictEqual(a.text, "甲\n\n乙");
+  assert.strictEqual(a.parts.length, 2, "空块应当被丢掉");
+  assert.strictEqual(a.fingerprint.length, 12, "指纹应当是 12 位");
+  assert.ok(!a.text.endsWith("\n"), "前缀不该以换行结尾（留尾巴就把边界交给了别人）");
+  assert.strictEqual(buildStablePrefix([]).text, "", "空输入应当是空串，不是分隔符");
+});
+
+await okAsync("前缀指纹：同一场连打两轮（输入不同）→ 指纹不变、不报变化", async () => {
+  resetPrefixWatch();
+  const c = await convRepo.create(card.id);
+  const one = await buildGenerationInput(repos, c, card, "第一句。", {});
+  const two = await buildGenerationInput(repos, await convRepo.get(c.id), card, "完全不同的一句。", {});
+
+  assert.strictEqual(one.audit.prefix.baseline, "未知（本进程第一次见到这一场）", "第一轮应当如实说未知");
+  assert.strictEqual(one.audit.prefix.changed, null, "没基线就不该报变化");
+  assert.strictEqual(two.audit.prefix.fingerprint, one.audit.prefix.fingerprint,
+    "输入不同不该动前缀——动了就说明有东西漏进了前缀");
+  assert.strictEqual(two.audit.prefix.changed, null, "指纹没变却报了变化");
+});
+
+await okAsync("前缀变了 → 指纹变，且点得出是哪一块（base）", async () => {
+  resetPrefixWatch();
+  const c2 = await convRepo.create(card.id);
+  const before = await buildGenerationInput(repos, c2, card, "一。", {});
+
+  await charRepo.update(card.id, { system_prompt: "（本轮改过的指令）" });
+  const changedCard = await charRepo.get(card.id);
+  const after = await buildGenerationInput(repos, await convRepo.get(c2.id), changedCard, "一。", {});
+
+  assert.notStrictEqual(after.audit.prefix.fingerprint, before.audit.prefix.fingerprint,
+    "改了卡，前缀指纹却没变");
+  assert.ok(after.audit.prefix.changed, "没有报出前缀变化");
+  assert.deepStrictEqual(after.audit.prefix.changed.parts, ["base"],
+    `点错了块：${JSON.stringify(after.audit.prefix.changed.parts)}`);
+  assert.ok(after.audit.warnings.some(w => /前缀本轮变了/.test(w)), "变了却没进警告");
 });
 
 fs.rmSync(tmp, { recursive: true, force: true });
