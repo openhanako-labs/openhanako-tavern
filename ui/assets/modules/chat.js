@@ -274,8 +274,12 @@ export async function deleteMessage(id) {
   try {
     state.currentConv.messages = state.currentConv.messages.filter(m => m !== msg);
     renderMessages();
-    // 单条删除没有专门端点，走整会话更新（对话是唯一真源）
-    await persistConv();
+    // 单条消息有自己的端点——之前这里写的是「整会话 PUT」，
+    // 而那条路由后端从来没有过，所以删一条消息只会弹「删除失败」然后回滚。
+    await apiFetch(
+      `conversations/${state.currentConv.id}/messages/${encodeURIComponent(id)}`,
+      { method: "DELETE" }
+    );
   } catch (e) {
     toast("删除失败: " + friendlyError(e), "error");
     await reloadCurrentConv();
@@ -397,19 +401,6 @@ async function reloadCurrentConv() {
     renderMessages();
   } catch { /* 回滚失败就不再补刀 */ }
 }
-
-/** 把当前对话整体写回后端。 */
-async function persistConv() {
-  try {
-    await apiFetch(`conversations/${state.currentConv.id}`, {
-      method: "PUT",
-      body: JSON.stringify({ messages: state.currentConv.messages })
-    });
-  } catch (e) {
-    toast("保存失败: " + friendlyError(e), "error");
-  }
-}
-
 
 // ── 对话列表与打开 ───────────────────────────────────
 

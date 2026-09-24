@@ -15,18 +15,51 @@ import { state } from "./state.js";
  */
 export async function loadTools() {
   try {
-    const [groupsRes, toolsRes] = await Promise.all([
-      apiFetch("tool-groups"),
-      apiFetch("tools")
+    // 端点名是 `tools/groups` / `tools/info`。
+    // 之前这里写的是 `tool-groups` / `tools`——两条都不存在，
+    // 所以这个面板从来没加载出来过（表现是弹一个「加载失败」）。
+    const [groupsRes, infoRes] = await Promise.all([
+      apiFetch("tools/groups"),
+      apiFetch("tools/info")
     ]);
     state.toolGroups = extractArray(groupsRes);
-    state.toolList = extractArray(toolsRes);
+    state.toolList = flattenTools(state.toolGroups, extractArray(infoRes));
     renderToolGroups(state.toolGroups);
     renderTools(state.toolList);
   } catch (e) {
     console.error("[Tools] load failed:", e);
     toast("加载失败: " + friendlyError(e), "error");
   }
+}
+
+/**
+ * 拼出界面上那一份工具明细（渲染要 `{name, group, description}`）。
+ *
+ * 「工具名→组」的归属在后端（TOOL_GROUPS），「工具的说明」在宿主
+ * （sdk.tools.list）。两边各只有一半，所以在这里合。
+ * **宿主不报 list 时照样出得了明细**——组那半份是权威的，
+ * 说明那半份有就补上、没有就空着。
+ */
+function flattenTools(groups, known) {
+  const desc = new Map();
+  for (const t of known) if (t && t.name) desc.set(t.name, t.description || "");
+
+  const rows = [];
+  const claimed = new Set();
+  for (const g of groups) {
+    for (const name of g.tools || []) {
+      claimed.add(name);
+      rows.push({ name, group: g.id, description: desc.get(name) || "" });
+    }
+  }
+  // 宿主报了、但没有组认领的（自加工具）：后端的 isToolEnabled 对这类默认放行，
+  // 界面也得把它亮出来——否则「默认放行」的东西在面板上看不见，开关就名不副实。
+  for (const t of known) {
+    if (t && t.name && !claimed.has(t.name)) {
+      rows.push({ name: t.name, group: "", description: t.description || "" });
+    }
+  }
+  return rows;
 }
 
 /** 渲染工具组开关。 */
@@ -49,7 +82,7 @@ export function renderToolGroups(groups) {
       const id = cb.dataset.g;
       const on = cb.checked;
       try {
-        await apiFetch(`tool-groups/${encodeURIComponent(id)}`, {
+        await apiFetch(`tools/groups/${encodeURIComponent(id)}/toggle`, {
           method: "PUT",
           body: JSON.stringify({ enabled: on })
         });

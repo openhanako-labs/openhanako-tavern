@@ -448,12 +448,46 @@ await okAsync("migration：health 与导出列表能打通", async () => {
   healthy(await request(apps.migration, "GET", "/migration/exports"), "GET /migration/exports");
 });
 
-// 工具（只读；toggle 会写真实数据目录，不碰）
+// 工具（只读那几条 + 面板真正用的 toggle）
 await okAsync("tools：只读那几条能打通", async () => {
   healthy(await request(apps.tools, "GET", "/tools/groups"), "GET /tools/groups");
   healthy(await request(apps.tools, "GET", "/tools/enabled"), "GET /tools/enabled");
   healthy(await request(apps.tools, "GET", "/tools/not-a-real-tool/enabled"), "GET /tools/:name/enabled");
   healthy(await request(apps.tools, "GET", "/tools/info"), "GET /tools/info");
+});
+
+// 工具面板**真的**在打的那三条。
+// 前端曾经把它们写成 `tool-groups` / `tools` / `PUT tool-groups/:id`——
+// 三条都不存在，所以这个面板从来没有加载出来过（表现是弹一句「加载失败」）。
+await okAsync("tools：面板用的三条真跑得通，且开关真落盘", async () => {
+  // 把开关的落盘目标先指到临时目录：不然 toggle 会写进真实数据目录
+  const { loadGroupState } = await import("../lib/tools/group.js");
+  await loadGroupState(tmp);
+
+  const groups = await request(apps.tools, "GET", "/tools/groups");
+  healthy(groups, "GET /tools/groups");
+  const list = groups.data;
+  assert.ok(Array.isArray(list) && list.length >= 5,
+    `组列表不是数组或太少：${JSON.stringify(list)?.slice(0, 80)}`);
+  for (const g of list) {
+    // 前端靠 `tools[]` 拼明细——少了它，面板就是一列没有归属的空名字
+    assert.ok(Array.isArray(g.tools) && g.tools.length > 0, `组 ${g.id} 没有 tools[]，前端拼不出明细`);
+    assert.strictEqual(typeof g.enabled, "boolean", `组 ${g.id} 没有 enabled`);
+  }
+
+  const info = await request(apps.tools, "GET", "/tools/info");
+  healthy(info, "GET /tools/info");
+  assert.ok(Array.isArray(info.data),
+    "tools/info 必须返回数组（宿主不报 list 时是空数组，但不能不是数组）");
+
+  const first = list[0].id;
+  const off = await request(apps.tools, "PUT", `/tools/groups/${first}/toggle`, { body: { enabled: false } });
+  healthy(off, "PUT /tools/groups/:id/toggle");
+  assert.strictEqual(off.data.enabled, false, "关掉之后返回值没跟着变");
+  assert.ok(fs.existsSync(path.join(tmp, "tool-groups.json")), "开关没有落盘——重启就丢");
+
+  const back = await request(apps.tools, "PUT", `/tools/groups/${first}/toggle`, { body: { enabled: true } });
+  assert.strictEqual(back.data.enabled, true, "再开回来没生效");
 });
 
 // ── ③ 死端点扫描：每个注册的路由都至少能被打到一次 ──
