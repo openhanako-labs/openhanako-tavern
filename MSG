@@ -1,61 +1,42 @@
-feat(ui): 装上「界面能点」这条路 + 它一上来就抓到的两个真 bug
+fix(chat): 流式回复永远渲染不出来——后端推 delta，前端只认 chunk
 
-## 为什么这一轮从这里开始
+## 一个词之差，主流程哑掉
 
-被问了一句「你有自己点过吗」。答案是没有——整个会话我都停在模块层、
-路由层、装配层，把剩下的交给一张清单让人去点。那是转嫁，不是验收。
+`lib/conversations/routes.js` 推的是
+`{type:"delta", content}` / `reasoning` / `usage` / `cancelled` /
+`error` / `{type:"done", content, message}`，
+而 `ui/assets/modules/chat.js` 只认 `{type:"chunk", content}`。
 
-根源是宿主的 App surface 锁在鉴权后面：静态资源要 `_surface/<session>/`
-路径段 + `X-Hana-App-Surface-Session` 头，而那串 session 是宿主开窗口时
-在内存里现发的，没有 HTTP 入口能换。
+后果不是报错，是**什么都没有**：气泡从没被创建，而最后那条 done
+又只在「气泡已存在」时才更新它。数据一帧不落地到了，屏幕上空的。
 
-那就不借它的壳：**自己起一个能把界面跑起来的小宿主**
-（`tools/ui-host.mjs`）。按宿主真实的 URL 形状收请求（形状是从
-app.asar 里那段脱敏正则读出来的），后端用**真的** `lib/*` 路由
-（注册方式与 regression-routes-smoke 一致），数据用真实数据的临时副本
-（点坏了碰不到原数据），每个请求打一行日志。
+这是真点出来的：读数据条里 prompt tokens=120 说明生成确实完成、
+无 toast、无异常，而消息列表里只有用户那一句。
 
-于是「这一次点击到底打了哪个端点」第一次变成可见的。前端一行都没改。
+## 修法
 
-## 一上来就抓到的两个真 bug
+- 事件名两系都认（`delta` 为主，`chunk` 留作别名）
+- **气泡的建立与重绘各自抽出来**（ensureBubble / paint），
+  `done` 分支也调 ensureBubble——一帧增量都没收到，结果也得站出来。
+  原来那句 `if (assistantMsgEl)` 是「沉默的第二半」
+- 补上 `cancelled`：用户点了停止，已到的半截留在屏上，不当失败
 
-**① main.js 的 init() 从来没加载首屏数据。**
-恢复时掉的（和之前那批被截掉的函数同一个形状）：init() 只剩绑事件，
-`loadCharacters()` 那行没了。原文在
-`tavern-reads/ui__assets__modules__main.js.read.txt` 里就是
-`// 加载数据` + `loadCharacters();`。症状是 `state.charList` 一直是空的。
+## 新护栏：流式事件名的跨侧契约
 
-**② 正则表单里的「跑一遍」是个 submit 按钮。**
-`<button id="rf-test-btn">` 没写 type——在 `<form>` 里默认是 submit，
-点一下等于提交表单，浏览器就导航：**整页重载**。在宿主里 iframe 一切换，
-URL 上的 appSurfaceSession 就没了，之后每个请求都报
-「requires appSurfaceSession」。日志里看得清清楚楚：POST 之后紧跟
-一整轮静态资源重载。
+这个 bug 能活这么久，是因为**两侧各自都对、接缝没人看**：
+路由测试只问「handler 抛没抛」，UI 测试只问「函数在不在」。
+45 个测试一个都没拦住。
 
-## 两个「假 bug」也是这一轮挣来的
+`test/check-stream-contract.mjs` 只做一件事：把两侧的事件名摆在一起对。
+后端推的每种 type，前端必须有分支接 **或者**写进 IGNORED 附理由。
+它立刻抓出第二个空档：`reasoning`（设计上就不接——思考段落盘后由
+消息自己的段渲染；实时显示是另一个功能）。**写了理由才算数，
+不写就是「没决定」。**
 
-**· 八个抽屉同时可见 / 到处「加载中…」**：我第一版把页面开在
-`?token=<serverToken>` 上，只有顶层文档带了凭据，CSS 与 main.js 都是
-403 → 得到一张空样式表。是我打开方式的产物，不是 App 的。
+## 顺带
 
-**· 抽屉打开只有 1px 宽**：`--ctx-w` 算出来就是 344px，可列宽是 0。
-真因是 `transition: grid-template-columns` 在**后台标签页被节流**，
-0px→344px 的过渡从来没跑。禁掉 transition 立刻是 `1081.6px 344px`。
-教训：在不可见的标签页里量带 transition 的布局，量到的是假象。
+`tools/ui-host.mjs` + `tools/flows/`：本地把 App 界面真跑起来的宿主，
+以及可重复的流程脚本（结果 POST 回来，我从日志读——不依赖
+browser 工具的 evaluate 通道）。这一轮的发现全是它点出来的。
 
-## 点出来的结果（真点，不是「应该」）
-
-- ⋯ 菜单：8 个入口全在（含工具、正则）
-- 标签条：一行四个
-- 工具抽屉：宽 344，五个组（角色卡/对话/变量/设定库/系统）都在，
-  工具明细有名字有归属——上一轮修的那两条端点端到端通了
-- 正则：新建 → 查找 `（[^）]*）` → 试 `她笑了（旁白）` →
-  「命中 / 替换后有变化 / 她笑了」，且不再重载页面
-- 宿主日志全程 200，没有 404、没有 handler 抛错
-
-## 护栏
-
-`check-u1-wiring` 加第 9 节：**form 里的 button 必须显式写 type**。
-静态就查得出，而这类错的表现是「点一下整页刷新」，很难往这上面想。
-
-45/45 通过。
+46/46 通过。

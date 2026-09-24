@@ -140,6 +140,24 @@ export async function sendMessageStream(content) {
     const decoder = new TextDecoder();
     let fullContent = "";
     let assistantMsgEl = null;
+
+    // 气泡的建立与重绘各自抽成一件小事。
+    // 为什么必须有：事件名一旦对不上，气泡就永远不会被建，
+    // 而最后那条 done 又只在「气泡已存在」时才更新它——
+    // 两处合起来就是「数据全到了，屏幕上什么都没有」。
+    const ensureBubble = () => {
+      if (assistantMsgEl) return;
+      assistantMsgEl = document.createElement("div");
+      assistantMsgEl.className = "message assistant";
+      assistantMsgEl.innerHTML = '<div class="content"></div>';
+      dom.messagesContainer.appendChild(assistantMsgEl);
+      try { loadingEl?.remove(); } catch { /* 已经拿掉 */ }
+    };
+    const paint = () => {
+      if (!assistantMsgEl) return;
+      assistantMsgEl.querySelector(".content").innerHTML = escapeHtml(fullContent);
+      dom.messagesContainer.scrollTop = dom.messagesContainer.scrollHeight;
+    };
     
     while (true) {
       const { done, value } = await reader.read();
@@ -153,23 +171,23 @@ export async function sendMessageStream(content) {
           try {
             const data = JSON.parse(line.slice(6));
             
-            if (data.type === "chunk") {
-              // 创建或更新消息元素
-              if (!assistantMsgEl) {
-                assistantMsgEl = document.createElement("div");
-                assistantMsgEl.className = "message assistant";
-                assistantMsgEl.innerHTML = '<div class="content"></div>';
-                dom.messagesContainer.appendChild(assistantMsgEl);
-                loadingEl.remove();
-              }
-              fullContent += data.content;
-              assistantMsgEl.querySelector(".content").innerHTML = escapeHtml(fullContent);
-              dom.messagesContainer.scrollTop = dom.messagesContainer.scrollHeight;
+            // 后端推的是 `delta`（见 lib/conversations/routes.js 那套：
+            // delta / reasoning / usage / cancelled / error / done）。
+            // 这里曾经只认 `chunk`——**一个词之差，回复就永远渲染不出来**。
+            // `chunk` 留作别名，不碍事。
+            if (data.type === "delta" || data.type === "chunk") {
+              ensureBubble();
+              fullContent += data.content ?? "";
+              paint();
             } else if (data.type === "done") {
-              fullContent = data.content;
-              if (assistantMsgEl) {
-                assistantMsgEl.querySelector(".content").innerHTML = escapeHtml(fullContent);
-              }
+              fullContent = data.content ?? fullContent;
+              ensureBubble();   // 一帧增量都没收到，结果也得站出来
+              paint();
+            } else if (data.type === "cancelled") {
+              // 用户点了停止：把已经到的半截留在屏上，不当作失败
+              fullContent = data.content ?? fullContent;
+              ensureBubble();
+              paint();
             } else if (data.type === "usage") {
               // 观测链：缓存命中率的数字从这里来。两系字段都认——
               // Anthropic: cache_read_input_tokens；OpenAI 兼容: prompt_tokens_details.cached_tokens

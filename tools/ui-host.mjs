@@ -33,7 +33,7 @@ const abs = (r) => path.join(ROOT, ...r.split("/"));
 const APP_ID = "eleckoi-tavern";
 const PORT = Number(process.env.ELECKOI_UI_PORT || 8791);
 
-const { makeApp, request } = await import("../test/lib/route-harness.mjs");
+const { makeApp, makeCtx } = await import("../test/lib/route-harness.mjs");
 const { CharacterRepo } = await import("../lib/characters/repo.js");
 const { CharacterTransfer } = await import("../lib/characters/transfer.js");
 const { ConversationRepo } = await import("../lib/conversations/repo.js");
@@ -131,10 +131,20 @@ function serveStatic(rel) {
 }
 
 // ── 路由分发 ──────────────────────────────────────────
+//
+// 故意**不用** route-harness 的 request()：它为了不让后台 handler 与
+// 测试后续动作抢同一个对话，会把 SSE 那条流读干。测试里那是对的，
+// 但这里是真转发，流被它读掉之后我再遍历 body 就得到
+// `ReadableStream is locked`——服务直接崩。
+// 所以自己拿 match + makeCtx，raw(Response) 原样交给下面去 pipe。
 async function dispatch(method, routePath, query, body) {
   for (const [name, app] of Object.entries(apps)) {
-    const r = await request(app, method, routePath, { query, body });
-    if (r) return { ...r, module: name };
+    const hit = app.match(method, routePath);
+    if (!hit) continue;
+    const { ctx, out } = makeCtx({ query, params: hit.params, body });
+    const returned = await hit.route.handler(ctx);
+    if (returned instanceof Response) return { raw: returned, module: name };
+    return { status: out.status, payload: out.payload, module: name };
   }
   return null;
 }
@@ -165,6 +175,27 @@ const server = http.createServer(async (req, res) => {
   const p = decodeURIComponent(url.pathname);
 
   const tag = (status, what) => console.log(`  ${String(status).padStart(3)}  ${method.padEnd(6)} ${url.pathname}${url.search ? "?" + url.searchParams.toString() : ""}  ${what || ""}`);
+
+  // 0) 脚本化探针
+  if (p === "/_probe.html") {
+    tag(200, "probe 页");
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    return res.end(PROBE_HTML);
+  }
+  if (p.startsWith("/_flow/")) {
+    const out = serveFlow(decodeURIComponent(p.slice("/_flow/".length)));
+    tag(out.status, `flow ${p.slice(7)}`);
+    res.writeHead(out.status, { "content-type": out.type || "text/plain; charset=utf-8", "cache-control": "no-store" });
+    return res.end(out.body);
+  }
+  if (p === "/__probe") {
+    const body = await readBody(req);
+    console.log("\n  ── 探针结果 ──");
+    console.log(JSON.stringify(body, null, 1).split("\n").map(l => "  " + l).join("\n"));
+    console.log("  ── 探针结果结束 ──\n");
+    res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+    return res.end(JSON.stringify({ ok: true }));
+  }
 
   // 1) 静态界面：/api/apps/<id>/ui/[ _surface/<s>/ ]<file>
   const uiPrefix = `/api/apps/${APP_ID}/ui/`;
@@ -205,19 +236,24 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ ok: false, error: `no route: ${method} ${routePath}` }));
     }
 
-    if (r.payload instanceof Response) {
-      const resp = r.payload;
-      tag(resp.status, `raw ${r.module}${routePath}（流式）`);
+    if (r.raw) {
+      const resp = r.raw;
+      tag(resp.status, `raw ${r.module}${routePath}（流式，原样转发）`);
       const headers = {};
       resp.headers.forEach((v, k) => { headers[k] = v; });
       res.writeHead(resp.status, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", ...headers });
       if (resp.body) {
-        for await (const chunk of resp.body) res.write(Buffer.from(chunk));
+        try {
+          for await (const chunk of resp.body) res.write(Buffer.from(chunk));
+        } catch (e) {
+          console.error("  流转发中断：" + e.message);
+        }
       }
       return res.end();
     }
 
-    tag(r.status, `${r.module}${routePath}${r.ok ? "" : "  ok=false " + (r.error || "")}`);
+    const okFlag = r.payload && typeof r.payload === "object" && r.payload.ok === true;
+    tag(r.status, `${r.module}${routePath}${okFlag ? "" : "  ok!=true " + (r.payload?.error || "")}`);
     res.writeHead(r.status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
     return res.end(JSON.stringify(r.payload));
   }
@@ -226,6 +262,44 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(404, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify({ ok: false, error: "not an app path: " + p }));
 });
+
+// ── 脚本化探针 ───────────────────────────────────────
+//
+// 为什么需要：browser 工具的 evaluate 这条通道会不定时掉
+//（`No browser instance for session`），而 navigate 一直稳定。
+// 那就把要跑的东西放进页面自己的脚本里：
+//   /_probe.html?flow=<name>  → iframe 加载 App，跑 tools/flows/<name>.js，
+//   把结果 POST 回 /__probe。我从日志里读。
+//
+// 比内联 evaluate 多两个好处：流程是**磁盘上的文件**（能改、能重跑、
+// 能进 git），而且 iframe 同源，直接就能拿到 App 的真模块实例。
+const PROBE_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>probe</title>
+<style>html,body{margin:0;height:100%}iframe{width:100%;height:100vh;border:0}</style></head>
+<body><iframe id="app"></iframe>
+<script>
+const flow = new URLSearchParams(location.search).get('flow') || 'send';
+const frame = document.getElementById('app');
+const send = (payload) => fetch('/__probe', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload)
+});
+frame.addEventListener('load', async () => {
+  try {
+    const code = await (await fetch('/_flow/' + flow + '.js')).text();
+    const result = await frame.contentWindow.eval('(async () => {\\n' + code + '\\n})()');
+    await send({ flow, ok: true, result });
+  } catch (e) {
+    await send({ flow, ok: false, error: String((e && e.stack) || e) });
+  }
+});
+frame.src = '/api/apps/${APP_ID}/ui/_surface/demo/characters.html?appSurfaceSession=demo';
+</script></body></html>`;
+
+function serveFlow(name) {
+  const clean = String(name).replace(/[^\w.-]/g, "").replace(/\.js$/, "");
+  const file = abs(`tools/flows/${clean}.js`);
+  if (!fs.existsSync(file)) return { status: 404, body: `no flow: ${clean}` };
+  return { status: 200, body: fs.readFileSync(file), type: "text/javascript; charset=utf-8" };
+}
 
 server.listen(PORT, "127.0.0.1", () => {
   const url = `http://127.0.0.1:${PORT}/api/apps/${APP_ID}/ui/_surface/demo/characters.html?appSurfaceSession=demo`;
