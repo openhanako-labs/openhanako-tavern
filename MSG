@@ -1,42 +1,53 @@
-fix(chat): 流式回复永远渲染不出来——后端推 delta，前端只认 chunk
+feat(pipeline): 组装预览给"账"——谁进了、谁没进、为什么
 
-## 一个词之差，主流程哑掉
+参考同类项目 dsh-tavern 的 context-planner（见 docs/notes-dsh-tavern.md）做的一件事：
+**prompt 构建返回账，而不是只返回拼好的文本。**
 
-`lib/conversations/routes.js` 推的是
-`{type:"delta", content}` / `reasoning` / `usage` / `cancelled` /
-`error` / `{type:"done", content, message}`，
-而 `ui/assets/modules/chat.js` 只认 `{type:"chunk", content}`。
+理由很直白：人看拼好的文本，对不出「该进没进」和「不该进进了」。
 
-后果不是报错，是**什么都没有**：气泡从没被创建，而最后那条 done
-又只在「气泡已存在」时才更新它。数据一帧不落地到了，屏幕上空的。
+## 账的形状
 
-这是真点出来的：读数据条里 prompt tokens=120 说明生成确实完成、
-无 toast、无异常，而消息列表里只有用户那一句。
+```js
+audit: {
+  included: [{ kind, where, chars, required, note }],   // where: system | messages
+  omitted:  [{ kind, reason }],                         // reason 不能空
+  warnings: [...],
+  totalChars, totalTokens,
+  systemCharsPreRegex, regexChanged
+}
+```
 
-## 修法
+- **账只从真实拼装里长出来**——旁边另算一遍，迟早会和真发出去的不一致
+- `omitted` 的**理由不能省**：没写就等于「忘了」，而那正是这块要防的事
+- `totalChars` 按**真正发出去**的那份算（正则可能改写过系统提示），
+  测试里拿它和 `systemPrompt.length + 消息长度` 对账
+- 一条警告顺手带上：**静态前缀里若还留着未结算的宏**，说明前缀每轮会变、
+  缓存白给——静态就能查，那就入账
 
-- 事件名两系都认（`delta` 为主，`chunk` 留作别名）
-- **气泡的建立与重绘各自抽出来**（ensureBubble / paint），
-  `done` 分支也调 ensureBubble——一帧增量都没收到，结果也得站出来。
-  原来那句 `if (assistantMsgEl)` 是「沉默的第二半」
-- 补上 `cancelled`：用户点了停止，已到的半截留在屏上，不当失败
+## UI
 
-## 新护栏：流式事件名的跨侧契约
+「组装预览」顶部先给账，再给正文。每条 `omitted` 亮出理由，
+比如「当前时刻 · 卡里没有时间宏（{{time}} 等），按设计不拼时间块」。
 
-这个 bug 能活这么久，是因为**两侧各自都对、接缝没人看**：
-路由测试只问「handler 抛没抛」，UI 测试只问「函数在不在」。
-45 个测试一个都没拦住。
+**还补了扫描文本**：预览以前发的是空 body，于是扫描文本永远是空的——
+世界书关键词永不命中、关键词格永不激活。预览会稳定地告诉人「什么都没有」，
+而那不是真相，是没给它输入。现在优先用输入框正在打的那句，否则用最后一条
+用户消息，并把「扫的是哪句话」亮在预览里。
 
-`test/check-stream-contract.mjs` 只做一件事：把两侧的事件名摆在一起对。
-后端推的每种 type，前端必须有分支接 **或者**写进 IGNORED 附理由。
-它立刻抓出第二个空档：`reasoning`（设计上就不接——思考段落盘后由
-消息自己的段渲染；实时显示是另一个功能）。**写了理由才算数，
-不写就是「没决定」。**
+## 顺手又抓到一次「信封没拆」
 
-## 顺带
+`chat-more.js` 的 `loadPreview` 把 `apiFetch` 返回的**全信封**直接交给了
+`renderActivation` / `renderPrompt` → 每个字段都是 undefined →
+屏幕上「约 0 tokens / 消息 0 / 世界书 0 条」。
 
-`tools/ui-host.mjs` + `tools/flows/`：本地把 App 界面真跑起来的宿主，
-以及可重复的流程脚本（结果 POST 回来，我从日志读——不依赖
-browser 工具的 evaluate 通道）。这一轮的发现全是它点出来的。
+**这是同一个病第三次出现**（presets.js 两处、这里两处）。看起来像
+「什么都没有」，不像「代码看错了地方」。两个预览用 `unwrap()` 修好。
 
-46/46 通过。
+## 测试
+
+`regression-cache-layering.mjs` 加 3 条：
+- 账的算术：`totalChars` 必须等于真发出去的系统提示 + 消息长度
+- 没时间宏的卡 → 账上要有一条 `time` 的 omitted，且理由里说清是「没有时间宏」
+- 有时间宏的卡 → `time` 进系统栏，且**不再**出现在 omitted 里（进了就不许报没进）
+
+46/46 通过。真点了一遍：预览里「这一轮的账 共 139 字符」+ 三段进了 + 四条没进带理由。

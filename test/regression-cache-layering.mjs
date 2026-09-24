@@ -15,7 +15,7 @@ import path from "node:path";
 const { ConversationRepo } = await import("../lib/conversations/repo.js");
 const { CharacterRepo } = await import("../lib/characters/repo.js");
 const { SettingRepo } = await import("../lib/settings/repo.js");
-const { buildGenerationInput } = await import("../lib/conversations/pipeline.js");
+const { buildGenerationInput, applyMacrosToCharacter } = await import("../lib/conversations/pipeline.js");
 
 let pass = 0, fail = 0;
 async function okAsync(name, fn) {
@@ -129,6 +129,53 @@ await okAsync("无尾巴那次 → 是有尾巴那次的字节前缀（分隔符
   assert.ok(!cold.includes(LORE_MARK), "这一句不该命中世界书");
   assert.ok(hot.includes(LORE_MARK), "这一句应当命中世界书");
   assert.ok(hot.startsWith(cold), "有尾巴时，无尾巴那次的内容不是它的字节前缀");
+});
+
+// ── 账（audit）：谁进了、谁没进、为什么 ──
+//
+// 这一块存在的理由：拼好的正文是给模型看的，**対不出「该进没进」**。
+// 人验收得看账。参考了同类项目 dsh-tavern 的 context-planner
+// （见 docs/notes-dsh-tavern.md），但字段是按我们自己的拼装点定的。
+
+await okAsync("账：每段都有出处，没进的都要写理由，总数与真发出去的一致", async () => {
+  const out = await buildGenerationInput(repos, conv, card, "又一句没关键词的话。", {});
+  const a = out.audit;
+  assert.ok(a && Array.isArray(a.included) && Array.isArray(a.omitted), "没有账");
+
+  assert.ok(a.included.some(x => x.kind === "base" && x.chars > 0), "账上没有底子段");
+
+  // 没进**必须**写理由。没写就等于「忘了」——那正是这块要防的事。
+  for (const o of a.omitted) {
+    assert.ok(String(o.reason || "").trim().length > 0, `omitted 缺理由：${JSON.stringify(o)}`);
+  }
+  // 每段都要有 where，界面靠它分「系统 / 消息」两栏
+  for (const x of a.included) {
+    assert.ok(x.where === "system" || x.where === "messages", `section 缺 where：${JSON.stringify(x)}`);
+  }
+
+  // 算术：账上的总数 = 真发出去的系统提示 + 消息正文
+  const expect = out.systemPrompt.length
+    + out.messages.reduce((n, m) => n + String(m.content ?? "").length, 0);
+  assert.strictEqual(a.totalChars, expect, "账上的总字符数与真发出去的对不上");
+});
+
+await okAsync("账：卡里没有时间宏 → time 那一条要写明为什么没拼", async () => {
+  const out = await buildGenerationInput(repos, conv, card, "又一句没关键词的话。", {});
+  const t = out.audit.omitted.find(x => x.kind === "time");
+  assert.ok(t, "没时间宏的卡，账上应当有一条 time 的 omitted");
+  assert.ok(/时间宏/.test(t.reason), `理由没说清：${t.reason}`);
+});
+
+await okAsync("账：卡里用了时间宏 → time 进系统栏，且不再出现在 omitted 里", async () => {
+  const timed = await charRepo.create({
+    name: "看钟的人", description: "现在是 {{time}}。", first_mes: "「你来了。」"
+  });
+  const c2 = await convRepo.create(timed.id);
+  // 必须跟真路径一样先过宏：needsTimeBlock 看的是**处理过的卡**上的指路标记，
+  // 直接拿原始卡（还写着 {{time}}）它当然说「没时间宏」。
+  const out = await buildGenerationInput(repos, c2, applyMacrosToCharacter(timed, c2, {}), "嗯。", {});
+  assert.ok(out.audit.included.some(x => x.kind === "time" && x.where === "system"), "时间块没进账");
+  assert.ok(!out.audit.omitted.some(x => x.kind === "time"), "时间块进了，却还报着没进");
 });
 
 fs.rmSync(tmp, { recursive: true, force: true });

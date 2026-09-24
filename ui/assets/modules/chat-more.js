@@ -8,7 +8,7 @@
 // 背景：这几个能力后端早就有了，但前端一个入口都没有——
 // 诊断端点躺在那儿，用户根本不知道能看。
 
-import { apiFetch, escapeHtml, friendlyError, toast } from "./core.js";
+import { apiFetch, escapeHtml, friendlyError, toast, unwrap } from "./core.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
 
@@ -168,13 +168,28 @@ async function loadPreview() {
     : `conversations/${conv.id}/prompt-preview`;
 
   try {
+    // 扫描文本：优先用输入框里正在打的那句，否则用最后一条用户消息。
+    //
+    // 之前这里发的是空 body，于是扫描文本永远是空的：
+    // 世界书关键词永远不命中、关键词格永远不激活。
+    // 预览会稳定地告诉人「什么都没有」——而那不是真相，是**没给它输入**。
+    const typed = String(dom.chatInput && dom.chatInput.value || "").trim();
+    const lastUser = [...(conv.messages || [])].reverse().find(m => m.role === "user");
+    const scanText = typed || String(lastUser && lastUser.content || "").trim();
+
     const res = await apiFetch(endpoint, {
       method: "POST",
-      body: JSON.stringify({})
+      body: JSON.stringify({ text: scanText })
     });
 
-    if (previewKind === "activation") renderActivation(res);
-    else renderPrompt(res);
+    // 拆信封。apiFetch 返回的是 `{ok, data}` **完整信封**，它不替你拆。
+    // 不拆的话 renderPrompt 读到的每个字段都是 undefined——屏幕上变成
+    //「约 0 tokens / 消息 0 / 世界书 0 条」，看起来像「什么都没有」，
+    // 而不像「代码看错了地方」。预设预览那两处已经踩过同一个坑了。
+    const data = unwrap(res);
+
+    if (previewKind === "activation") renderActivation(data, scanText);
+    else renderPrompt(data, scanText);
   } catch (e) {
     if (body) {
       body.innerHTML = `<div class="empty">加载失败<br><span class="hint">${escapeHtml(friendlyError(e))}</span></div>`;
@@ -183,7 +198,7 @@ async function loadPreview() {
 }
 
 /** 激活预览：列出"谁进了 / 谁被裁了 / 为什么"。 */
-function renderActivation(res) {
+function renderActivation(res, scanText = "") {
   const body = document.getElementById("preview-body");
   if (!body) return;
 
@@ -229,7 +244,7 @@ function renderActivation(res) {
 }
 
 /** 组装预览：systemPrompt + 逐条消息 + 用量估算。 */
-function renderPrompt(res) {
+function renderPrompt(res, scanText = "") {
   const body = document.getElementById("preview-body");
   if (!body) return;
 
@@ -244,6 +259,52 @@ function renderPrompt(res) {
     ${meta.droppedMessages ? `<span>折叠历史 ${meta.droppedMessages} 条</span>` : ""}
     ${meta.presetId ? `<span>预设 ${escapeHtml(String(meta.presetId))}</span>` : ""}
   </div>`);
+
+  // 把「扫的是哪句话」亮出来：关键词激活完全取决于它，
+  // 看不见它就无法解释「为什么这条没进」。
+  parts.push(`<div class="pv-entry">
+    <span class="tag">扫描</span>
+    <span class="content">${scanText
+      ? escapeHtml(scanText.slice(0, 200))
+      : `<span class="why">没有扫描文本（输入框空着、也没有用户消息）——关键词不会激活</span>`}</span>
+  </div>`);
+
+  // ── 账 ──
+  //
+  // 先给账再给正文。正文是给模型看的，账是给人看的：
+  // 人看拼好的文本，对不出「该进没进」和「不该进进了」。
+  const audit = res?.audit;
+  if (audit && ((audit.included || []).length || (audit.omitted || []).length || (audit.warnings || []).length)) {
+    const LABEL = {
+      base: "底子（预设或角色卡）",
+      "board-static": "世界 · 常驻",
+      "board-dynamic": "世界 · 本轮",
+      time: "当前时刻",
+      "lore-dynamic": "世界设定（本轮）",
+      history: "历史消息",
+      summary: "前情提要",
+      preset: "预设块"
+    };
+    const rows = (audit.included || []).map(x => `<div class="pv-entry">
+      <span class="tag">${x.where === "messages" ? "消息" : "系统"}</span>
+      <span class="content">${escapeHtml(LABEL[x.kind] || x.kind)}
+        <span class="dim">${x.chars} 字符</span>
+        ${x.note ? `<span class="dim">${escapeHtml(x.note)}</span>` : ""}</span>
+    </div>`).join("");
+    const outs = (audit.omitted || []).map(x => `<div class="pv-entry">
+      <span class="tag">没进</span>
+      <span class="content">${escapeHtml(LABEL[x.kind] || x.kind)}
+        <span class="why">${escapeHtml(x.reason || "（没写理由）")}</span></span>
+    </div>`).join("");
+    const warns = (audit.warnings || []).map(w => `<div class="pv-entry">
+      <span class="tag">⚠</span><span class="content">${escapeHtml(w)}</span>
+    </div>`).join("");
+    parts.push(`<div class="pv-section">
+      <div class="pv-head">这一轮的账
+        <span class="dim">共 ${audit.totalChars ?? 0} 字符${audit.regexChanged ? " · 正则改写后有变化" : ""}</span></div>
+      ${rows}${outs}${warns}
+    </div>`);
+  }
 
   parts.push(`<div class="pv-section">
     <div class="pv-head">systemPrompt <span class="dim">${meta.summaryAttached ? "含前情提要" : ""}</span></div>
