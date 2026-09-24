@@ -172,6 +172,22 @@ export async function init() {
     }
   });
 
+  // 首屏数据。
+  //
+  // **这一行曾经丢过**（恢复时掉的，和那批被截掉的函数同一个形状）：
+  // init() 只剩绑事件，于是 App 打开后左栏永远是空的，看起来像
+  // 「一个角色也没有」。原文在
+  //   已分类/工作/代码/tavern-reads/ui__assets__modules__main.js.read.txt
+  // 里就是 `// 加载数据` + `loadCharacters();`。
+  //
+  // 对话列表不在这里拉：页内侧栏已经删掉，那一份由宿主 rail 承担
+  //（见 dom.js 的 conversationsListEl）。
+  try {
+    await loadCharacters();
+  } catch (e) {
+    console.error("[Init] 首屏角色列表加载失败:", e);
+    toast("角色列表加载失败: " + friendlyError(e), "error");
+  }
 }
 
 init();

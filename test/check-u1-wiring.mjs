@@ -194,6 +194,35 @@ const mainSrc = fs.readFileSync(path.join(modDir, "main.js"), "utf8");
 if (mainSrc.includes('data-tab')) fail("main.js 还在处理 Tab 切换");
 else ok("main.js 已无 Tab 切换逻辑");
 
+// ── 9. form 里的 button 必须显式写 type ──
+//
+// `<button>` 在 `<form>` 里**不写 type 就是 submit**：点一下等于提交表单，
+// 浏览器就导航——整页重载。在宿主里 iframe 一切换，URL 上的
+// appSurfaceSession 就没了，之后每个请求都报「requires appSurfaceSession」。
+//
+// 这是真发生过的：正则表单里的「跑一遍」（#rf-test-btn）就没写，
+// 点它出来的是刷新，不是结果。
+{
+  const uiDir = path.resolve(modDir, "../..");
+  const pages = fs.readdirSync(uiDir).filter(f => f.endsWith(".html"));
+  const bad = [];
+  let forms = 0;
+  for (const page of pages) {
+    const src = fs.readFileSync(path.join(uiDir, page), "utf8");
+    for (const f of src.matchAll(/<form[^>]*>([\s\S]*?)<\/form>/g)) {
+      forms++;
+      for (const b of f[1].matchAll(/<button\b[^>]*>/g)) {
+        if (!/\btype=/.test(b[0])) bad.push(`${page}: ${b[0].replace(/\s+/g, " ").slice(0, 90)}`);
+      }
+    }
+  }
+  if (bad.length) {
+    fail(`form 里有 ${bad.length} 个 button 没写 type（默认是 submit，点一下会提交表单→整页重载）：\n     ${bad.join("\n     ")}`);
+  } else {
+    ok(`${pages.length} 个页面、${forms} 个 form 里的 button 都显式写了 type`);
+  }
+}
+
 console.log("\n" + "=".repeat(50));
 console.log(errors === 0 ? "U1 接线一致性全部通过" : `失败 ${errors} 项`);
 console.log("=".repeat(50));

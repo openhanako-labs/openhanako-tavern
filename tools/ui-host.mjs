@@ -1,0 +1,236 @@
+// tools/ui-host.mjs — 把 App 的界面在**真浏览器**里跑起来的本地宿主
+//
+// 为什么需要：
+//   宿主的 App surface 被锁在鉴权后面——静态资源要 `_surface/<session>/`
+//   路径段 + `X-Hana-App-Surface-Session` 头，而那串 session 是宿主开
+//   窗口时在内存里现发的，没有 HTTP 入口能换。于是「点一遍界面」这件事
+//   一直做不了，我只能把清单交给人去点——那是转嫁，不是验收。
+//
+// 这个宿主把那条路补上：
+//   · 用**真的** lib/* 路由（注册方式与 regression-routes-smoke 一致）
+//   · 按宿主真实的 URL 形状收请求（见 app.asar 里那段脱敏正则）：
+//       /api/apps/<id>/ui/_surface/<session>/<file>
+//       /api/apps/<id>/routes/_runtime/<rt>/_surface/<session>/<path>
+//     session 是路径段，所以页面的相对子资源（css / js / import 图）
+//     **自动继承**，前端一行都不用改。
+//   · 数据目录是**真实数据的临时副本**：能看见自己的角色与对话，
+//     而点击（删、改、保存）碰不到原数据。
+//   · 每个请求都打一行日志——「这一次点击到底打了哪个端点」是查
+//     界面逻辑问题时最要紧的那条线索。
+//
+// 用法：node tools/ui-host.mjs
+//      然后开 http://127.0.0.1:<port>/api/apps/eleckoi-tavern/ui/_surface/demo/characters.html?appSurfaceSession=demo
+//   环境变量：ELECKOI_UI_PORT（默认 8791）、ELECKOI_DATA（真实数据目录）
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import http from "node:http";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const abs = (r) => path.join(ROOT, ...r.split("/"));
+const APP_ID = "eleckoi-tavern";
+const PORT = Number(process.env.ELECKOI_UI_PORT || 8791);
+
+const { makeApp, request } = await import("../test/lib/route-harness.mjs");
+const { CharacterRepo } = await import("../lib/characters/repo.js");
+const { CharacterTransfer } = await import("../lib/characters/transfer.js");
+const { ConversationRepo } = await import("../lib/conversations/repo.js");
+const { SettingRepo } = await import("../lib/settings/repo.js");
+const { VariableRepo } = await import("../lib/variables/repo.js");
+const { PresetRepo } = await import("../lib/presets/repo.js");
+const { BoardRepo } = await import("../lib/board/repo.js");
+const { RegexRepo } = await import("../lib/regex/repo.js");
+const { registerCharacterRoutes } = await import("../lib/characters/routes.js");
+const { registerConversationRoutes } = await import("../lib/conversations/routes.js");
+const { registerSettingRoutes } = await import("../lib/settings/routes.js");
+const { registerVariableRoutes } = await import("../lib/variables/routes.js");
+const { registerPresetRoutes } = await import("../lib/presets/routes.js");
+const { registerToolRoutes } = await import("../lib/tools/routes.js");
+const { registerBoardRoutes } = await import("../lib/board/routes.js");
+const { registerRegexRoutes } = await import("../lib/regex/routes.js");
+const { registerMigrationRoutes } = await import("../lib/migration/routes.js");
+const { loadGroupState } = await import("../lib/tools/group.js");
+
+// ── 数据：真实数据的临时副本 ──────────────────────────
+const SRC = process.env.ELECKOI_DATA || "W:/Games/Hanako/.hanako/app-data/eleckoi-tavern";
+const DATA = path.join(os.tmpdir(), "eleckoi-ui-host-data");
+fs.rmSync(DATA, { recursive: true, force: true });
+fs.mkdirSync(DATA, { recursive: true });
+let seeded = 0;
+if (fs.existsSync(SRC)) {
+  // **必须递归**：角色卡与对话都在子目录里，只拷顶层文件的话
+  // GET /characters 会回一个空数组——看上去像 App 坏了，实际是我拷漏了。
+  fs.cpSync(SRC, DATA, { recursive: true });
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true })
+    .reduce((n, e) => n + (e.isDirectory() ? walk(path.join(d, e.name)) : 1), 0);
+  seeded = walk(DATA);
+}
+
+const charRepo = new CharacterRepo(DATA); await charRepo.init();
+const transfer = new CharacterTransfer(charRepo);
+const convRepo = new ConversationRepo(DATA); await convRepo.init();
+const setRepo = new SettingRepo(DATA); await setRepo.init();
+const varRepo = new VariableRepo(DATA); await varRepo.init();
+const presetRepo = new PresetRepo(DATA); await presetRepo.init();
+const boardRepo = new BoardRepo(DATA); await boardRepo.init();
+const regexRepo = new RegexRepo(DATA); await regexRepo.init();
+await loadGroupState(DATA);
+
+// 假 llm：界面流程要能跑到底，但不需要真花 token。
+// 生成路由少一个方法就是 TypeError，那样「点了没反应」会被误当成界面 bug。
+const fakeLlm = {
+  available: true,
+  lastTarget: { model: "ui-host-stub" },
+  resolveContextWindow: async () => 32000,
+  generate: async () => ({
+    content: "「我在。」她没回头。",
+    usage: { prompt_tokens: 120, completion_tokens: 18 }
+  }),
+  async *streamEvents() {
+    yield { type: "text-delta", delta: "「我在。」" };
+    yield { type: "done", usage: { prompt_tokens: 120, completion_tokens: 18 }, stopReason: "end_turn" };
+  }
+};
+
+const apps = {
+  characters: makeApp(), conversations: makeApp(), settings: makeApp(),
+  variables: makeApp(), presets: makeApp(), board: makeApp(),
+  regex: makeApp(), tools: makeApp(), migration: makeApp()
+};
+registerCharacterRoutes(apps.characters, charRepo, transfer, setRepo);
+registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo);
+registerSettingRoutes(apps.settings, setRepo, convRepo);
+registerVariableRoutes(apps.variables, varRepo, convRepo, charRepo);
+registerPresetRoutes(apps.presets, presetRepo);
+registerToolRoutes(apps.tools, {});
+registerBoardRoutes(apps.board, boardRepo);
+registerRegexRoutes(apps.regex, regexRepo);
+registerMigrationRoutes(apps.migration, DATA);
+
+// ── 静态文件 ──────────────────────────────────────────
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".webp": "image/webp"
+};
+
+function serveStatic(rel) {
+  const clean = path.posix.normalize("/" + rel).replace(/^\/+/, "");
+  if (clean.includes("..")) return { status: 403, body: "path traversal" };
+  const file = abs("ui/" + clean);
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return { status: 404, body: "not found: " + clean };
+  return { status: 200, body: fs.readFileSync(file), type: MIME[path.extname(file).toLowerCase()] || "application/octet-stream" };
+}
+
+// ── 路由分发 ──────────────────────────────────────────
+async function dispatch(method, routePath, query, body) {
+  for (const [name, app] of Object.entries(apps)) {
+    const r = await request(app, method, routePath, { query, body });
+    if (r) return { ...r, module: name };
+  }
+  return null;
+}
+
+function readBody(req) {
+  return new Promise((resolve) => {
+    const chunks = [];
+    req.on("data", (c) => chunks.push(c));
+    req.on("end", () => {
+      const raw = Buffer.concat(chunks);
+      if (raw.length === 0) return resolve(undefined);
+      const ct = String(req.headers["content-type"] || "");
+      // 不信 content-type，直接试 JSON：
+      // SDK 的 hana.api.fetch 未必把 content-type 带上来，而只认
+      // application/json 的话，路由会收到一个**字符串**，
+      // 解不出字段——看上去像「前端没填」，实际是我这边没解析。
+      const txt = raw.toString("utf8");
+      try { return resolve(JSON.parse(txt)); } catch { /* 不是 JSON，当文本 */ }
+      return resolve(txt);
+    });
+  });
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
+  const query = Object.fromEntries(url.searchParams.entries());
+  const method = req.method.toUpperCase();
+  const p = decodeURIComponent(url.pathname);
+
+  const tag = (status, what) => console.log(`  ${String(status).padStart(3)}  ${method.padEnd(6)} ${url.pathname}${url.search ? "?" + url.searchParams.toString() : ""}  ${what || ""}`);
+
+  // 1) 静态界面：/api/apps/<id>/ui/[ _surface/<s>/ ]<file>
+  const uiPrefix = `/api/apps/${APP_ID}/ui/`;
+  if (p.startsWith(uiPrefix)) {
+    let rel = p.slice(uiPrefix.length);
+    rel = rel.replace(/^_surface\/[^/]+\//, "");
+    const out = serveStatic(rel);
+    tag(out.status, out.status === 200 ? `static ${rel}` : out.body);
+    res.writeHead(out.status, { "content-type": out.type || "text/plain; charset=utf-8", "cache-control": "no-store" });
+    return res.end(out.body);
+  }
+
+  // 2) 路由：/api/apps/<id>/routes/[ _runtime/<rt>/ ]_surface/<s>/<path>
+  const rtPrefix = `/api/apps/${APP_ID}/routes/`;
+  let routePath = null;
+  if (p.startsWith(rtPrefix)) {
+    let rest = p.slice(rtPrefix.length);
+    rest = rest.replace(/^_runtime\/[^/]+\//, "");
+    rest = rest.replace(/^_surface\/[^/]+\//, "");
+    routePath = "/" + rest;
+  }
+  // 2b) 方便起见：/__api/<path> 直接打路由（排查用）
+  if (routePath === null && p.startsWith("/__api/")) routePath = "/" + p.slice("/__api/".length);
+
+  if (routePath !== null) {
+    const body = await readBody(req);
+    let r = null;
+    try {
+      r = await dispatch(method, routePath, query, body);
+    } catch (e) {
+      tag(500, "handler 抛了：" + e.message);
+      res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+      return res.end(JSON.stringify({ ok: false, error: "handler threw: " + e.message, stack: String(e.stack).split("\n").slice(0, 4) }));
+    }
+    if (!r) {
+      tag(404, "没有路由匹配（前端可能在打一个不存在的地方）");
+      res.writeHead(404, { "content-type": "application/json; charset=utf-8" });
+      return res.end(JSON.stringify({ ok: false, error: `no route: ${method} ${routePath}` }));
+    }
+
+    if (r.payload instanceof Response) {
+      const resp = r.payload;
+      tag(resp.status, `raw ${r.module}${routePath}（流式）`);
+      const headers = {};
+      resp.headers.forEach((v, k) => { headers[k] = v; });
+      res.writeHead(resp.status, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", ...headers });
+      if (resp.body) {
+        for await (const chunk of resp.body) res.write(Buffer.from(chunk));
+      }
+      return res.end();
+    }
+
+    tag(r.status, `${r.module}${routePath}${r.ok ? "" : "  ok=false " + (r.error || "")}`);
+    res.writeHead(r.status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    return res.end(JSON.stringify(r.payload));
+  }
+
+  tag(404, "不是 App 的路径");
+  res.writeHead(404, { "content-type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify({ ok: false, error: "not an app path: " + p }));
+});
+
+server.listen(PORT, "127.0.0.1", () => {
+  const url = `http://127.0.0.1:${PORT}/api/apps/${APP_ID}/ui/_surface/demo/characters.html?appSurfaceSession=demo`;
+  console.log(`\n界面宿主已起：${url}`);
+  console.log(`  数据目录（临时副本）  ${DATA}  （从 ${SRC} 拷了 ${seeded} 个文件）`);
+  console.log(`  路由              /api/apps/${APP_ID}/routes/_runtime/<rt>/_surface/<s>/<path>`);
+  console.log(`  快捷直连          /__api/<path>\n`);
+});
