@@ -40,6 +40,11 @@ export const dom = {
   regexCountEl: document.getElementById("regex-count"),
   regexNoteEl: document.getElementById("regex-note"),
 
+  // 预设
+  presetListEl: document.getElementById("preset-list"),
+  presetCountEl: document.getElementById("preset-count"),
+  presetNoteEl: document.getElementById("preset-note"),
+
   exportsListEl: document.getElementById("exports-list"),
   exportInfoEl: document.getElementById("export-info"),
   importResultEl: document.getElementById("import-result"),

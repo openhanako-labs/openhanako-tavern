@@ -79,15 +79,37 @@ export async function request(app, method, reqPath, opts = {}) {
   if (!hit) return null;
 
   const { ctx, out } = makeCtx({ ...opts, params: hit.params });
-  await hit.route.handler(ctx);
+  const returned = await hit.route.handler(ctx);
 
-  const p = out.payload || {};
+  // 响应有两种落地方式，别只接一种：
+  //   · 走 c.json / c.body 的 → 落在 out.payload
+  //   · raw(Response) 的 → **作为返回值**（respond.js 对 `body instanceof Response`
+  //     直接 return body，绕过 c.body）
+  //
+  // 注意：假 c.json() 自己也返回一个对象（out），所以**只认 Response**——
+  // 把「任何非空返回值」都当 payload 会把 c.json 的返回值抓进来，全线崩。
+  let payload = out.payload;
+  let status = out.status;
+  if (returned instanceof Response) {
+    payload = returned;
+    status = returned.status;
+  }
+
+  // SSE 端点返回的是 Response（body 是一条流）。**必须把流读干净**：
+  // 不读的话 handler 会在后台继续跑，与测试后续动作抢同一个对话，
+  // 制造出假的报错噪音（也会让「流式路径到底跑没跑过」变得说不清）。
+  if (payload && typeof payload.text === "function" && !(payload instanceof Response && !payload.body)) {
+    try { await payload.text(); } catch { /* 读完就行 */ }
+  }
+
+  const isEnvelope = payload && typeof payload === "object" && !(payload instanceof Response) && "ok" in payload;
+  const env = isEnvelope ? payload : {};
   return {
-    status: out.status,
-    ok: p.ok === true,
-    data: p.data,
-    error: p.error,
-    code: p.code,
-    payload: p
+    status,
+    ok: env.ok === true,
+    data: env.data,
+    error: env.error,
+    code: env.code,
+    payload
   };
 }

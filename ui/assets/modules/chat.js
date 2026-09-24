@@ -528,6 +528,12 @@ export async function openConversation(id) {
       await loadBoard();
     }
 
+    // 预设也是跟对话走的：换一场就得重画「这一场在用」那个标。
+    if (!document.getElementById("drawer-presets")?.classList.contains("hidden")) {
+      const { renderPresets } = await import("./presets.js");
+      renderPresets(state.presetList || []);
+    }
+
     // 角色上下文态：开对话 = 右栏自动站出角色卡。
     // reload:true 绕开 openDrawer 的同名 toggle——连续开会话不该被误关。
     openDrawer("character", { reload: true });

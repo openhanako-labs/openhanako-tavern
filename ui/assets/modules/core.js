@@ -99,6 +99,24 @@ export async function apiFetch(path, options = {}) {
 }
 
 // 从 API 响应中提取数据数组
+/**
+ * 拆信封。
+ *
+ * 服务端统一是 `{ok:true, data}`（respond.js 的契约），而 apiFetch 返回的是
+ * `r.json()`，也就是**完整信封**——它不替你拆。
+ *
+ * 列表类有 extractArray 兜着，单个对象就得自己拆。写漏了**不会报错**：
+ * `res.name` 只是 undefined，于是预设编辑器打开是空白、预览是空的，
+ * 看起来像「没有数据」而不像「代码写错了」。
+ *
+ * （其他模块用的是 `res.data || res` 写法，等价；这里给一个统一的名字。）
+ */
+export function unwrap(res) {
+  if (!res || typeof res !== "object") return res;
+  if (res.ok === true && "data" in res) return res.data;
+  return res;
+}
+
 export function extractArray(res) {
   if (!res) return [];
   // 直接是数组

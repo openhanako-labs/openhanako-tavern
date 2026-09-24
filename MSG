@@ -1,84 +1,53 @@
-fix(conversations): 四条生成路由从没工作过（6 个内部函数被截掉）+ 一次性宏在历史里重掷
+feat(presets): 预设跟随对话（挂上真生效）+ 修两处「信封没拆」的静默空转
 
-这一轮挖出的是**整个 App 的主操作是死的**，以及一类"看不见的错"。
+## 一、预设跟随对话
 
-## 一、`withRealWindow` 等 6 个函数只剩调用、定义整段消失
+`presetRepo` 传进 `registerConversationRoutes` 却**一次都没被引用**——预设编辑器
+能用能存，生成时根本不生效。现在挂到对话上：
 
-transcript 里只留下 6 处调用：
+- `Conversation` 加 `presetId`（字段注释里写清了为什么是跟随对话而不是全局：
+  同一个角色，一场用「日常」、一场用「战斗描写」是常事；全局的话每开一场都要
+  回去改一次，而改的还会影响别的场）
+- 新路由 `PUT /conversations/:id/preset`。**校验存在性**——挂一个不存在的 id
+  的表现是「什么也没发生」，那是最难查的一类（生成不报错，只是安静地不用预设）
+- 解析放在 `withRealWindow(options, conv)` 里，让**生成与预览走同一条**。
+  两边各解析一次的话，预览出来的 prompt 不是真发出去的那份
+- 界面：预设卡片上标「这一场在用」（左侧强调色条），操作里加「这一场用它 /
+  这一场不再用」；没有对话时置灰并说明。换对话时重画标记
+  （不重画的话，界面显示旧的那套而生成已经是新的——两边不一致比不显示更糟）
 
-    persistUsage / persistSummary / createSseStream / extractReasoning /
-    withGenerationContext / withRealWindow
+## 二、`presets.js` 两处「信封没拆」
 
-没有一个有定义。于是**四条生成路由一被调用就 ReferenceError**：
-发消息、流式发消息、重生成、流式重生成——也就是「发消息」这个主操作
-**从路由层整个是死的**。而 Agent 工具路径不经过它们，所以从工具那边看
-一切正常（这正是最难发现的那种：一半的门能开，另一半一推就掉）。
+`apiFetch` 返回的是 `r.json()`，也就是**完整信封** `{ok:true,data}`——它不替你拆。
+其他模块都写了 `res.data || res` 兜着，`presets.js` 漏了两处：
 
-病因与前端那次一模一样：重建时 read 分页把**文件尾部**整段截掉，
-定义丢了、调用还在——两者恰好分居文件两端。`attachVariant` 活了下来
-（它在文件最末尾），其余全没。
+1. **`previewPreset`** —— 读 `res.detail` / `res.systemPrompt`，全是 undefined，
+   于是预设预览**永久显示「没有块」**。不报错，只是空。
+2. **`openPresetEditor`** —— `preset.name` / `blocks` / `id` 全是 undefined，
+   于是**编辑已有预设打开是一片空白，而保存会变成新建一份副本**，
+   原来那套永远改不了。
 
-已按调用点的语义把六个都重建：
+这类错的共同点：**看起来像「没有数据」，不像「代码写错了」**。
+在 core.js 加了 `unwrap()` 并把这个陷阱写进注释。
 
-- `withRealWindow` —— 用 `llm.resolveContextWindow()` 拿模型真实窗口
-  （写死 8000 时，目录里 32K–128K 的模型等于自愿只用零头）
-- `persistUsage` —— 落盘 usage/签名/模型/推理；**失败不抛**：
-  用量是观测面，写不进去不该毁掉一整轮已经生成好的回复
-- `persistSummary` —— 管线只给建议值（`meta.summaryPatch`），落盘是路由的事。
-  调用点是 fire-and-forget，所以这里的 try/catch 不是为了返回值，
-  是为了**不让一个未处理的 rejection 掀掉进程**
-- `createSseStream` —— 自己造 SSE Response（`raw()` 对 Response 原样交出）。
-  格式必须与前端对齐：chat.js 里就是 `split("\n")` + `startsWith("data: ")`。
-  handler 抛错时把错误也推成一条事件——静默断流是最难查的那种
-- `extractReasoning` —— 没有 reasoning 段返回 null（「没有」与「空」要分开）
+## 三、把漏掉的覆盖补上
 
-## 二、一次性宏在历史里重掷
+- `regression-routes-smoke.mjs` 路由表加 `PUT /conversations/:id/preset`，
+  并加一条真断言：**挂上预设 → 预览里真的出现那块文本；取消 → 真的没了；
+  挂不存在的 → 404**
+- harness 修两处：
+  · SSE 端点的响应是 `raw(Response)`，走的是**返回值**而不是 `c.body`
+    （respond.js 对 `body instanceof Response` 直接 return body）。
+    只接 `c.body` 会漏掉所有流式端点
+  · **必须把流读干净**——不读的话 handler 在后台继续跑，与测试后续动作抢
+    同一个对话，制造假的报错噪音，也让「流式路径到底跑没跑过」说不清
+- 假 llm 补 `streamEvents`：不补的话 handler 一进 for-await 就 TypeError，
+  流式路径只是「没抛出来」而不是「真跑过」
 
-`{{roll}}` 用 `Math.random()`、`{{time}}` 读当前时间，而消息是**原样落盘**的，
-历史在每次装配时又会重新过一遍宏处理器。于是：
+## 四、顺手修的一处
 
-- 上一轮掷出的 **42，这一轮变成 7**——已经发生的事被改写
-- 更伤的是连带的：历史逐字节在变 → provider 侧前缀签名对不上
-  → 缓存命中率被一条早已发生的骰子持续吃掉
-
-不是"理论上可能"：仓库里那几本 ST 战斗系统世界书写的就是
-`{{roll 1d20+AGI}}` 这类用法，模型会照做。
-
-测试把症状打出来了：`骰子每轮重掷了：10 → 15` / `我掷了 76。` vs `我掷了 86。`
-
-**修法不是"让随机数稳定"**，而是承认一句更简单的话：
-**掷骰在它发生的那一刻结算，之后它是事实。**
-所以冻结点是**落盘**（`freezeVolatileMacros`），不是读取——
-routes 的 `prepareGeneration` 一个咽喉点管住四条生成路由，
-工具路径也补上了（不然又是"两条路径再次分叉"）。
-
-只处理含一次性宏的文本：其余消息原样通过，行为与从前完全一致。
-
-## 三、新增两条常驻护栏
-
-- **`test/check-server-undef.mjs`** —— 服务端版的「调用了但没定义」。
-  前端那条（check-undefined-refs）只扫 ui/assets/modules/，服务端从来没查过。
-  判据故意偏"宁可漏报"（只查小写开头、排除成员与私有方法、定义位置收得很宽），
-  并剥掉正则字面量——不剥的话 `/^(\d*)d(\d+)$/` 里那个 `d(` 会被当成调用。
-  **否定测试**：注入一处未定义调用确认抓到，清掉恢复绿。
-- **`regression-macro-volatility.mjs`** —— 穿过路由测（直接把消息写进仓储
-  再断言稳定，测的就不是修好的那条路——第一版就是这么写歪的）。
-
-## 四、把漏掉的那段覆盖补上
-
-`regression-routes-smoke.mjs` 加了一整段**生成路由真跑**（假 llm）。
-上一版它写着「需要真 llm，跳过」——而 `withRealWindow` 那个 bug 正好住在
-被跳过的那一段里。**难测的那一段，正是最容易烂掉的那一段。**
-
-## 五、顺手发现（未改，需要你定）
-
-1. **预设从来没被用在生成里**。`presetRepo` 传进了 `registerConversationRoutes`
-   却一次都没被引用：仓储里没有 active、对话上没有字段、前端也不传。
-   预设编辑器能用、能存，但生成时不生效。
-   补法要先定一个产品问题：**当前预设是全局的还是跟随对话的？**
-2. **卡字段里的一次性宏每轮重算** → 静态前缀每轮都变 → 前缀缓存
-   永远不可能命中。这条我留了个显眼的"已知问题"断言在测试里（断的是现状）。
-   修法同样要定一个产品问题：**`{{time}}` 在一个会话里该不该刷新？**
-   我倾向「按会话冻结」，但那会改变体感，得由人来定。
+`attachVariant` 之后 `persistUsage` 会撞上「Message not found」——那是测试里
+两个生成并发时的竞态，`persistUsage` 的「失败不抛」设计正确地把日志打了出来
+而没有掀桌。加了流排空之后噪音消失。（顺带证明了那条 try/catch 是有用的。）
 
 测试 44/44。

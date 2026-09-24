@@ -7,7 +7,7 @@
 // 块顺序是有语义的（改错位置 prompt 就散了），拖拽容易误操作。
 // 改成"上下移动 + 开关 + 逐块预览"，每一步都可复核。
 
-import { apiFetch, confirmDialog, escapeHtml, extractArray, friendlyError, toast } from "./core.js";
+import { apiFetch, confirmDialog, escapeHtml, extractArray, friendlyError, toast, unwrap } from "./core.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
 
@@ -49,10 +49,24 @@ export function renderPresets(list) {
   const enabledCount = (p) => (p.blocks || []).filter(b => b.enabled !== false).length;
   const totalCount = (p) => (p.blocks || []).length;
 
-  dom.presetListEl.innerHTML = list.map(p => `
-    <div class="card preset-card ${p.builtin ? "builtin" : ""}" data-id="${p.id}">
+  // 预设**跟随对话**：卡片上得看得出这一场在用哪一套，
+  // 也要能当场换——不然「挂预设」这件事看不到也做不到。
+  const activeId = state.currentConv?.presetId || null;
+  const hasConv = !!state.currentConv;
+
+  if (dom.presetNoteEl) {
+    dom.presetNoteEl.textContent = hasConv
+      ? "点「这一场用它」把预设挂到当前对话上——只影响这一场。"
+      : "还没打开对话：预设挂在对话上，先开一场再选。";
+  }
+
+  dom.presetListEl.innerHTML = list.map(p => {
+    const isActive = activeId === p.id;
+    return `
+    <div class="card preset-card ${p.builtin ? "builtin" : ""}${isActive ? " active" : ""}" data-id="${p.id}">
       <div class="card-header">
         <h3>${escapeHtml(p.name || "（无名称）")}</h3>
+        ${isActive ? '<span class="card-date">这一场在用</span>' : ""}
         ${p.builtin ? '<span class="card-date">内置</span>' : ""}
       </div>
       <div class="card-desc">${escapeHtml(p.description || "")}</div>
@@ -62,13 +76,14 @@ export function renderPresets(list) {
         <span>${p.sampling?.maxTokens ?? "—"} tokens</span>
       </div>
       <div class="card-actions">
+        <button class="btn-sm" data-act="use" ${hasConv ? "" : "disabled"}>${isActive ? "这一场不再用" : "这一场用它"}</button>
         <button class="btn-sm" data-act="edit">编辑</button>
         <button class="btn-sm" data-act="preview">预览</button>
         <button class="btn-sm" data-act="duplicate">复制</button>
         ${p.builtin ? "" : '<button class="btn-sm danger" data-act="delete">删除</button>'}
       </div>
-    </div>
-  `).join("");
+    </div>`;
+  }).join("");
 
   dom.presetListEl.querySelectorAll(".preset-card").forEach(card => {
     card.querySelectorAll("button[data-act]").forEach(btn => {
@@ -76,13 +91,40 @@ export function renderPresets(list) {
         e.stopPropagation();
         const act = btn.dataset.act;
         const id = card.dataset.id;
-        if (act === "edit") openPresetEditor(id);
+        if (act === "use") setConversationPreset(activeId === id ? null : id);
+        else if (act === "edit") openPresetEditor(id);
         else if (act === "preview") previewPreset(id);
         else if (act === "duplicate") duplicatePreset(id);
         else if (act === "delete") deletePreset(id);
       });
     });
   });
+}
+
+/**
+ * 把一套预设挂到**当前对话**上（或传 null 取消）。
+ *
+ * 挂的是对话而不是全局——同一个角色，一场用「日常」、一场用「战斗描写」
+ * 是常事；全局的话每开一场都要回去改一次，而改的还会影响别的场。
+ */
+export async function setConversationPreset(presetId) {
+  const conv = state.currentConv;
+  if (!conv) { toast("先打开一个对话", "error"); return; }
+
+  try {
+    const res = unwrap(await apiFetch(`conversations/${encodeURIComponent(conv.id)}/preset`, {
+      method: "PUT",
+      body: JSON.stringify({ presetId })
+    }));
+
+    // 本地也要跟着更新：不更新的话界面显示的还是旧的那套，
+    // 而生成时已经是新的了——两边不一致比不显示更糟。
+    state.currentConv.presetId = res?.presetId ?? null;
+    renderPresets(state.presetList || []);
+    toast(presetId ? "这一场改用这套预设" : "这一场不再用预设", "success");
+  } catch (e) {
+    toast(`设置失败: ${friendlyError(e)}`, "error");
+  }
 }
 
 /** 当前对话（预览预设时用它当上下文，看不到真卡就用手填的样例）。 */
@@ -105,10 +147,12 @@ async function previewContext() {
 export async function previewPreset(id) {
   try {
     const ctx = await previewContext();
-    const res = await apiFetch(`presets/${id}/preview`, {
+    // 必须拆信封：apiFetch 返回的是 {ok,data}，不拆的话 res.detail 是 undefined，
+    // 预览就永久显示「没有块」——不报错，只是空。
+    const res = unwrap(await apiFetch(`presets/${id}/preview`, {
       method: "POST",
       body: JSON.stringify(ctx)
-    });
+    }));
 
     const detail = (res.detail || []).map(d => {
       const tag = d.skipped ? "跳过" : (d.position === "in_chat" ? "插话" : "系统");
@@ -168,7 +212,10 @@ export async function openPresetEditor(id) {
   let preset = null;
   if (id) {
     try {
-      preset = await apiFetch(`presets/${id}`);
+      // 同样要拆信封。不拆的后果更重：preset.name / blocks / id 全是 undefined，
+      // 编辑器打开是空白、pe-id 是空串，于是**保存会变成新建一份副本**，
+      // 原来那套永远改不了。
+      preset = unwrap(await apiFetch(`presets/${id}`));
     } catch (e) { toast("加载失败", "error"); return; }
   }
   state.currentPreset = preset;

@@ -2229,3 +2229,21 @@ main.ctx-open .drawer:not(.hidden) {
 }
 
 .t-hint { margin-top: 6px; color: var(--fg-muted); }
+
+/* ── 预设：这一场在用哪一套 ────────────────────────────
+ * 左边一道强调色条。预设是「跟对话走」的，
+ * 而对话会随时换——不标出来的话，用户根本不知道当前是哪一套（或有没有）。
+ */
+.preset-card.active {
+  border-color: var(--accent-line);
+}
+
+.preset-card.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
+}

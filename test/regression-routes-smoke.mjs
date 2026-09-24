@@ -71,7 +71,9 @@ function healthy(r, where, expected = 200) {
   }
   assert.strictEqual(r.status, expected, `${where}：实为 ${r.status}（${r.error || "无错误信息"}）`);
   if (expected === 200) {
-    if (r.payload && typeof r.payload === "object" && "ok" in r.payload) {
+    const isEnvelope = r.payload && typeof r.payload === "object"
+      && !(r.payload instanceof Response) && "ok" in r.payload;
+    if (isEnvelope) {
       assert.strictEqual(r.ok, true, `${where}：200 但 ok 不是 true（契约破了：${JSON.stringify(r.payload).slice(0, 120)}）`);
     } else {
       assert.ok(r.payload !== undefined && r.payload !== null, `${where}：raw 响应没有内容`);
@@ -114,7 +116,24 @@ const fakeLlm = {
   generate: async () => ({
     content: "「我在。」她没回头。",
     usage: { prompt_tokens: 120, completion_tokens: 18 }
-  })
+  }),
+  // 流式那三条需要它，否则 handler 一进 for-await 就 TypeError，
+  // 流式路径就只是「没抛出来」而不是「真跑过」。
+  async *streamEvents() {
+    yield { type: "text-delta", delta: "「我在。」" };
+    yield { type: "reasoning-delta", delta: "（她在想。）" };
+    yield {
+      type: "done",
+      usage: { prompt_tokens: 120, completion_tokens: 18 },
+      stopReason: "end_turn",
+      assistant: {
+        content: [
+          { type: "reasoning", text: "（她在想。）" },
+          { type: "text", text: "「我在。」" }
+        ]
+      }
+    };
+  }
 };
 
 registerCharacterRoutes(apps.characters, charRepo, transfer, setRepo);
@@ -146,6 +165,7 @@ const EXPECTED = {
     "DELETE /conversations/:id/messages/:messageId",
     "PUT /conversations/:id/messages/:messageId/variant",
     "PUT /conversations/:id/persona",
+    "PUT /conversations/:id/preset",
     "POST /conversations/:id/messages", "POST /conversations/:id/messages/stream",
     "POST /conversations/:id/regenerate", "POST /conversations/:id/regenerate/stream",
     "GET /characters-for-conv",
@@ -299,6 +319,50 @@ await okAsync("conversations：两个预览端点能打通", async () => {
   healthy(await request(apps.conversations, "POST", `/conversations/${convId}/activation-preview`, {
     body: { text: "预览一下。" }
   }), "POST activation-preview");
+});
+
+// 预设跟随对话：
+//   之前 presetRepo 传进了路由却一次都没被引用——预设编辑器能用能存，
+//   生成时根本不生效。这一条钉的是「挂上之后真的进 prompt」。
+await okAsync("conversations：预设跟随对话，挂上就真的进 prompt", async () => {
+  const MARK = "这是预设里的固定文本。";
+
+  const p = await presetRepo.create({
+    name: "跟随对话的预设",
+    blocks: [
+      { id: "main", source: "literal", content: MARK, position: "system", order: 0, enabled: true }
+    ]
+  });
+  assert.ok(p?.id, "预设没建起来");
+
+  const before = healthy(await request(apps.conversations, "POST", `/conversations/${convId}/prompt-preview`, {
+    body: { text: "看看。" }
+  }), "preview before");
+  assert.ok(!before.data.systemPrompt.includes(MARK), "还没挂预设就生效了");
+
+  healthy(await request(apps.conversations, "PUT", `/conversations/${convId}/preset`, {
+    body: { presetId: p.id }
+  }), "PUT preset");
+
+  const after = healthy(await request(apps.conversations, "POST", `/conversations/${convId}/prompt-preview`, {
+    body: { text: "看看。" }
+  }), "preview after");
+  assert.ok(after.data.systemPrompt.includes(MARK), "挂了预设却没进 prompt");
+
+  // 挂不存在的预设必须报错——安静地什么也不发生是最难查的一类
+  const bad = await request(apps.conversations, "PUT", `/conversations/${convId}/preset`, {
+    body: { presetId: "no-such-preset" }
+  });
+  assert.strictEqual(bad.status, 404, `挂不存在的预设应 404，实为 ${bad.status}`);
+
+  healthy(await request(apps.conversations, "PUT", `/conversations/${convId}/preset`, {
+    body: { presetId: null }
+  }), "PUT preset null");
+
+  const back = healthy(await request(apps.conversations, "POST", `/conversations/${convId}/prompt-preview`, {
+    body: { text: "看看。" }
+  }), "preview back");
+  assert.ok(!back.data.systemPrompt.includes(MARK), "取消之后预设还在");
 });
 
 // 设定库
