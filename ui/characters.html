@@ -29,14 +29,17 @@
       对照示例稿时最刺眼的就是这一处：标签是骨架，菜单是抽屉。
     -->
     <nav class="ctx-tabs" id="ctx-tabs" aria-label="右栏面板">
+      <!--
+        一级只放「这一场里你会看一眼或改一下的」四个。
+        设一次就不动的那些（预设 / 正则 / 工具 / 迁移）在 ⋯ 菜单里。
+        八个标签挤在 344px 的横带上：排不下、看不清，而且横带每多一行
+        就少一行聊天。二级可以复杂，一级必须干净。
+      -->
       <button class="ctx-tab" data-drawer="character"><span class="mi">👤</span>角色</button>
       <button class="ctx-tab" data-drawer="settings"><span class="mi">✳</span>设定库</button>
       <button class="ctx-tab" data-drawer="board"><span class="mi">▤</span>世界</button>
       <button class="ctx-tab" data-drawer="variables"><span class="mi">◫</span>变量</button>
       <button class="drawer-close ctx-close" title="收起右栏" aria-label="收起右栏">✕</button>
-      <button class="ctx-tab" data-drawer="presets"><span class="mi">⌗</span>预设</button>
-      <button class="ctx-tab" data-drawer="tools"><span class="mi">⚙</span>工具</button>
-      <button class="ctx-tab" data-drawer="migration"><span class="mi">⇅</span>迁移</button>
     </nav>
 
     <!-- 聊天 -->
@@ -55,6 +58,7 @@
               <button data-drawer="board"><span class="mi">▤</span>世界</button>
               <button data-drawer="variables"><span class="mi">◫</span>变量</button>
               <button data-drawer="presets"><span class="mi">⌗</span>提示词预设</button>
+              <button data-drawer="regex"><span class="mi">⁂</span>正则规则</button>
               <div class="sep"></div>
               <button data-drawer="tools"><span class="mi">⚙</span>工具</button>
               <button data-drawer="migration"><span class="mi">⇅</span>迁移</button>
@@ -173,6 +177,34 @@
         </div>
         <button id="test-replace-btn" class="btn btn-primary">测试</button>
         <div id="replace-test-result" class="result hidden"></div>
+      </div>
+    </div>
+
+    <!-- ── 抽屉：正则规则 ───────────────────────────── -->
+    <!--
+      规则是「对文本做的替换」。它比看起来危险：一条写错的正则能让角色
+      说出完全不属于自己的话，而且**没人会立刻发现**（仓储注释里就是
+      这么写的）。所以这一页的重点不是把字段排整齐，是当场能看效果——
+      表单底部那个「试一下」才是主角。
+
+      这也是引擎里最大的一处「有能力没入口」：lib/regex 全套 CRUD、
+      ST 导入导出、作用域三层、三个作用面，一直没有任何界面能碰到。
+    -->
+    <div id="drawer-regex" class="drawer hidden">
+      <div class="drawer-head">
+        <h2>正则规则</h2>
+        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <div class="drawer-toolbar">
+        <button id="create-regex-btn" class="btn btn-primary btn-sm">+ 新建</button>
+        <button id="refresh-regex-btn" class="btn btn-ghost btn-sm">刷新</button>
+        <span id="regex-count" class="count"></span>
+      </div>
+      <div class="drawer-body">
+        <div id="regex-note" class="drawer-note"></div>
+        <div id="regex-list" class="list">
+          <div class="empty">加载中…</div>
+        </div>
       </div>
     </div>
 
@@ -442,6 +474,61 @@
               启用
             </label>
           </div>
+        </div>
+      </form>
+
+      <form id="regex-form" class="form hidden">
+        <input type="hidden" id="rf-id">
+        <div class="field"><label>名称 *</label><input type="text" id="rf-name" placeholder="去掉括号注释"></div>
+
+        <div class="field"><label>查找（正则）*</label><input type="text" id="rf-pattern" class="mono" placeholder="（[^）]*）"></div>
+        <div class="field-row">
+          <div class="field"><label>标志（flags）</label><input type="text" id="rf-flags" class="mono" value="g" placeholder="gi"></div>
+          <div class="field"><label>顺序</label><input type="number" id="rf-order" value="0" step="10"></div>
+        </div>
+        <div class="field">
+          <label>替换为</label>
+          <input type="text" id="rf-replacement" class="mono" placeholder="留空 = 删掉命中部分">
+          <p class="hint">支持 $1 $2 捕获组。想插入空行写 \n。</p>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>生效范围</label>
+            <select id="rf-scope">
+              <option value="global">所有角色</option>
+              <option value="character">只有某个角色</option>
+              <option value="preset">只有某套预设</option>
+            </select>
+          </div>
+          <div class="field hidden" id="rf-scope-id-field">
+            <label>哪一个</label>
+            <select id="rf-scope-id"><option value="">加载中…</option></select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>作用面</label>
+          <div class="checkbox-row">
+            <label class="checkbox-label"><input type="checkbox" id="rf-surface-prompt" checked> 发请求前</label>
+            <label class="checkbox-label"><input type="checkbox" id="rf-surface-display"> 显示时</label>
+            <label class="checkbox-label"><input type="checkbox" id="rf-surface-stored"> 存储时（也会改用户输入）</label>
+          </div>
+          <p class="hint">可多选。只勾「显示时」不会动发给模型的内容；只勾「发请求前」不影响你看到的气泡。引擎内部用 ST 的三个老开关（promptOnly / markdownOnly / runOnEdit）表达这三件事，保存时自动同步——不必两边都填。</p>
+        </div>
+
+        <div class="field">
+          <label class="checkbox-label"><input type="checkbox" id="rf-enabled" checked> 启用</label>
+        </div>
+
+        <div class="panel">
+          <h3>试一下</h3>
+          <div class="field">
+            <label>拿一段文本过一遍这条规则</label>
+            <textarea id="rf-test-input" rows="3" placeholder="填你真会遇到的文本，例如：她笑了（这是旁白）"></textarea>
+          </div>
+          <button id="rf-test-btn" class="btn btn-sm">跑一遍</button>
+          <div id="rf-test-output" class="test-out hidden"></div>
         </div>
       </form>
 

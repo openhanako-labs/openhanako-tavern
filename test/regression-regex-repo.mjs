@@ -179,6 +179,82 @@ await test("仓储规则能直接喂给 applyRules", async () => {
   assert.equal(out.text, "这是重点内容");
 });
 
+console.log("\n正则仓储 · 作用面一致性\n" + "─".repeat(50));
+
+// 这一组钉的是一处此前一直存在的不一致：
+//   仓储存 `surfaces: ["prompt"|"display"|"stored"]`，
+//   而引擎的 appliesToSurface() 读的是 ST 那三个老开关，**完全不看 surfaces**。
+// 于是 surfaces 是摆设：界面写它、导入写它，真正应用规则的那段不读。
+// 更阴的是 markdownOnly 以前根本不在 normalizeRule 的返回值里——存一次就丢。
+// 现在 surfaces 是唯一真源，三个老开关是它的派生视图。
+
+await test("surfaces 是唯一真源：三个老开关由它派生", async () => {
+  const repo = await freshRepo("surfaces-derive");
+
+  const p = await repo.create({ name: "只管请求", pattern: "a", surfaces: ["prompt"] });
+  assert.equal(p.promptOnly, true, "不含 display → promptOnly 必须为真");
+  assert.equal(p.markdownOnly, false, "含 prompt → markdownOnly 必须为假");
+  assert.equal(p.runOnEdit, false);
+
+  const b = await repo.create({ name: "两面", pattern: "b", surfaces: ["prompt", "display"] });
+  assert.equal(b.promptOnly, false);
+  assert.equal(b.markdownOnly, false);
+
+  const s = await repo.create({ name: "也落盘", pattern: "c", surfaces: ["prompt", "stored"] });
+  assert.equal(s.runOnEdit, true, "含 stored → runOnEdit 必须为真");
+});
+
+await test("surfaces 真的作用到引擎上（不再是摆设）", async () => {
+  const { applyRules } = await import("../lib/regex/engine.js");
+
+  const only = await freshRepo("surfaces-engine-only");
+  await only.create({ name: "只管请求", pattern: "X", replacement: "Y", surfaces: ["prompt"] });
+  const rules = await only.listFor({});
+
+  assert.equal(applyRules("X", rules, { surface: RegexSurface.PROMPT }).text, "Y", "Prompt 面该生效");
+  assert.equal(applyRules("X", rules, { surface: RegexSurface.DISPLAY }).text, "X",
+    "surfaces 不含 display，显示面却生效了——说明 surfaces 又变回摆设了");
+  assert.equal(applyRules("X", rules, { surface: RegexSurface.STORED }).text, "X");
+
+  const both = await freshRepo("surfaces-engine-both");
+  await both.create({ name: "两面", pattern: "X", replacement: "Y", surfaces: ["prompt", "display"] });
+  const rules2 = await both.listFor({});
+  assert.equal(applyRules("X", rules2, { surface: RegexSurface.DISPLAY }).text, "Y", "勾了显示时就该生效");
+});
+
+await test("ST 导入：老开关反推成 surfaces", async () => {
+  const repo = await freshRepo("surfaces-st-import");
+  const rules = fromStRegexScripts([
+    { scriptName: "只提示词", findRegex: "/a/g", promptOnly: true },
+    { scriptName: "也管显示", findRegex: "/b/g", promptOnly: false }
+  ]);
+  await repo.importRules(rules);
+
+  const list = await repo.list();
+  const p = list.find(r => r.name === "只提示词");
+  const d = list.find(r => r.name === "也管显示");
+  assert.deepEqual(p.surfaces, ["prompt"], `实为 ${JSON.stringify(p?.surfaces)}`);
+  assert.ok(d.surfaces.includes("display"), `promptOnly=false 该反推出 display，实为 ${JSON.stringify(d?.surfaces)}`);
+});
+
+await test("markdownOnly 存一次不丢（它以前根本不在返回值里）", async () => {
+  const repo = await freshRepo("markdown-only");
+  const c = await repo.create({ name: "只管显示", pattern: "X", replacement: "Y", surfaces: ["display"] });
+  assert.equal(c.markdownOnly, true, "不含 prompt → markdownOnly 必须为真");
+  assert.equal(c.promptOnly, false);
+
+  const got = await repo.get(c.id);
+  assert.equal(got.markdownOnly, true, "存一次 markdownOnly 就丢了");
+});
+
+await test("导出回 ST 不改变性质（markdownOnly 不再写死 false）", async () => {
+  const repo = await freshRepo("export-markdown");
+  const c = await repo.create({ name: "只管显示", pattern: "X", replacement: "Y", surfaces: ["display"] });
+  const st = toStRegexScript(c);
+  assert.equal(st.markdownOnly, true);
+  assert.equal(st.promptOnly, false);
+});
+
 await fs.rm(tmp, { recursive: true, force: true });
 
 console.log("\n" + "=".repeat(50));

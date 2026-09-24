@@ -52,41 +52,75 @@ if (domMissing.length === 0) ok(`dom.js 的 ${domRefs.length + domClassRefs.leng
 else for (const m of domMissing) fail(`dom.js 引用了不存在的东西: ${m}`);
 
 // ── 4. 抽屉 id 与 shell.js 的 DRAWERS 键 ──
-// （2026-09-24 加上 board：黑板从数据层接到界面，成为第七个面板）
+// （2026-09-24 加上 board 与 regex：面板涨到八个）
 const shellSrc = fs.readFileSync(path.join(modDir, "shell.js"), "utf8");
-for (const name of ["character", "settings", "board", "variables", "presets", "tools", "migration"]) {
+const DRAWER_NAMES = ["character", "settings", "board", "variables", "presets", "regex", "tools", "migration"];
+for (const name of DRAWER_NAMES) {
   if (!htmlIds.has(`drawer-${name}`)) fail(`缺抽屉 #drawer-${name}`);
 }
-ok("七个抽屉容器 id 齐全");
+ok(`${DRAWER_NAMES.length} 个抽屉容器 id 齐全`);
 if (!shellSrc.includes('data-drawer')) fail("topbar 菜单没绑 data-drawer");
 else ok("顶栏菜单 → 抽屉的事件源存在");
 
-// ── 4b. 右栏标签条：七个面板的常驻入口，必须一一对上 ──
-// （2026-09-23 v3 结构落地：面板从 ⋯ 菜单里搬出来，变成看得见的标签）
-// （2026-09-24 世界加入：设定库是静态资料，黑板是会变的状态，
-//   两者同属「模型看到的世界」那一层，所以放在相邻位置）
+// ── 4b. 导航分层：一级四个标签 + 二级全量入口 ──
 //
-// 列数也要一并断言：栅格列数要装得下「标签 + 收起键」。少一列，
+// （2026-09-23 v3 结构落地：面板从 ⋯ 菜单里搬出来，变成看得见的标签）
+// （2026-09-24 面板涨到八个后的定案）
+//
+// 八个标签挤在 344px 的横带上排不下也看不清，而且横带每多一行就少一行
+// 聊天。所以定案：**一级只放「这一场里你会看一眼或改一下的」四个**
+// （角色 / 设定库 / 世界 / 变量），其余全落 ⋯ 菜单。
+//
+// 于是这里断言的不是「标签条有几个」，而是两件真事：
+//   ① 一级恰好四个，且必须是那四个（多了就回到挤不下的老路）
+//   ② **每个抽屉都能从 ⋯ 菜单走到**——有面板没门，用户永远找不到它
+//
+// 列数也一并断言：栅格列数要装得下「标签 + 收起键」。少一列，
 // 多出来的标签会被挤进 26px 的收起列——布局静默崩掉，不报错。
 const cssSrc = fs.readFileSync(path.join(root, "ui/assets/characters.css"), "utf8");
 const tabStrip = html.match(/<nav class="ctx-tabs"[\s\S]*?<\/nav>/);
 if (!tabStrip) fail("缺右栏标签条 .ctx-tabs");
 else {
+  const PRIMARY = ["character", "settings", "board", "variables"];
   const tabs = [...tabStrip[0].matchAll(/data-drawer="([^"]+)"/g)].map(m => m[1]);
-  for (const name of ["character", "settings", "board", "variables", "presets", "tools", "migration"]) {
-    if (!tabs.includes(name)) fail(`标签条缺面板入口: ${name}`);
+
+  for (const name of PRIMARY) {
+    if (!tabs.includes(name)) fail(`一级标签条缺面板入口: ${name}`);
   }
-  if (tabs.length !== 7) fail(`标签条应有 7 个入口，实为 ${tabs.length}`);
+  if (tabs.length !== PRIMARY.length) {
+    fail(`一级标签条应恰好 ${PRIMARY.length} 个入口，实为 ${tabs.length}（多出来的该往 ⋯ 菜单放）`);
+  }
   if (!tabStrip[0].includes('class="drawer-close ctx-close"')) fail("标签条缺收起键（.ctx-close）");
 
   const items = tabs.length + 1;   // 标签 + 收起键
-  const cols = Number((cssSrc.match(/\.ctx-tabs \{[\s\S]*?grid-template-columns:\s*repeat\((\d+)/) || [])[1] || 0);
-  if (!cols) fail("读不出 .ctx-tabs 的栅格列数");
+  // 列数要把**尾部固定轨道**一起算上：`repeat(4, minmax(0,1fr)) 26px`
+  // 是 5 列，不是 4 列（最后那个 26px 是给收起键的）。
+  // 只取 repeat() 的数字会多数出一行——护栏报告的行数不对，
+  // 就说明它量错了地方，那种护栏比没有更糟。
+  const grid = (cssSrc.match(/\.ctx-tabs \{[\s\S]*?grid-template-columns:\s*([^;]+);/) || [])[1] || "";
+  const rep = grid.match(/repeat\((\d+),\s*minmax\(0,\s*1fr\)\)/);
+  const fixedTracks = [...grid.matchAll(/\d+px/g)].length;
+  const cols = rep ? Number(rep[1]) + fixedTracks : 0;
+  if (!cols) fail(`读不出 .ctx-tabs 的栅格列数（读到：${grid || "空"}）`);
   else {
     const rows = Math.ceil(items / cols);
     if (rows > 2) fail(`标签条 ${items} 个元素按 ${cols} 列要排 ${rows} 行，超出两行`);
     else if (cols * rows - items >= cols) fail(`标签条按 ${cols} 列会空出整行`);
-    else if (errors === 0) ok(`右栏标签条 ${tabs.length} 个入口 + 收起键齐全（${cols} 列 × ${rows} 行）`);
+    else if (errors === 0) ok(`一级标签条 ${tabs.length} 个入口 + 收起键（${cols} 列 × ${rows} 行）`);
+  }
+
+  // ── 二级：⋯ 菜单必须装下全部抽屉 ──
+  // 切到下一个 .more-wrap 为止——菜单里有嵌套的 <div class="sep">，
+  // 用 `<\/div>` 收口会在第一个分隔符那里就截断。
+  const mStart = html.indexOf('id="app-more-menu"');
+  const mEnd = html.indexOf('id="chat-more-btn"');
+  const menu = mStart >= 0 && mEnd > mStart ? html.slice(mStart, mEnd) : null;
+  if (!menu) fail("找不到 ⋯ 菜单 #app-more-menu");
+  else {
+    const entries = [...menu.matchAll(/data-drawer="([^"]+)"/g)].map(m => m[1]);
+    const missing = DRAWER_NAMES.filter(n => !entries.includes(n));
+    if (missing.length) fail(`⋯ 菜单缺面板入口: ${missing.join(", ")}（有面板没门）`);
+    else ok(`⋯ 菜单装下全部 ${DRAWER_NAMES.length} 个面板入口`);
   }
 }
 
@@ -127,6 +161,33 @@ for (const needle of [".shell {", ".ctx-tabs {", ".char-list .card", ".drawer {"
   if (!css.includes(needle)) fail(`CSS 缺 ${needle}`);
 }
 if (errors === 0) ok("CSS 新布局锚点齐全");
+
+// ── 9. HTML 标签配平与 id 唯一性 ──
+//
+// 这一条是拿真伤换来的：一次性插入脚本里写了
+// `indexOf("    </div>\n")`，而它命中了缩进更深的 `      </div>\n` 的
+// **尾部子串**（子串匹配不认行首），块尾切错，留下半截块 + 一对不配平的 div。
+// 浏览器不会报错，它会「尽力而为」地猜出另一棵树——所以必须静态自查。
+//
+// id 重复是同一类伤：重复时 getElementById 只返回第一个，
+// 第二个就成了「看得见但永远点不动」的鬼。
+{
+  const divOpen = (html.match(/<div\b/g) || []).length;
+  const divClose = (html.match(/<\/div>/g) || []).length;
+  if (divOpen !== divClose) fail(`<div> 不配平：${divOpen} 开 / ${divClose} 闭`);
+  else ok(`<div> 配平（${divOpen} 对）`);
+
+  for (const tag of ["form", "nav", "main", "section", "body", "html"]) {
+    const o = (html.match(new RegExp(`<${tag}\\b`, "g")) || []).length;
+    const c = (html.match(new RegExp(`</${tag}>`, "g")) || []).length;
+    if (o !== c) fail(`<${tag}> 不配平：${o} 开 / ${c} 闭`);
+  }
+
+  const ids = [...html.matchAll(/id="([^"]+)"/g)].map(m => m[1]);
+  const dup = [...new Set(ids.filter((x, i) => ids.indexOf(x) !== i))];
+  if (dup.length) fail(`HTML 里重复的 id：${dup.join(", ")}`);
+  else ok(`${ids.length} 个 id 无重复`);
+}
 
 // ── 8. main.js 不再有 Tab 切换逻辑 ──
 const mainSrc = fs.readFileSync(path.join(modDir, "main.js"), "utf8");

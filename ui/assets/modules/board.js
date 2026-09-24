@@ -117,12 +117,12 @@ export function renderBoard() {
         <span class="bc-title">${escapeHtml(cell.title || "（无标题）")}</span>
       </div>
       ${cell.body ? `<div class="bc-body">${escapeHtml(cell.body)}</div>` : ""}
-      <div class="bc-tags">
-        <span class="bc-tag">${escapeHtml(life)}</span>
-        <span class="bc-tag ${vis.cls}">${escapeHtml(vis.text)}</span>
-        <span class="bc-tag">${escapeHtml(act)}</span>
+      <div class="chip-row">
+        <span class="chip">${escapeHtml(life)}</span>
+        <span class="chip ${vis.cls}">${escapeHtml(vis.text)}</span>
+        <span class="chip">${escapeHtml(act)}</span>
       </div>
-      <div class="bc-acts">
+      <div class="row-acts">
         <button class="mini" data-act="toggle">${cell.enabled === false ? "启用" : "关掉"}</button>
         <button class="mini" data-act="edit">编辑</button>
         <button class="mini danger" data-act="delete">删除</button>

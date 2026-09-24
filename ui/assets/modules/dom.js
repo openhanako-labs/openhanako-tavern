@@ -35,6 +35,11 @@ export const dom = {
   boardCountEl: document.getElementById("board-count"),
   boardNoteEl: document.getElementById("board-note"),
 
+  // 正则规则
+  regexListEl: document.getElementById("regex-list"),
+  regexCountEl: document.getElementById("regex-count"),
+  regexNoteEl: document.getElementById("regex-note"),
+
   exportsListEl: document.getElementById("exports-list"),
   exportInfoEl: document.getElementById("export-info"),
   importResultEl: document.getElementById("import-result"),
@@ -53,6 +58,7 @@ export const DRAWERS = {
   board: document.getElementById("drawer-board"),
   variables: document.getElementById("drawer-variables"),
   presets: document.getElementById("drawer-presets"),
+  regex: document.getElementById("drawer-regex"),
   tools: document.getElementById("drawer-tools"),
   migration: document.getElementById("drawer-migration"),
   character: document.getElementById("drawer-character"),

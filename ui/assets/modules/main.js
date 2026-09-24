@@ -18,6 +18,7 @@ import { loadVariables, renderVariables, openVariableEditor, saveVariable, delet
 import { loadTools, renderToolGroups, renderTools } from "./tools.js";
 import { importFile, loadExports, renderExports, downloadExport, downloadExportFile, deleteExportFile, copyExport, formatFileSize, exportAll } from "./migration.js";
 import { saveBoardCell, deleteBoardCell, bindBoard } from "./board.js";
+import { saveRegexRule, deleteRegexRule, bindRegex } from "./regex.js";
 
 
 // ── 通用弹窗 ──────────────────────────────────────────
@@ -28,6 +29,7 @@ export function closeEditModal() {
   state.currentSetting = null;
   state.currentVariable = null;
   state.currentBoardCell = null;
+  state.currentRegexRule = null;
   state.currentForm = null;
 }
 
@@ -36,6 +38,7 @@ export async function handleSave() {
   else if (state.currentForm === 'setting') await saveSetting();
   else if (state.currentForm === 'variable') await saveVariable();
   else if (state.currentForm === 'board') await saveBoardCell();
+  else if (state.currentForm === 'regex') await saveRegexRule();
 }
 
 export async function handleExport() {
@@ -55,6 +58,7 @@ export async function handleDelete() {
   else if (state.currentForm === 'setting' && state.currentSetting) await deleteSetting(state.currentSetting.id);
   else if (state.currentForm === 'variable' && state.currentVariable) await deleteVariable(state.currentVariable.id);
   else if (state.currentForm === 'board' && state.currentBoardCell) await deleteBoardCell(state.currentBoardCell.id);
+  else if (state.currentForm === 'regex' && state.currentRegexRule) await deleteRegexRule(state.currentRegexRule.id);
 }
 
 
@@ -156,6 +160,9 @@ export async function init() {
 
   // 世界（黑板）抽屉内的按钮
   bindBoard();
+
+  // 正则规则抽屉内的按钮
+  bindRegex();
 
   // 快捷键：Ctrl/Cmd+B 折侧栏
   document.addEventListener("keydown", (e) => {

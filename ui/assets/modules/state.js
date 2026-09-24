@@ -14,6 +14,9 @@ export const state = {
   boardWorld: [],
   boardChat: [],
   currentBoardCell: null,
+  // 正则规则：规则表，以及正在编辑的那一条
+  regexList: null,
+  currentRegexRule: null,
   toolGroups: null,
   toolList: null,
   exportList: null,
