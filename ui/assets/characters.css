@@ -52,6 +52,15 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+/*
+ * 高度链的根。html/body 必须先钉到视口高——
+ * 少了这一条 body 高度就是 auto，下面 .shell 的 height:100%
+ * 会退化成 auto，整条链塔回内容高：输入区悬在中部、
+ * 主区下面坠着大片空白。之前只在 .shell 的行高上找原因，
+ * 找错了层：症状在下面，病根在最上面。
+ */
+html, body { height: 100%; }
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
                "Hiragino Sans GB", "Microsoft YaHei", Roboto, sans-serif;
@@ -516,6 +525,13 @@ h1 {
   font-size: 13px;
   opacity: .62;
 }
+
+/*
+ * 空态在消息区里要落在中心，不能堆在顶沿舔着边框。
+ * .messages 是 flex column，grid-column 在那里是句空话——
+ * 真正管用的是 margin:auto。只对消息区生效，不动抽屉列表。
+ */
+.messages > .empty { margin: auto; }
 
 .empty .hint {
   display: block;
