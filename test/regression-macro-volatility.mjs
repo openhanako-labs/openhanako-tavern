@@ -29,7 +29,7 @@ import { makeApp, request } from "./lib/route-harness.mjs";
 const { ConversationRepo } = await import("../lib/conversations/repo.js");
 const { CharacterRepo } = await import("../lib/characters/repo.js");
 const { SettingRepo } = await import("../lib/settings/repo.js");
-const { buildGenerationInput, applyMacrosToCharacter, freezeVolatileMacros } =
+const { buildGenerationInput, applyMacrosToCharacter, freezeVolatileMacros, TIME_MACRO_MARKER } =
   await import("../lib/conversations/pipeline.js");
 const { registerConversationRoutes } = await import("../lib/conversations/routes.js");
 const { createConversationTools } = await import("../lib/probe/tools.js");
@@ -131,19 +131,25 @@ await okAsync("工具路径落盘的助手消息也冻结", async () => {
   assert.ok(!stored.content.includes("{{"), `工具路径落盘的内容还带着宏：${stored.content}`);
 });
 
-// ── 5. 卡字段里的一次性宏按对话冻结 ──
+// ── 5. 卡字段里的一次性宏：两族两条路 ──
 //
-// 卡字段最终落进**静态前缀**。前缀里一旦有会变的东西，
-// 从它出现的位置往后整段都对不上缓存——不是只损失那几个字符。
-// 所以冻结点是「首算」：同一场对话里前缀逐字节不动。
-//
-// 代价（已接受，写在这里以防后人以为是 bug）：卡里的 `{{time}}`
-// 会在首次求值那一刻定住，**整场对话不再走**。想要会走的钟，
-// 它就不能待在前缀里，得改成往动态尾部注入当前时刻——那是另一条路。
-await okAsync("卡字段里的一次性宏按对话冻结（不污染静态前缀）", async () => {
+//   抽签族（roll/random）→ 按对话冻结。它是一次事件，冻住语义就对。
+//   时间族（time/date/...）→ 搬出前缀。冻死等于摆一只哑钟，
+//     但待在前缀里会让「从它出现位置往后」整段失配——
+//     所以卡里留一个**常量指路标记**，真值每轮由尾部提供。
+
+/** 按第一个动态标记切前缀/尾部。 */
+const DYNAMIC_MARKS = ["## 当前时刻", "## 世界设定", "## 世界 · 本轮"];
+function splitAt(s) {
+  const idx = DYNAMIC_MARKS.map(m => s.indexOf(m)).filter(i => i >= 0);
+  const cut = idx.length ? Math.min(...idx) : s.length;
+  return { prefix: s.slice(0, cut).replace(/\n\n$/, ""), tail: s.slice(cut) };
+}
+
+await okAsync("抽签族在卡里按对话冻结（不污染静态前缀）", async () => {
   const wild = await charRepo.create({
     name: "掷骰者",
-    description: "她的编号是 {{roll 1d1000}}，现在是 {{time}}。",
+    description: "她的编号是 {{roll 1d1000}}。",
     first_mes: "「你来了。」"
   });
   const c2 = await convRepo.create(wild.id);
@@ -158,6 +164,66 @@ await okAsync("卡字段里的一次性宏按对话冻结（不污染静态前�
     `静态前缀每轮都变 → 前缀缓存永远不可能命中。\n     A: ${a.systemPrompt.slice(0, 90)}\n     B: ${b.systemPrompt.slice(0, 90)}`
   );
   assert.ok(!/\{\{/.test(a.systemPrompt), `前缀里还留着没结算的宏：${a.systemPrompt.slice(0, 120)}`);
+});
+
+await okAsync("时间族在卡里搬出前缀：卡里留标记，真值进尾部", async () => {
+  const timed = await charRepo.create({
+    name: "看钟的人",
+    description: "现在是 {{time}}。",
+    first_mes: "「你来了。」"
+  });
+  const c3 = await convRepo.create(timed.id);
+  const one = await convRepo.get(c3.id);
+
+  const { systemPrompt } = await buildGenerationInput(
+    repos, one, applyMacrosToCharacter(timed, one, {}), "一。", {}
+  );
+  const { prefix, tail } = splitAt(systemPrompt);
+
+  assert.ok(prefix.includes(TIME_MACRO_MARKER), `卡里没留下指路标记：${prefix.slice(0, 120)}`);
+  assert.ok(!/\d{1,2}:\d{2}/.test(prefix), `静态前缀里出现了具体时刻（每轮会变）：${prefix.slice(0, 120)}`);
+  assert.ok(tail.includes("## 当前时刻"), "尾部没有时间块");
+  assert.match(tail, /现在是 .+\d{1,2}:\d{2}/, `时间块里没有时刻：${tail.slice(0, 120)}`);
+});
+
+await okAsync("钟真的在走：推进时钟再装配，前缀不动而尾部跟着变", async () => {
+  const timed = await charRepo.create({
+    name: "看钟的人二号",
+    description: "现在是 {{time}}。",
+    first_mes: "「你来了。」"
+  });
+  const c4 = await convRepo.create(timed.id);
+  const one = await convRepo.get(c4.id);
+
+  // 直接把全局 Date 推着走，而不是等真实时间过去：
+  // 块里的读数只到**分钟**，等 1.1 秒根本不会变——
+  // 那样断言会因为「恰好同一分钟」而假红（或反过来假绿）。
+  const RealDate = globalThis.Date;
+  const setClock = (iso) => {
+    const t = new RealDate(iso);
+    globalThis.Date = class extends RealDate {
+      constructor(...args) { super(...(args.length ? args : [t.getTime()])); }
+      static now() { return t.getTime(); }
+    };
+  };
+
+  let a, b;
+  try {
+    setClock("2026-01-02T03:04:05");
+    a = await buildGenerationInput(repos, one, applyMacrosToCharacter(timed, one, {}), "一。", {});
+    setClock("2026-06-07T08:09:10");
+    b = await buildGenerationInput(repos, one, applyMacrosToCharacter(timed, one, {}), "二。", {});
+  } finally {
+    globalThis.Date = RealDate;
+  }
+
+  assert.match(splitAt(a.systemPrompt).tail, /2026-01-02 03:04/, "尾部没读到第一次的时钟");
+  assert.match(splitAt(b.systemPrompt).tail, /2026-06-07 08:09/, "尾部没读到第二次的时钟——钟被冻住了");
+  assert.strictEqual(
+    splitAt(a.systemPrompt).prefix,
+    splitAt(b.systemPrompt).prefix,
+    "前缀跟着时钟动了——那它就不是静态前缀"
+  );
 });
 
 fs.rmSync(tmp, { recursive: true, force: true });
