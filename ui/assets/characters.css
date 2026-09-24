@@ -1421,6 +1421,10 @@ footer a:hover { color: var(--accent); }
   display: grid;
   /* 页内侧栏已删：单列，主区铺满（rail 是宿主层，不占这里） */
   grid-template-columns: 1fr;
+  /* 行必须钉满容器：行高 auto 会塌回内容高——
+     chat-view 的 height:100% 就成了循环依赖，
+     表现为输入区悬在中部、下面坠着几百像素空白 */
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
