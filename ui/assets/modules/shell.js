@@ -382,7 +382,8 @@ export function bindShell() {
         console.error("[nav] open-conv failed:", e);
         toast(`打开对话失败: ${friendlyError(e)}`, "error");
       }
-    } else if (msg.t === "new-char" && msg.id) {
+    } else if (msg.t === "new-conv-for" && msg.id) {
+      // 旧名 new-char 同时被当“新建角色”和“给这个角色开新场”用，名字会骗人。
       await startNewConversation(msg.id);
     } else if (msg.t === "pick-char" && msg.id) {
       await pickCharacter(msg.id);
@@ -392,6 +393,18 @@ export function bindShell() {
     } else if (msg.t === "new-conv") {
       const { createConversation } = await import("./chat.js");
       await createConversation();
+    } else if (msg.t === "new-char") {
+      // rail 的「+ 角色」：不带 id 的 new-char 就是“新建角色”。
+      // 它以前落到分支链末尾——点了没反应，还一声不吭。
+      const { openCharacterEditor } = await import("./characters.js");
+      await openCharacterEditor();
+    } else if (msg.t === "rail-refresh") {
+      // 左栏要求刷新它自己的列表，主区不动（主区有自己的 loadCharacters）
+    } else {
+      // 可见出口：分支链末尾没有 else 时，任何没接住的导航意图都是无声失败。
+      // 这条链跳 iframe，吞掉最难查——所以宁可吵，也不许静默。
+      console.warn("[nav] 未处理的导航意图:", msg);
+      toast(`未处理的导航意图: ${msg.t}`, "error");
     }
   });
 

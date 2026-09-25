@@ -170,7 +170,7 @@ async function openChar(id) {
   const mine = convs.filter(c => c.characterId === id);
   if (mine.length === 1) { openConv(mine[0].id); return; }
   if (mine.length === 0) {
-    nav({ t: "new-char", id });
+    nav({ t: "new-conv-for", id });
     return;
   }
   nav({ t: "pick-char", id });
