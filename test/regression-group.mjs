@@ -148,6 +148,45 @@ await okAsync("消息能记住发言者（UI 要靠它标谁说的）", async ()
   assert.strictEqual(back.speakerId, ren.id);
 });
 
+// ── ⑦ 路由：发言者真的落到回复上 ────────────────────
+await okAsync("路由：带 speakerId 发一条 → 回复上记着是谁说的", async () => {
+  const app = makeApp();
+  const llm = { available: true, generate: async () => ({ content: "「山上的风变了。」", usage: {}, target: { model: "grp-stub" } }), resolveContextWindow: async () => 32000 };
+  registerConversationRoutes(app, convRepo, llm, charRepo, setRepo, null, null, null);
+
+  const conv = await convRepo.create(vera.id, { characterIds: [vera.id, ren.id] });
+  const r = await request(app, "POST", `/conversations/${conv.id}/messages`, {
+    body: { content: "谁先说？", speakerId: ren.id }
+  });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  assert.strictEqual(r.data.assistantMessage.speakerId, ren.id, "回复该署上发言者");
+  assert.strictEqual(r.data.assistantMessage.speakerName, "任十九");
+});
+
+await okAsync("路由：发言者不在这一场里 → 报错说清（不偷偷用主角顶上）", async () => {
+  const app = makeApp();
+  const llm = { available: true, generate: async () => ({ content: "x", usage: {}, target: {} }), resolveContextWindow: async () => 32000 };
+  registerConversationRoutes(app, convRepo, llm, charRepo, setRepo, null, null, null);
+
+  const conv = await convRepo.create(vera.id, { characterIds: [vera.id, ren.id] });
+  const r = await request(app, "POST", `/conversations/${conv.id}/messages`, {
+    body: { content: "喂", speakerId: solo.id }
+  });
+  assert.ok(r.status >= 400, `该报错，实际 ${r.status}`);
+  assert.ok(/发言者不在这一场里/.test(r.error || ""), `报错要说清：${r.error}`);
+});
+
+await okAsync("单人对话：不写 speakerId（那条信息多余，也会改掉单角色路径的落盘形状）", async () => {
+  const app = makeApp();
+  const llm = { available: true, generate: async () => ({ content: "嗯。", usage: {}, target: {} }), resolveContextWindow: async () => 32000 };
+  registerConversationRoutes(app, convRepo, llm, charRepo, setRepo, null, null, null);
+
+  const conv = await convRepo.create(solo.id);
+  const r = await request(app, "POST", `/conversations/${conv.id}/messages`, { body: { content: "你一个人？" } });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  assert.ok(!r.data.assistantMessage.speakerId, `不该写发言者：${JSON.stringify(r.data.assistantMessage.speakerId)}`);
+});
+
 console.log(`\n通过 ${pass} / 失败 ${fail}`);
 fs.rmSync(tmp, { recursive: true, force: true });
 process.exit(fail > 0 ? 1 : 0);
