@@ -20,6 +20,11 @@
  *   （在 variables.js 的模板里），一条样式都没有，这个检查器当时是绿的。
  *   若要把它们收进来：得把“JS 里 `class="…"` 字面量”也算作落点，
  *   而那会把状态类一并拖进来——得先想清楚白名单再动。
+ *
+ *   2026-09-25 已补两处（死规则那侧的误报）：
+ *     ① 带插值的类属性 `class="x${…}"`——只取插值前的字面量；
+ *     ② **值整个是插值**的 `class="${m.role}"` 静态拿不到名字，
+ *        改由 DYNAMIC_CLASSES 显式登记（不登记会被当死规则而误删）。
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -29,6 +34,17 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const UI = join(ROOT, "ui");
 const CSS = join(UI, "assets", "characters.css");
+
+/**
+ * 由插值决定的类名：静态扫不到，只能登记。
+ *
+ * 不登记的话，`.user` / `.system` 会被当成死规则——而它们是**活的**：
+ * chat.js 里写的是 `class="message ${m.role}"`，role ∈ user/assistant，
+ * 也就是气泡的角色类。无脑“清理死规则”会把它删掉。
+ *
+ * 登错了的代价只是**死规则少报**（更保守），不会误删。
+ */
+const DYNAMIC_CLASSES = ["user", "assistant", "system"];
 
 let pass = 0;
 let fail = 0;
@@ -70,8 +86,9 @@ for (const f of files) {
   // 上面那三条都要求名字后面**紧跟引号**，所以这种写法整条扫不到——
   // 后果是真实的类被当成死规则（群聊的 .speaker-chip 就是这么被报的）。
   // 只取插值前面的字面量部分。
-  // 已知未覆盖：插值在**前面**的写法（`class="${x} on"`）——那种还没出现过，
-  // 等真出现时连这条一起补，别在这儿凭空猜。
+  //
+  // 仍扫不到的还有**值整个是插值**的写法（`class="${m.role}"`）：
+  // 静态根本拿不到名字，所以靠下面的 DYNAMIC_CLASSES 登记。
   const patterns = [
     /class(?:Name)?\s*=\s*[`"']([^`"']+)[`"']/g,
     /classList\.(?:add|remove|toggle)\(([^)]*)\)/g,
@@ -90,6 +107,9 @@ for (const f of files) {
     }
   }
 }
+
+// 插值处看不见的类名（见上面 DYNAMIC_CLASSES 的说明）
+for (const c of DYNAMIC_CLASSES) used.add(c);
 
 // ── 收集：CSS 里的类选择器 ──────────────────────────────
 const cssSrc = readFileSync(CSS, "utf8");
