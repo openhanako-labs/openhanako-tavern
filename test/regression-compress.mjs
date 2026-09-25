@@ -219,6 +219,114 @@ await okAsync("清掉之后：下一轮重新压一遍（不是从此就不折�
   assert.strictEqual(r.meta.summaryReused, false, "这次是从头压的，不该说复用");
 });
 
+// ── ⑥ 模型写的摘要（手动触发的那一次调用） ──────────────
+//
+// 这一节验的是：提示词真拦住了三件事（新增 / 对话口吻 / 长度），
+// 清洗容错但也真会空手，而且**模型看到的确实是那批要被折掉的历史**。
+
+const { buildSummaryInput, parseSummary, SUMMARY_MAX_CHARS } = await import("../lib/conversations/summary-llm.js");
+const { mergeSummary } = await import("../lib/llm/history.js");
+
+await okAsync("提示词：三条约束都在（不许新增 / 不许对话口吻 / 长度上限）", () => {
+  const input = buildSummaryInput({ name: "薇拉" }, [{ role: "user", content: "你在守什么？" }]);
+  const p = input.systemPrompt;
+  assert.ok(/不许新增/.test(p), "没有“只许压缩不许新增”——模型会顺手编事件");
+  assert.ok(/不要写成对话/.test(p), "没有拦住对话口吻——它会被放在 prompt 最前面，写成“我们继续”就是一句用户指令");
+  assert.ok(new RegExp(String(SUMMARY_MAX_CHARS)).test(p), `提示词里该写清长度上限 ${SUMMARY_MAX_CHARS}`);
+  assert.ok(/薇拉/.test(p), "该告诉它是哪个角色");
+  assert.strictEqual(input.messages.length, 1, "被折的那批要**合并成一条** user 消息——拆多轮模型会顺着往下写");
+});
+
+await okAsync("提示词：被折的内容真在里面", () => {
+  const rows = [
+    { role: "user", content: "塔顶的结界在响" },
+    { role: "assistant", content: "她把霜从袖口抖下去" }
+  ];
+  const input = buildSummaryInput(null, rows);
+  assert.strictEqual(input.count, 2);
+  assert.ok(input.messages[0].content.includes("塔顶的结界在响"));
+  assert.ok(input.messages[0].content.includes("她把霜从袖口抖下去"));
+});
+
+await okAsync("清洗：围栏 / 引号 / 寒暄 / 标签都去掉", () => {
+  assert.strictEqual(parseSummary("```\n她在塔顶守了三夜。\n```").text, "她在塔顶守了三夜。");
+  assert.strictEqual(parseSummary("「她在塔顶守了三夜。」").text, "她在塔顶守了三夜。");
+  assert.strictEqual(parseSummary("好的，她在塔顶守了三夜。").text, "她在塔顶守了三夜。");
+  assert.strictEqual(parseSummary("前情提要：她在塔顶守了三夜。").text, "她在塔顶守了三夜。");
+});
+
+await okAsync("清洗：空手就空手（不把“好的”存成摘要）", () => {
+  for (const empty of ["", "   ", "```\n```", "好的，"]) {
+    const r = parseSummary(empty);
+    assert.strictEqual(r.text, null, `“${empty}”不该被当成摘要`);
+    assert.ok(r.why, "空手要带一句为什么");
+  }
+});
+
+await okAsync("清洗：超长要截到上限并且看得出来被截了", () => {
+  const r = parseSummary("很长".repeat(600), { maxChars: 50 });
+  assert.ok(r.text.length <= 51, `实际 ${r.text.length}`);
+  assert.ok(r.text.endsWith("…"), "截了要留个记号");
+});
+
+await okAsync("情形 0：模型写的摘要 + 又多折了几条 → 保持原样、只推覆盖范围（不拼机械骨架）", () => {
+  const prev = { text: "她在塔顶守了三夜。", coveredCount: 10, byModel: true };
+  const rows = Array.from({ length: 14 }, (_, i) => ({ role: "user", content: `第${i}句` }));
+  const merged = mergeSummary(prev, rows);
+  assert.strictEqual(merged.text, "她在塔顶守了三夜。", "不该往模型写的叙述后面拼“起点：…”“涉及角色：…”那类标签");
+  assert.strictEqual(merged.coveredCount, 14, "覆盖范围要推到新的折叠数");
+  assert.strictEqual(merged.byModel, true);
+});
+
+await okAsync("路由：真调一次模型，并把**它看到的那批历史**核一遍", async () => {
+  const seen = [];
+  const app2 = makeApp();
+  const llm2 = {
+    available: true,
+    lastTarget: { model: "sum-stub" },
+    resolveContextWindow: async () => 8000,
+    generate: async (messages, options) => {
+      seen.push({ messages, options });
+      return { content: "```\n她在塔顶守了三夜，霜结在袖口上。\n```", usage: { total_tokens: 321 }, target: { model: "sum-stub" } };
+    }
+  };
+  registerConversationRoutes(app2, convRepo, llm2, charRepo, setRepo, null, null, null);
+
+  const r = await request(app2, "POST", `/conversations/${long.id}/summary/summarize`, { body: {} });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  assert.strictEqual(r.data.ok, true);
+  assert.ok(r.data.folded > 0, `该说清压了几条：${JSON.stringify(r.data)}`);
+  assert.strictEqual(r.data.summary.text, "她在塔顶守了三夜，霜结在袖口上。", "围栏要被清掉");
+  assert.strictEqual(r.data.summary.byModel, true, "要标明这是模型写的");
+  assert.strictEqual(r.data.summary.coveredCount, r.data.folded);
+  assert.strictEqual(r.data.usage.total_tokens, 321, "用量要回传，成本要看得见");
+
+  assert.strictEqual(seen.length, 1, "应当只调用一次模型");
+  assert.ok(/不许新增/.test(seen[0].options.systemPrompt), "带的是压缩器的系统提示");
+  assert.ok(
+    String(seen[0].messages[0].content).includes("第 1 句"),
+    "模型看到的该是最早那批要被折掉的历史"
+  );
+
+  const conv = await convRepo.get(long.id);
+  assert.strictEqual(conv.summary.byModel, true, "要真落盘");
+});
+
+await okAsync("路由：没有可折的就**不假装成功**（直说还没到折叠的地方）", async () => {
+  const app3 = makeApp();
+  const llm3 = {
+    available: true,
+    generate: async () => { throw new Error("不该被调用"); },
+    resolveContextWindow: async () => 8000
+  };
+  registerConversationRoutes(app3, convRepo, llm3, charRepo, setRepo, null, null, null);
+
+  const r = await request(app3, "POST", `/conversations/${short.id}/summary/summarize`, { body: {} });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  assert.strictEqual(r.data.ok, false);
+  assert.ok(/折叠/.test(r.data.reason), `理由要说人话：${r.data.reason}`);
+});
+
 console.log(`\n通过 ${pass} / 失败 ${fail}`);
 fs.rmSync(tmp, { recursive: true, force: true });
 process.exit(fail > 0 ? 1 : 0);

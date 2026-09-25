@@ -169,6 +169,9 @@ const EXPECTED = {
     // 前情提要：折叠是有损的，所以界面上它得有个能读、能改、能清的家。
     // （2026-09-25 加：折得出摘要，却没人能看一眼它写错了什么——那不算做完了。）
     "GET /conversations/:id/summary", "PUT /conversations/:id/summary",
+    // 手动触发的一次模型调用：把旧历史重写成人话。
+    // （不自动——折叠可能每轮都发生，自动的账就成了“用户不知道花了钱”。）
+    "POST /conversations/:id/summary/summarize",
     "POST /conversations/:id/messages", "POST /conversations/:id/messages/stream",
     "POST /conversations/:id/regenerate", "POST /conversations/:id/regenerate/stream",
     "GET /characters-for-conv",

@@ -50,5 +50,18 @@ if (ta) {
   );
 }
 
-// ⑤ 留着面板给人看
+// ⑤ 那个按钮：在不在、点了之后说什么
+//
+// 这一场（真的那场对话）消息少、折不出东西，所以**正确答案是如实说没得压**——
+// 而“点了没反应”“报一个成功的假话”都是错的。
+const llmBtn = box?.querySelector("#ctx-summary-llm");
+out["④ 有『让模型重写』按钮"] = !!llmBtn;
+if (llmBtn) {
+  llmBtn.click();
+  await sleep(3000);
+  out["④ 点完的提示"] = [...document.querySelectorAll(".toast")].map((t) => t.textContent).join(" | ").slice(0, 200);
+  out["④ 按钮活过来了吗"] = !llmBtn.disabled;
+}
+
+// ⑥ 留着面板给人看
 return out;

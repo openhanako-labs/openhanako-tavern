@@ -422,15 +422,20 @@ export async function renderCharContext(greetIdx = 0) {
     <div class="ctx-summary">
       <div class="ctx-summary-head">
         <span>前情提要</span>
-        ${sum?.coveredCount ? `<span class="dim">折叠 ${sum.coveredCount} 条</span>` : ""}
+        ${sum?.byModel ? `<span class="dim">模型写的</span>` : sum?.text ? `<span class="dim">机械骨架</span>` : ""}
+        ${sum?.coveredCount ? `<span class="dim">盖住 ${sum.coveredCount} 条</span>` : ""}
       </div>
       ${sum?.text
         ? `<textarea id="ctx-summary-text" rows="4" spellcheck="false">${escapeHtml(sum.text)}</textarea>
            <div class="ctx-summary-acts">
              <button type="button" class="mini" id="ctx-summary-save">保存</button>
+             <button type="button" class="mini" id="ctx-summary-llm" title="再调用一次模型，把旧历史重写一遍">让模型重写</button>
              <button type="button" class="mini" id="ctx-summary-clear">清掉</button>
            </div>`
-        : `<div class="ctx-summary-empty">还没折叠过——历史超出预算时，最早的那几条会压成一段骨架放在这里。</div>`}
+        : `<div class="ctx-summary-empty">还没折叠过——历史超出预算时，最早的那几条会压成一段骨架放在这里。</div>
+           <div class="ctx-summary-acts">
+             <button type="button" class="mini" id="ctx-summary-llm" title="调用一次模型，现在就把旧历史压成一段前情提要">让模型写一份</button>
+           </div>`}
     </div>`;
 
   box.innerHTML = `
@@ -468,6 +473,40 @@ export async function renderCharContext(greetIdx = 0) {
       await renderCharContext(gi);
     } catch (e) {
       toast("保存失败: " + friendlyError(e), "error");
+    }
+  });
+
+  /*
+   * 让模型重写：**一次明确的调用**。
+   *
+   * 为什么不是自动：折叠可能每轮都发生，自动化的那笔账
+   * 就成了"用户不知道花了钱"。点它才花——所以用量要说出来。
+   */
+  box.querySelector("#ctx-summary-llm")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = "模型在想…";
+    try {
+      const res = await apiFetch(`conversations/${state.currentConv.id}/summary/summarize`, {
+        method: "POST",
+        body: JSON.stringify({})
+      });
+      const data = res?.data || res || {};
+      if (data.ok === false) {
+        // 没得可压不是错误，是一句实话
+        toast(data.reason || "现在没什么可摘要的", "info");
+        btn.disabled = false;
+        btn.textContent = sum?.text ? "让模型重写" : "让模型写一份";
+        return;
+      }
+      if (state.currentConv) state.currentConv.summary = data.summary ?? null;
+      const u = data.usage?.total_tokens ?? data.usage?.completion_tokens ?? null;
+      toast(`前情提要已重写（压了 ${data.folded ?? "?"} 条）${u ? ` · 用了 ${u} token` : ""}`, "success");
+      await renderCharContext(gi);
+    } catch (err) {
+      toast("重写失败: " + friendlyError(err), "error");
+      btn.disabled = false;
+      btn.textContent = sum?.text ? "让模型重写" : "让模型写一份";
     }
   });
 
