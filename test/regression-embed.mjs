@@ -321,5 +321,70 @@ await okAsync("status：不能用时说清卡在哪一步（不抛错）", async
   assert.match(s2.note, /未授权/);
 });
 
+// ── 复核提出的几条（每条对应一个真实失败模式） ──
+await okAsync("宿主给的 headers 覆盖不了我们拼的 Authorization（顺序 + 过滤两道）", async () => {
+  const bus = makeBus({
+    credentials: {
+      apiKey: SECRET,
+      baseUrl: "https://api.example.com/v1",
+      headers: { authorization: "Bearer EVIL", "x-org": "abc" }
+    }
+  });
+  const { fn, seen } = makeFetch();
+  await embed(bus, ["甲", "乙"], { fetchImpl: fn });
+  assert.strictEqual(seen[0].headers.authorization, `Bearer ${SECRET}`, "被宿主的 headers 顶掉了");
+  assert.strictEqual(seen[0].headers["x-org"], "abc", "无关的自定义头该留着");
+});
+
+await okAsync("baseUrl 里夹的令牌不会进错误消息（只报 origin）", async () => {
+  const TOKEN = "SECRETTOKEN-IN-QUERY-0123456789";
+  const bus = makeBus({
+    credentials: { apiKey: SECRET, baseUrl: `https://gw.example.com/v1?token=${TOKEN}` }
+  });
+  const fn = async () => { throw new Error("ECONNREFUSED"); };
+  let msg = null;
+  try { await embed(bus, ["甲"], { fetchImpl: fn }); } catch (e) { msg = e.message; }
+  assert.ok(msg && msg.includes("gw.example.com"), `该报出主机：${msg}`);
+  assert.ok(!msg.includes(TOKEN), `把查询串里的令牌回显了：${msg}`);
+});
+
+await okAsync("prefer=\"bge\" 不会选中 bge-reranker（先过滤再匹配）", async () => {
+  const picked = pickEmbeddingModel(
+    [{ id: "BAAI/bge-reranker-v2-m3" }, { id: "BAAI/bge-m3" }],
+    "bge"
+  );
+  assert.strictEqual(picked.id, "BAAI/bge-m3");
+});
+
+await okAsync("凭据返回数组 → 说清是数组，不说“没有 apiKey”", async () => {
+  const bus = makeBus({ credentials: [SECRET] });
+  const { fn } = makeFetch();
+  let msg = null;
+  try { await embed(bus, ["甲"], { fetchImpl: fn }); } catch (e) { msg = e.message; }
+  assert.ok(msg && msg.includes("数组"), `错的失败信息：${msg}`);
+});
+
+await okAsync("按类型查被拒（{error}）→ 不当成“没有模型”，把理由留着", async () => {
+  const bus = {
+    calls: [],
+    async request(verb) {
+      this.calls.push(verb);
+      if (verb === "provider:models-by-type") return { error: "permission denied" };
+      if (verb === "model:list") return { models: [] };
+      throw new Error("没料到");
+    }
+  };
+  const s = await status(bus);
+  assert.strictEqual(s.ok, false);
+  assert.match(s.typeError || "", /permission denied/, `该把宿主拒绝的理由留着：${JSON.stringify(s)}`);
+});
+
+await okAsync("id 启发式：embedding 单复数都认（“embedding”本来就含子串 embed）", async () => {
+  const { isEmbeddingCandidate } = await import("../lib/embed/service.js");
+  assert.strictEqual(isEmbeddingCandidate({ id: "mistral-embedding-model" }), true);
+  assert.strictEqual(isEmbeddingCandidate({ id: "text-embeddings-3" }), true);
+  assert.strictEqual(isEmbeddingCandidate({ id: "nomic-embed-text" }), true);
+});
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} 过 / ${fail} 不过\n`);
 process.exit(fail ? 1 : 0);

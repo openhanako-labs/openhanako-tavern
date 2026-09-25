@@ -66,6 +66,10 @@ for (const c of dead) {
 }
 console.log(`  复核后：确认可删 ${confirmed.length} 条 · 复核撤回 ${rescued.length} 条`);
 for (const r of rescued) console.log(`    （撤回）${r.c} —— 在 ${r.where} 里有落点`);
+// 逐条列出“确认可删”的。
+// 一份说“12 条可删”却说不出是哪 12 条的报告，**等于没法验**——
+// 拿不到 shell 的复核者就卡在这个上（她只能手工重建名单，然后跟我对不上）。
+for (const c of confirmed) console.log(`    （可删）${c}`);
 
 // ── ③ 扫 CSS：注释感知地把规则切成块 ────────────────────
 const src = fs.readFileSync(CSS, "utf8");
