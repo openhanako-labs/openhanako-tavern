@@ -45,6 +45,7 @@ const { registerToolRoutes } = await import("../lib/tools/routes.js");
 const { registerMigrationRoutes } = await import("../lib/migration/routes.js");
 const { registerGenRoutes } = await import("../lib/gen/routes.js");
 const { registerMediaRoutes } = await import("../lib/media/routes.js");
+const { registerTtsRoutes } = await import("../lib/tts/routes.js");
 const { registerBoardRoutes } = await import("../lib/board/routes.js");
 const { registerRegexRoutes } = await import("../lib/regex/routes.js");
 
@@ -106,7 +107,8 @@ const apps = {
   tools: makeApp(),
   migration: makeApp(),
   gen: makeApp(),
-  media: makeApp()
+  media: makeApp(),
+  tts: makeApp()
 };
 
 // 假 llm。生成路由需要它，而**不能因为麻烦就跳过这一段**——
@@ -153,6 +155,9 @@ registerGenRoutes(apps.gen, { llm: fakeLlm, net: null });
 // 出图：这里只验「路由注册与可达」，真调用形状在 regression-media-portrait。
 // sdk 给 null —— status 会诚实地报「没提供 sdk.media」。
 registerMediaRoutes(apps.media, { sdk: null, characterRepo: charRepo, transfer });
+// 语音合成：sdk 与 dataDir 都给 null → 两条服务路由会诚实地报“未就绪”，
+// 而 /tts/providers 不依赖它们，照样能答。
+registerTtsRoutes(apps.tts, { sdk: null, dataDir: null });
 // 板上与正则各自的深测在 regression-board-routes / regression-regex-routes，
 // 这里注册它们只是为了让下面那张表是**完整的九张脸**。
 registerBoardRoutes(apps.board, boardRepo);
@@ -235,6 +240,10 @@ const EXPECTED = {
   ],
   media: [
     "GET /media/status", "POST /media/portrait"
+  ],
+  tts: [
+    "GET /tts/providers", "GET /tts/config", "PUT /tts/config",
+    "POST /tts/speak", "GET /tts/audio/:name"
   ]
 };
 

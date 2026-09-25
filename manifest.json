@@ -14,14 +14,30 @@
     "app/models.infer",
     "app/models.read",
     "app/provider.credentials.read",
-    "app/media.generate"
+    "app/media.generate",
+    "app/runtime.network",
+    "app/services.call",
+    "app/environments.manage"
   ],
   "network": {
-    "allowedHosts": ["api.siliconflow.cn", "zh.moegirl.org.cn", "export.arxiv.org"],
-    "methods": ["GET", "POST"],
-    "allowLocalhost": false,
-    "defaultTimeoutMs": 30000,
-    "maxResponseBytes": 5242880
+    "allowedHosts": [
+      "api.siliconflow.cn",
+      "zh.moegirl.org.cn",
+      "export.arxiv.org",
+      "api.openai.com",
+      "eastasia.tts.speech.microsoft.com",
+      "southeastasia.tts.speech.microsoft.com",
+      "eastus.tts.speech.microsoft.com",
+      "westus.tts.speech.microsoft.com",
+      "westeurope.tts.speech.microsoft.com",
+      "japaneast.tts.speech.microsoft.com",
+      "koreacentral.tts.speech.microsoft.com",
+      "centralindia.tts.speech.microsoft.com"
+    ],
+    "methods": ["GET", "POST", "PUT"],
+    "allowLocalhost": true,
+    "defaultTimeoutMs": 60000,
+    "maxResponseBytes": 8388608
   },
   "contributes": {
     "cards": [
