@@ -1,31 +1,18 @@
-chore(css): 清掉死规则（44 → 25）——顺带把检查器补到能信
+feat(embed): 用宿主自己的 embedding 模型算向量（bus 取凭据，不经手 key）
 
-`check-css-wiring` 报的 46 条死规则里**混着假阳性**，所以这不是一次纯机械清理：
-`.user` / `.system` 是气泡的角色类（`class="message ${m.role}"`，插值处静态扫不到），
-无脑删会把在用的样式删掉——**而且删完检查器还是绿的**：不报错，界面悄悄坏。
+宿主给 App 的模型契约（app-contract/models.d.ts）只有 list/stream/utility/cancel，
+没有 embedding 面——但不等于算不了：ctx.bus.request 有
+provider:models-by-type 与 provider:credentials，拿到 baseUrl+apiKey 之后
+按 OpenAI 兼容形状 POST /embeddings 就行。
 
-顺序因此是：先把判据补全 → 再动手。
+lib/embed/service.js  找模型 -> 取凭据 -> 算；凭据不落盘/不进日志/不进返回值
+lib/embed/tool.js     tavern_embed_status / tavern_embed（可落文件，默认只回指纹）
+lib/embed/routes.js   GET /embed/status、POST /embed
+manifest.json         加 app/models.read + app/provider.credentials.read
 
-## 检查器补了两处盲区（前一步已提交）
+test/regression-embed.mjs 22 条：形状逐条对、信封必须拆、凭据不许漏。
+test/check-module-load.mjs（新守卫）+ test/lib/load-probe.mjs
+  —— 真 import 每个服务端模块。起因：两个半角引号写进中文字符串，
+     node --check 报了 OK，宿主报 Unexpected identifier，用户看到安装未完成。
 
-1. 带插值的类属性 `class="x${…}"`：只取插值前的字面量。
-2. **值整个是插值**的 `class="${m.role}"`：静态拿不到名字，
-   改由 `DYNAMIC_CLASSES` 显式登记（`user` / `assistant` / `system`）。
-
-## 新工具 `tools/trim-css.mjs`（默认只报告，`--apply` 才动手）
-
-它的**第一步不是删，是把名单再核一遍**：对每个"死"类名在整个 `ui/` 下
-独立搜一次（HTML + JS 都搜，**排除 CSS 自己**——否则每条规则都"证明"自己还活着）。
-核不过的从删除名单里撤回。方向故意选保守：**宁可留着死规则，也不删在用的**。
-
-跑出来：44 条里**撤回 13 条**（`input` / `name` / `desc` / `select` 这类在 JS 里
-当变量名出现过），确认可删 31 条 → 实际清掉 41 个块 + 2 处组选择器部分。
-死规则 **44 → 25**（剩下的是被撤回的那些）。
-
-## 一条过期断言
-
-`check-u1-wiring` 第 7 节期望 CSS 里有 `.sb-foot` —— 那是**侧栏**（`sb-*`）留下的。
-侧栏早已按产品决定删除（列表归宿主 rail），这批规则跟着成了死规则，清理时被删了。
-**结构变了断言跟着变**：把它从锚点表里去掉（剩下的仍是真锚点），并注明原因。
-
-全量 55 通过 / 0 失败。
+docs/notes-host-embedding.md 记下这道门的位置与形状。

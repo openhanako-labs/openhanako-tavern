@@ -35,6 +35,8 @@ import { BoardRepo } from "./lib/board/repo.js";
 import { registerBoardRoutes } from "./lib/board/routes.js";
 
 import { registerToolRoutes } from "./lib/tools/routes.js";
+import { createEmbedTools } from "./lib/embed/tool.js";
+import { registerEmbedRoutes } from "./lib/embed/routes.js";
 import { loadGroupState, isGroupEnabled } from "./lib/tools/group.js";
 
 import { registerMigrationRoutes } from "./lib/migration/routes.js";
@@ -184,6 +186,12 @@ export default defineApp(async (sdk) => {
     for (const t of createSettingTools({ settingRepo, conversationRepo })) await registerTool(t, "settings");
   }
 
+  // 向量：走宿主的 bus 取凭据，用宿主目录里的 embedding 模型算（见 lib/embed/）。
+  // 独立成一个工具组，坏了或不想用可以直接关。
+  if (sdk) {
+    for (const t of createEmbedTools({ sdk, dataDir })) await registerTool(t, "embed");
+  }
+
   s.tools = {
     registered: receipts.length,
     groups: [
@@ -191,6 +199,7 @@ export default defineApp(async (sdk) => {
       { id: "conversations", name: "对话" },
       { id: "variables", name: "变量" },
       { id: "settings", name: "设定库" },
+      { id: "embed", name: "向量" },
       { id: "system", name: "系统" }
     ].map(g => ({ ...g, enabled: isGroupEnabled(g.id) }))
   };
@@ -230,6 +239,9 @@ export default defineApp(async (sdk) => {
     }
 
     registerToolRoutes(app, sdk);
+
+    // 向量（与工具共用一个 service，纪律只有一份）
+    registerEmbedRoutes(app, sdk);
 
     if (dataDir) {
       registerMigrationRoutes(app, dataDir);
