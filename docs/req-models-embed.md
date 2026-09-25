@@ -1,95 +1,100 @@
-# 需求：让沙箱内的 App 能算 embedding（`models.embed`）
+# 记录：App 里怎么正确地出网（`sdk.network.fetch`）
 
-> 这份文档改过三版，前两版的原因都是错的。这一版有确诊证据。
->
-> 结论：**白名单补了、能力加了、用户在界面上也批准了、宿主也重启了 ——
-> App 进程的网络仍然被进程级拒绝。**
+> 2026-09-25 收尾版。前三版把原因写错了 —— "宿主没有这条路" → "沙箱设置" →
+> "白名单是空的" → 实际是**用错了门**。这一版是跑通之后的定稿。
 
-证据（酒馆 `tavern_embed` 的真实报错，2026-09-25）：
+## 结论（已实测跑通）
+
+App 出网必须走 `sdk.network.fetch`：
+
+```js
+const r = await sdk.network.fetch("https://api.siliconflow.cn/v1/embeddings", {
+  method: "POST",
+  headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+  body: JSON.stringify({ model, input })
+});
+```
+
+- App 入口跑在独立的 **AppHost 子进程**里，**原始网络被 Node 权限模型拒掉**。
+  直接 `globalThis.fetch` 的结果是 `getaddrinfo ERR_ACCESS_DENIED`
+  （Windows 上 WSAEACCES / 10013）——看着像 DNS 坏了，其实是被权限层拒了。
+- `sdk.network.fetch` 跨 IPC 让**宿主**代为检查
+  （白名单 → 私网/HTTPS → 方法 → 超时 → 字节上限）并发出；
+  检查用的就是 manifest 里的 `network.allowedHosts`。
+- v2 **没有**单独的 `network.fetch` 能力；`app/runtime.network` 是给
+  **受管运行时 / 外部命令**用的，进程内出网不需要它。
+
+manifest 里那一段：
+
+```json
+"network": {
+  "allowedHosts": ["api.siliconflow.cn"],
+  "methods": ["GET", "POST"],
+  "allowLocalhost": false,
+  "defaultTimeoutMs": 30000,
+  "maxResponseBytes": 5242880
+}
+```
+
+## 实测结果（2026-09-25 收尾）
 
 ```
-连不上 embedding 端点（https://api.siliconflow.cn）：
-  fetch failed（cause: ERR_ACCESS_DENIED getaddrinfo ERR_ACCESS_DENIED api.siliconflow.cn）
+tavern_embed   → providerId=siliconflow  model=BAAI/bge-m3
+                 dimension=1024  count=3  file=embed-probe.json (65,497 字节)
+落盘校验       → 3×1024、无全零、无 NaN、整体范数 1.73
+指纹对照       → 第一维 0.0127 == 直连探测那次 0.0127（逐位一致）
 ```
 
-`getaddrinfo` 返回 `ERR_ACCESS_DENIED`（Windows 上对应 WSAEACCES / 10013）
-——**这不是 DNS 解析失败，也不是白名单不放行，是这次调用被权限层拒绝了。**
-App 进程连域名都解析不出去。
+（余弦那三个数字不能当质量证据：0.3878 / 0.3543 / 0.4075 全挤在一条窄带里，
+bge-m3 在短句上就是这样。判质量要用检索测。）
 
-## 对照组（同一台机、同一把凭据、同一个端点）
+## 给宿主的一条建议（唯一还值得改的）
 
-| 谁在发 | 结果 |
-|---|---|
-| 宿主外的普通 node 进程 | `HTTP 200`　1024 维　367ms |
-| App 进程（eleckoi-tavern） | `fetch failed` + `ERR_ACCESS_DENIED` |
+`getaddrinfo` 被权限层拒掉时，报错应该直说
+"该 App 的原始网络被沙箱拒绝，出网请用 `sdk.network.fetch`"，
+而不是伪装成 `fetch failed`。
+——我是挖 undici 的 `cause` 才看见 `ERR_ACCESS_DENIED` 的，这一步不该靠猜。
 
-## 已经排除的（每一条都实测过）
-
-- **API**：好的（200 / 1024 维 / usage 正常）。
-- **凭据**：好的（`tavern_embed_status` 拿得到 baseUrl + apiKey）。
-- **模型**：找得到（`BAAI/bge-m3`，`foundBy=scan`——按 `type:"embedding"` 查是 0 条，
-  宿主把没写 `type` 的模型一律算 chat，扫目录才认出来）。
-- **白名单**：`network.allowedHosts: ["api.siliconflow.cn"]`、`methods: ["GET","POST"]` 已填。
-- **能力**：`app/runtime.network` 已加（另外五家能联网的 App 都带着这条：
-  comfyui-hana / hana-downloader / hana-media-manager / hanako-gallery / token-tracker-app；
-  唯一例外 bilibili-intake-v2 走 `app/process.spawn`，是子进程联网）。
-- **用户批准**：App 详情页那排权限开关**全是打开的**（含「允许受管程序联网」）。
-- **宿主重启**：重启过（工具通道恢复了，网络仍然被拒）。
-
-## 所以真正缺的是什么
-
-App 进程的网络访问在**进程级**被拒。这不在 App 能改的范围内——
-manifest 里的白名单与能力都只能"申请"，真正决定放不放行的是宿主，
-以及它给 App 进程套的那层限制。
-
-**请求（按优先级）：**
-
-1. **让 App 进程的网络访问真正开通**，或者写清楚它还需要什么才能开通
-   （某条能力？某个开关？安装时物化？）。现在的状态是：
-   manifest 两处都写对了、用户在界面上批准了，进程仍然连 DNS 都出不去。
-   顺带：被拒时的报错最好能直接说"网络被沙箱拒绝"，
-   而不是让它伪装成 `fetch failed`（我是把 undici 的 `cause` 挖出来才看见 `ERR_ACCESS_DENIED` 的）。
-2. **或者**：给一条 `models.embed` 面，让宿主代劳算向量。这条更贴设计——
-   契约自己写着：
-   > Provider credentials, endpoints, headers and transport configuration are
-   > **deliberately absent**: Hana keeps those in its shared model runtime.
-
-   宿主有网、有凭据、能抹平端点差异，App 只要向量。
-
-   ```ts
-   embed(request: {
-     requestId: string;
-     provider: string;
-     model: string;
-     input: string | string[];
-   }): Promise<{ vectors: number[][]; dimension: number }>;
-   ```
-
-   - 能力名建议 `app/models.embed`（与 `models.read` / `models.infer` 并列）。
-     **不复用 `infer`**：这条面存在的意义就是能力收窄——只给向量，不给一把完整钥匙。
-   - ⚠️ **不要**加 `dimensions`：那是 OpenAI text-embedding-3 的东西，
-     `bge-m3` 收到直接 `400 · code 20015`（酒馆侧实测踩过）。
-   - 验收：酒馆侧 `lib/embed/service.js` 那个分支就在等它（两个调用点已经把 `sdk.models`
-     传进去了），`test/regression-embed.mjs` 里两条——有这条面就走它
-     （`via: "host"`，并用 `fetchImpl` 抛错证明它**没去取凭据**）；没有就直连（`via: "direct"`）。
-
-## 附带一条（小，不急）：工具通道会被一次 reload 静默掐断
+## 附带一条：工具通道会被一次 App reload 静默掐断
 
 App 暴露给模型的工具（`app/tools.expose-to-model`），**只在宿主启动时建立通道**：
 
 - 重启宿主 → 工具立刻可调（实测：`tavern_list_characters`、`tavern_embed_status` 真返回）。
 - 此后**只要重载一次 App**（从界面重载也好、用扩展管理工具重载也好）→ 通道断掉，
   之后调用全是 `RPC peer closed; cannot call callback.tools.execute`；
-  而且**把 App 的界面打开也没用**（窗口开着，peer 仍然 closed）。
+  **把 App 的界面打开也没用**（窗口开着，peer 仍然 closed）。
 - 自己 `reload`、二次 `reload`、`disable → enable`、先刷新工具目录都不管用。
+- 同一时刻 `extension_manager inspect` 报 `host=on agent=on`，不代表工具能跑。
 
-同一时刻 `extension_manager inspect` 报 `host=on agent=on`，不代表工具能跑。
+操作结论：**改完 App 不要重载，直接重启宿主。**
 
-**请求**：要么让工具通道在 reload 后能重建，要么让 `inspect` / 工具目录如实反映
-"它已经断了"——现在那个 `on` 会让人以为能跑。
+另：`hana-app-creator` SKILL 里写着「用户安装的 App 不能用 force reload」，
+且「manifest 扩大声明时宿主要求既有复核，**取消则保留旧实例在跑**」
+（`cancellation leaves the old instance running`）——所以"打开了复核框"不等于"批准了"。
+
+## `models.embed` 还要不要
+
+**不再是阻塞项**（`sdk.network.fetch` 这条路已经跑通）。
+仍然值得做，但理由从"做不到"降为"更干净"：App 现在手里是一把**完整凭据**
+（`provider:credentials` 返回明文 apiKey），出网门一开，它就能把 key 带到任何
+被允许的域名去。若宿主愿意代劳（只给向量、不给钥匙、端点差异由宿主抹平），
+酒馆这边已经留好分支：`lib/embed/service.js` 的 `modelsFace`，
+返回里 `via: "host" | "direct"` 可诊断，测试在 `test/regression-embed.mjs` 里等着。
+
+签名（**不要加 `dimensions`**：bge-m3 收到直接 400 code 20015）：
+
+```ts
+embed(request: {
+  requestId: string;
+  provider: string;
+  model: string;
+  input: string | string[];
+}): Promise<{ vectors: number[][]; dimension: number }>;
+```
 
 ---
 
-记录人：奥菲莉娅（月曦夜的助手） · 2026-09-25（当日第三版，附确诊证据）
+记录人：奥菲莉娅（月曦夜的助手） · 2026-09-25（收尾版）
 来源仓库：`W:\Games\Hanako\.hanako\apps\eleckoi-tavern`
-相关文件：`lib/embed/{service,tool,routes}.js`、`manifest.json`、`docs/notes-host-embedding.md`
+关键依据：`C:\Users\Administrator\.hanako\skills\hana-app-creator\SKILL.md`
+　（"network: the checked outbound door" 一节）
