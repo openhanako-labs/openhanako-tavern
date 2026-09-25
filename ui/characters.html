@@ -148,11 +148,22 @@
               <button data-act="tts"><span class="mi">◔</span>语音朗读</button>
               <button data-act="image"><span class="mi">◨</span>出图设置</button>
               <div class="sep"></div>
+              <button data-act="play-all"><span class="mi">▶</span>连播这场</button>
+              <div class="sep"></div>
               <button data-act="export"><span class="mi">↓</span>导出</button>
               <button data-act="delete" class="danger"><span class="mi">✕</span>删除</button>
             </div>
           </div>
         </div>
+      </div>
+
+      <!--
+        连播的进度条：只在连播时出现。
+        为什么需要它：不看进度就不知道“还要等多久”、“会不会一直读下去”。
+      -->
+      <div id="tts-bar" class="tts-bar hidden">
+        <span id="tts-bar-text">连播中…</span>
+        <button type="button" id="tts-bar-stop" class="mini">停</button>
       </div>
 
       <div id="messages-container" class="messages">

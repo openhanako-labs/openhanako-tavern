@@ -11,6 +11,7 @@
 
 import { apiFetch, toast, escapeHtml, friendlyError, apiUrl } from "./core.js";
 import { state } from "./state.js";
+import { planNarration, progressText } from "./narration-plan.js";
 
 let providersLoaded = false;
 let providers = [];
@@ -58,27 +59,67 @@ export function stripForSpeech(text) {
 
 // ── 播放 ────────────────────────────────────────────────
 
+/**
+ * 共用一只播放器。
+ *
+ * 监听器**每次播都重新挂、播完就摘**——不挂常驻监听。
+ * 常驻监听看着省事，但“上一条的 ended”与“这一条的 ended”会撞在一起，
+ * 而连播恰恰就是把一条接一条播下去，撞上是早晚的事。
+ */
 function player() {
-  if (!audio) {
-    audio = new Audio();
-    audio.addEventListener("ended", () => {
-      playingKey = null;
-      if (onStop) { onStop("done"); onStop = null; }
-    });
-    audio.addEventListener("error", () => {
-      playingKey = null;
-      if (onStop) { onStop("error"); onStop = null; }
-    });
-  }
+  if (!audio) audio = new Audio();
   return audio;
+}
+
+/** 播一个地址，等它播完（或被打断）。 */
+function playUrl(url, key, onState) {
+  const p = player();
+  try { p.pause(); } catch { /* 之前没在放 */ }
+
+  playingKey = key;
+  onStop = onState || null;
+
+  return new Promise((resolve) => {
+    const settle = (how) => {
+      p.removeEventListener("ended", onEnded);
+      p.removeEventListener("error", onError);
+      if (playingKey === key) playingKey = null;
+      const cb = onStop; onStop = null;
+      if (cb && how !== "next") cb(how);
+      resolve(how);
+    };
+    const onEnded = () => settle("done");
+    const onError = () => settle("error");
+    p.addEventListener("ended", onEnded);
+    p.addEventListener("error", onError);
+
+    p.src = url;
+    p.play().catch(() => settle("error"));
+  });
+}
+
+/** 要一段音频（不播）。 */
+async function fetchSpeech(text, characterId) {
+  const res = await apiFetch("tts/speak", {
+    method: "POST",
+    body: JSON.stringify({
+      text,
+      ...(characterId ? { characterId: String(characterId) } : {})
+    })
+  });
+  const r = readEnvelope(res, "朗读");
+  if (!r || !r.url) throw new Error("服务端没给出音频地址");
+  return r;
 }
 
 export function stopSpeak() {
   if (audio) {
     try { audio.pause(); } catch { /* 没在放就算了 */ }
+    // 把当前这条 settle 掉：连播循环在等它，不断开就会卡在那儿。
+    try { audio.dispatchEvent(new Event("ended")); } catch { /* 算了 */ }
   }
   playingKey = null;
-  if (onStop) { onStop("stop"); onStop = null; }
+  if (onStop) { const cb = onStop; onStop = null; cb("stop"); }
 }
 
 export function isSpeaking(key) {
@@ -89,7 +130,7 @@ export function isSpeaking(key) {
  * 读一段文字，或者停掉正在读的那段。
  *
  * @param {string} text
- * @param {{key?: string, characterId?: string, onState?: (s: string) => void, autoSave?: boolean}} [opts]
+ * @param {{key?: string, characterId?: string, onState?: (s: string) => void}} [opts]
  *   characterId：谁在说。传了就按角色分配的声音读（群聊一人一嗓）。
  */
 export async function speakText(text, opts = {}) {
@@ -99,23 +140,10 @@ export async function speakText(text, opts = {}) {
   const say = stripForSpeech(text);
   if (!say) { toast("这条没什么可读的", "error"); return { ok: false }; }
 
-  stopSpeak();                       // 先让上一条闭嘴
-  const p = player();
-  onStop = opts.onState || null;
-
   let r;
   try {
-    const res = await apiFetch("tts/speak", {
-      method: "POST",
-      body: JSON.stringify({
-        text: say,
-        ...(opts.characterId ? { characterId: String(opts.characterId) } : {})
-      })
-    });
-    r = readEnvelope(res, "朗读");
-    if (!r || !r.url) throw new Error("服务端没给出音频地址");
+    r = await fetchSpeech(say, opts.characterId);
   } catch (e) {
-    onStop = null;
     // 没配好是这里最常见的一种失败，而"去设置"藏在 ⋯ 菜单里——
     // 所以这句话得自己把路指出来。
     const why = friendlyError(e);
@@ -123,19 +151,111 @@ export async function speakText(text, opts = {}) {
     return { ok: false, error: why };
   }
 
+  const how = await playUrl(apiUrl(r.url), key, opts.onState);
+  if (r.truncated) toast(r.note || "文本太长，只读了一部分", "error");
+  return { ok: how !== "error", ...r, how };
+}
+
+// ── 连播整场 ──────────────────────────────────────────
+
+/** 正在连播的那个队列（null = 没在连播）。 */
+let queue = null;
+
+export function isPlayingAll() {
+  return !!queue;
+}
+
+/**
+ * 从这一条开始连播下去。
+ *
+ * 逐条现要（不预取）：一条台词几十秒，预取会把好几条塞进队列里等着，
+ * 而用户想停的时候，真正浪费的是那几条已经付过钱的。
+ *
+ * @param {{items: Array<{id, speakerId, text}>, onProgress?: (done: number, total: number) => void,
+ *          onFinish?: (reason: string) => void}} args
+ */
+export async function playQueue({ items, onProgress, onFinish } = {}) {
+  const list = Array.isArray(items) ? items : [];
+  if (list.length === 0) { toast("这场没有可读的台词", "error"); return { ok: false }; }
+  if (queue) stopPlayback();
+
+  queue = { stop: false };
+  const mine = queue;
+
   try {
-    p.src = apiUrl(r.url);
-    playingKey = key;
-    await p.play();
-  } catch (e) {
-    playingKey = null;
-    onStop = null;
-    toast("拿到了音频，但浏览器不让放：" + friendlyError(e), "error");
-    return { ok: false, error: String(e) };
+    for (let i = 0; i < list.length; i++) {
+      if (mine.stop) break;
+      if (onProgress) onProgress(i, list.length);
+
+      const it = list[i];
+      let r;
+      try {
+        r = await fetchSpeech(stripForSpeech(it.text), it.speakerId);
+      } catch (e) {
+        const why = friendlyError(e);
+        // 第一条就失败：别再往下试了。
+        // “没配好/没网络”这类错不会因为再试三条就变好——只会往屏幕上堆三句一样的话。
+        if (i === 0) { toast(`连播不了：${why}`, "error"); break; }
+        // 中间某条失败不拖垮整场：从哪条断的要说清楚，然后接着读完。
+        toast(`第 ${i + 1} 条读不出来：${why}`, "error");
+        continue;
+      }
+      if (mine.stop) break;
+      const how = await playUrl(apiUrl(r.url), `all:${it.id}`, null);
+      if (mine.stop || how === "stop") break;
+    }
+  } finally {
+    const stopped = mine.stop;
+    if (queue === mine) queue = null;
+    if (onFinish) onFinish(stopped ? "stopped" : "done");
   }
 
-  if (r.truncated) toast(r.note || "文本太长，只读了一部分", "error");
-  return { ok: true, ...r };
+  return { ok: true };
+}
+
+/** 停连播（并让当前那条闭嘴）。 */
+export function stopPlayback() {
+  if (queue) queue.stop = true;
+  stopSpeak();
+}
+
+/**
+ * 连播这场：再点一下是停。
+ *
+ * 读的是**角色的台词**（自己的话不念——那是你说过的，不是别人说给你听的），
+ * 宏先还原再剪符号。具体读什么由 narration-plan.js 决定，那边有单测。
+ */
+export async function playConversation() {
+  const conv = state.currentConv;
+  if (!conv) { toast("先开一场对话", "error"); return { ok: false }; }
+  if (isPlayingAll()) { stopPlayback(); return { stopped: true }; }
+
+  const macro = state.macro || null;
+  const items = planNarration(conv.messages, {
+    characterId: conv.characterId,
+    process: (s) => (macro ? macro.process(s) : s)
+  });
+  if (items.length === 0) { toast("这场没有可读的台词", "error"); return { ok: false }; }
+
+  const bar = $("tts-bar");
+  const txt = $("tts-bar-text");
+  bar?.classList.remove("hidden");
+  if (txt) txt.textContent = progressText(0, items.length, conv.title || "");
+
+  try {
+    await playQueue({
+      items,
+      onProgress: (i, total) => { if (txt) txt.textContent = progressText(i, total, conv.title || ""); },
+      onFinish: (reason) => {
+        bar?.classList.add("hidden");
+        if (reason === "done") toast(`这一场读完了（${items.length} 条）`, "success");
+      }
+    });
+  } catch (e) {
+    bar?.classList.add("hidden");
+    toast("连播出错：" + friendlyError(e), "error");
+  }
+  return { ok: true };
 }
 
 // ── 设置面板 ────────────────────────────────────────────
@@ -341,6 +461,7 @@ export function bindTts() {
 
   $("tts-close")?.addEventListener("click", closeTts);
   $("tts-cancel")?.addEventListener("click", closeTts);
+  $("tts-bar-stop")?.addEventListener("click", stopPlayback);
   modal.addEventListener("click", (e) => { if (e.target === modal) closeTts(); });
 
   $("tts-save")?.addEventListener("click", async () => {

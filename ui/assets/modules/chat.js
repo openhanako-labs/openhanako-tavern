@@ -281,7 +281,11 @@ export function renderMessages() {
     el.querySelector('[data-act="copy"]')?.addEventListener("click", () => copyMessage(id));
     el.querySelector('[data-act="speak"]')?.addEventListener("click", async (e) => {
       const btn = e.currentTarget;
-      const m = (state.currentConv?.messages || []).find(x => x.id === id);
+      // 用现成的 findMessage，不要在这里重新写一遍查找：
+      // 消息 id 是**数字**，而 dataset.id 永远是**字符串**——
+      // 自己写 `x.id === id` 会永远不相等，于是处理器在下一行直接 return：
+      // 点了没反应，而且不报错。（探针里就撞上这个。）
+      const m = findMessage(id);
       if (!m) return;
       // 读的是**还原宏之后**的文本：{{user}} 不该被念成花括号。
       const plain = macro ? macro.process(String(m.content ?? "")) : String(m.content ?? "");

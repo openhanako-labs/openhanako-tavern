@@ -35,15 +35,32 @@ out["消息上的朗读按钮数"] = speakBtns.length;
 out["按钮文字"] = speakBtns[0]?.textContent?.trim() || "(没有)";
 
 if (speakBtns[0]) {
-  speakBtns[0].click();
-  // toast 会自己消失，所以要早点看（上一版等了 2.5 秒，看见的是空盘子）
-  await sleep(700);
-  const errToasts = [...document.querySelectorAll(".toast.error")].map((t) => t.textContent.trim());
-  out["未配置时的错误话"] = errToasts.slice(-2);
-  out["那句话有没有指路"] = errToasts.some((t) => /朗读不了/.test(t))
-    ? (errToasts.some((t) => /语音朗读/.test(t)) ? "有（提到 ⋯ 菜单）" : "说了原因，没指路")
+  // 点之前**重新取一次**：如果中间发生过一次重渲染，
+  // 之前拿到的就是已经被换掉的旧节点——`.click()` 点了空气，
+  // 什么也不发生，看上去就像“监听器没挂上”。
+  const live = document.querySelector('.message [data-act="speak"]');
+  out["点击时用的节点是不是当前的"] = live === speakBtns[0] ? "是" : "否（已重渲染）";
+  out["首条 data-id"] = document.querySelector(".message")?.dataset.id || "(空)";
+  const chatMod = await import(new URL("./assets/modules/state.js", location.href).href);
+  const mid = document.querySelector(".message")?.dataset.id;
+  out["state 里找得到这条消息吗"] = (chatMod.state.currentConv?.messages || []).some((x) => x.id === mid) ? "找得到" : "找不到（处理器会在这一行直接 return）";
+
+  (live || speakBtns[0]).click();
+  // toast 会自己消失，所以要早点看、多看几次。
+  // 同时看网络：responseStatus=0 表示“请求还没回来”——
+  // 这能把“卡住了”跟“提示得晚了”分开。
+  const seen = [];
+  for (let i = 0; i < 12; i++) {
+    await sleep(400);
+    for (const el of document.querySelectorAll(".toast")) seen.push(el.textContent.trim());
+  }
+  out["未配置时的错误话"] = [...new Set(seen)].slice(-3);
+  out["那句话有没有指路"] = seen.some((t) => /朗读不了/.test(t))
+    ? (seen.some((t) => /语音朗读/.test(t)) ? "有（提到 ⋯ 菜单）" : "说了原因，没指路")
     : "没看到";
-  await sleep(1800);
+  out["朗读请求的网络痕迹"] = performance.getEntriesByType("resource")
+    .filter((r) => /tts\/speak/.test(r.name))
+    .map((r) => `${r.responseStatus || "(0=还没回)"} ${Math.round(r.duration)}ms`);
   out["未配置时点朗读·按钮复原"] = speakBtns[0].textContent.trim();
 }
 
@@ -148,6 +165,26 @@ if (out["面板关掉了"] === "是") {
   out["重开后是不是刚挑的那个"] = after?.value === pick ? "是（对）" : "不是（错）";
   document.getElementById("tts-cancel")?.click();
   await sleep(150);
+}
+
+// ── 连播这场 ──────────────────────────────────────
+// dev 宿主没配语音，所以这一段重点又是“失败那条路”：说清为什么读不了、
+// 不能堆三句一样的话、不能留下一条收拾不掉的进度条。
+document.getElementById("chat-more-btn")?.click();
+await sleep(200);
+const playAll = document.querySelector('#more-menu button[data-act="play-all"]');
+out["⋯ 菜单里有连播这场"] = playAll ? "有" : "没有";
+if (playAll) {
+  playAll.click();
+  await sleep(120);
+  out["刚点下去时进度条在不在"] = document.getElementById("tts-bar")?.classList.contains("hidden") ? "藏着（可能没起来）" : "露着（对）";
+  await sleep(900);
+  const errsNow = [...document.querySelectorAll(".toast.error")].map((t) => t.textContent.trim());
+  out["连播的错误话"] = errsNow.slice(-3);
+  out["错误话有没有说到点子上"] = errsNow.some((t) => /连播不了/.test(t) && /(配好|region|key|baseUrl|语音服务回了)/.test(t)) ? "有" : "没看到";
+  out["堆了几句‘连播不了’（第一条就断就不该堆）"] = errsNow.filter((t) => /连播不了/.test(t)).length;
+  await sleep(2500);
+  out["结束时进度条收起来了"] = document.getElementById("tts-bar")?.classList.contains("hidden") ? "是（对）" : "没收起（错）";
 }
 
 out["有没有 4xx（除 favicon）"] = performance
