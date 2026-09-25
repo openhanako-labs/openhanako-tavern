@@ -1,26 +1,26 @@
-fix(chat): 流式回复从来没进本地消息表（顺带让「发完自动轮换」真生效）
+feat(group): 群聊开场白（每位参与者各说一句）+ 主角也要署名 + 界面开场跟随选择
 
-加了「发完自动轮换」开关之后，group-ui 探针说：开关全对、气泡也在，
-但发完就是不换人。
+三处「单人规则套到多人身上」的错，都由 group-ui 探针抓出来：
 
-切开看（探针读 state，不看屏幕）：
-  state.speakerId 发前发后一模一样
-  → 不是「轮了没重画」，是那一行根本没被执行到。
+① 开场白只种主角那一句（lib/conversations/routes.js）
+   群聊一开场就少了一半人的声音，而"谁先开口"恰好是群聊里最该由作者安排的东西。
+   改：seedGreetings 按名册依次种，每位都署名；单人走原路（不传 speakerId）
+       → 单角色路径的落盘形状逐字节不变。
+   某位读不到卡（刚被删）不该把整次建对话搞挂 → 逐位 catch。
 
-根因：sendMessage 的流式成功分支里写着 content: fullContent，
-而 fullContent 声明在 sendMessageStream 内部（let fullContent = ""）
-→ ReferenceError → 被外层 catch 吞成一句 toast。于是：
-  · 气泡照样出现（流式自己画的），用户看不出异常
-  · 但这条回复**从来没被 push 进 state.currentConv.messages**
-  · 它后面的 rotateSpeaker() / loadConversations() 一行都不跑
-    （所以侧边栏也不刷新）
+② speakerOpts 把「主角发言不署名」也套到群聊上
+   那条规则本意是"单人对话里 speakerId === characterId 是多余信息"，
+   但群聊里主角的话因此变成**无主气泡**，界面上看着像旁白。
+   改：多人场合一律署名（含主角）。单人保持不写。
+   探针原话："我 | 角色(薇拉·霜语) | 角色" —— 最后那个角色就是主角。
 
-修：用流式函数自己的返回值 streamRes.content。
-探针复验：⑥ 气泡数 2 → 3（回复终于进本地表）
-          ⑦ 自动开：薇拉·霜语 → 任十九（换了）
+③ 0 消息时的「开场」显示的是主角的开场白，不管这一轮选的是谁
+   选着任十九、屏幕上却是薇拉的开场白 = 界面在撒谎。
+   改：显示**这一轮选中那位**的；选中的卡找不到就宁可不显示，
+       也不拿别人的顶上（单人对话才退回 currentCharacter）。
+   顺带修一个静态判据：GET /characters **只回摘要、没有 first_mes**
+   （服务端注释写着"列表只有摘要"）→ 新增按需取详情 + 缓存 speakerCardCache。
 
-新增 ui/assets/modules/speaker-rotation.js（纯逻辑，可在 Node 里测）
-  + test/regression-speaker-rotation.mjs 9 条
-    （含与服务端 lib/conversations/model.js 的 participantsOf 逐例一致）
-UI：「自动」开关（默认关，localStorage eleckoi:auto-rotate）+ .speaker-auto 样式
-tools/flows/group-ui.js 扩了 ⑥b/⑦：默认态 / aria-pressed / 持久化 / 真轮换
+测试：regression-group 11 → 13（两人的开场白都种下且带署名 / 群聊主角也署名 /
+      单人仍不写署名）。
+探针：group-ui 加 ④b / ⑤c（开场块跟随选择）+ ⑥b 开关 + ⑦ 真轮换。

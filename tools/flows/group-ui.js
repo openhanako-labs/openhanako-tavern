@@ -47,6 +47,10 @@ out["④ 发言者行可见"] = !!row && !row.classList.contains("hidden");
 out["④ 行里有几个"] = row ? row.querySelectorAll("[data-speaker]").length : 0;
 out["④ 都是谁"] = row ? [...row.querySelectorAll("[data-speaker]")].map((b) => b.textContent.trim()).join(" / ") : "";
 out["④ 默认高亮"] = row?.querySelector(".speaker-chip.on")?.textContent.trim() || "";
+// ④b 0 消息时的“开场”：该显示**当前选中那位**的开场白。
+// 默认选中任十九（探针自己造的卡，有 first_mes）→ 块应该在。
+out["④b 开场块（选中任十九）"] = (document.querySelector(".scene-kicker")?.textContent || "(没有)").trim();
+out["④b 开场正文"] = (document.querySelector(".scene-body")?.textContent || "(空)").trim().slice(0, 40);
 
 // ⑤ 换个人说话
 const chips = row ? [...row.querySelectorAll("[data-speaker]")] : [];
@@ -55,6 +59,9 @@ if (chips.length >= 2) {
   await sleep(300);
   out["⑤ 换了之后高亮"] = row.querySelector(".speaker-chip.on")?.textContent.trim() || "";
 }
+
+// ⑤c 换人之后，开场块跟着换（薇拉的卡没写 first_mes → 宁可不显示，也不拿别人的顶）
+out["⑤c 开场块（选中薇拉）"] = (document.querySelector(".scene-kicker")?.textContent || "(没有)").trim();
 
 // ⑥ 发一条，看回复署谁的名
 const ta = document.getElementById("chat-input");

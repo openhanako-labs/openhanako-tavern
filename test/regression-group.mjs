@@ -51,7 +51,7 @@ await okAsync("participantsOf：旧对话（只有 characterId）也读得出参
 });
 
 // ── ② 建一场群聊 ────────────────────────────────────
-await okAsync("路由：建群聊（两个角色）——第一个是主角，开场白由他出", async () => {
+await okAsync("路由：建群聊（两个角色）——第一位是主角；两人的开场白都种下、都带署名", async () => {
   const app = makeApp();
   registerConversationRoutes(app, convRepo, { available: true, generate: async () => ({ content: "x" }) }, charRepo, setRepo, null, null, null);
 
@@ -60,8 +60,38 @@ await okAsync("路由：建群聊（两个角色）——第一个是主角，�
   assert.strictEqual(r.data.characterId, vera.id, "主角 = 第一个");
   assert.deepStrictEqual(r.data.characterIds, [vera.id, ren.id]);
   assert.strictEqual(r.data.characterName, "薇拉", "列表用的角色名该是主角的");
-  assert.strictEqual(r.data.messages.length, 1, "开场白该已经种下");
-  assert.strictEqual(r.data.messages[0].role, "assistant");
+  assert.strictEqual(r.data.messages.length, 2, `两位参与者的开场白都该种下，实际 ${r.data.messages.length} 条`);
+  assert.deepStrictEqual(r.data.messages.map(m => m.role), ["assistant", "assistant"]);
+  assert.deepStrictEqual(r.data.messages.map(m => m.speakerId), [vera.id, ren.id], "各条要署各自的名");
+  assert.ok(r.data.messages[0].content.trim() && r.data.messages[1].content.trim(), "正文不该是空的");
+});
+
+// ── ②b 署名规则：单人省、多人写 ──────────────────────
+// 旧行为是「speakerId === 主角就不写」。单人对话里这条对（信息多余），
+// 但套到群聊上，主角的话就变成无主气泡——界面上看着像旁白。
+// （group-ui 探针：“我 | 角色(薇拉·霜语) | 角色”，最后那个就是主角。）
+await okAsync("群聊里主角发言也要署名（单人那条“多余”的规则不能套到多人身上）", async () => {
+  const app = makeApp();
+  registerConversationRoutes(app, convRepo, { available: true, generate: async () => ({ content: "x" }) }, charRepo, setRepo, null, null, null);
+
+  const r = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+  const sent = await request(app, "POST", `/conversations/${r.data.id}/messages`, {
+    body: { content: "谁在？", speakerId: vera.id }
+  });
+  assert.strictEqual(sent.status, 200, `状态 ${sent.status}：${sent.error || ""}`);
+  assert.strictEqual(sent.data.assistantMessage?.speakerId, vera.id, "主角在群聊里也要署名");
+});
+
+await okAsync("单人对话里同一个 id 仍然不写署名（与以前逐字节一致）", async () => {
+  const app = makeApp();
+  registerConversationRoutes(app, convRepo, { available: true, generate: async () => ({ content: "x" }) }, charRepo, setRepo, null, null, null);
+
+  const r = await request(app, "POST", "/conversations", { body: { characterId: solo.id, greeting: false } });
+  const sent = await request(app, "POST", `/conversations/${r.data.id}/messages`, {
+    body: { content: "在吗", speakerId: solo.id }
+  });
+  assert.strictEqual(sent.status, 200, `状态 ${sent.status}：${sent.error || ""}`);
+  assert.ok(!sent.data.assistantMessage?.speakerId, `单人对话不该写署名，实际 ${sent.data.assistantMessage?.speakerId}`);
 });
 
 await okAsync("路由：某个角色不存在 → 报错说清是哪一个（不自作主张用空名）", async () => {

@@ -30,6 +30,26 @@ function autoRotateEnabled() {
   try { return localStorage.getItem(AUTO_ROTATE_KEY) === "1"; } catch { return false; }
 }
 
+/*
+ * 选中发言者的**详情卡**（按需拉 + 缓存）。
+ *
+ * 为什么不能直接用 state.charList：列表接口 `GET /characters` 只回摘要
+ * （服务端注释写着“列表只有摘要”），**没有 first_mes**。
+ * 而“开场”那一块需要知道这一轮是谁的卡——所以只能按 id 取一次详情。
+ */
+const speakerCardCache = new Map();
+async function ensureSpeakerCard(id) {
+  if (!id) return null;
+  if (speakerCardCache.has(id)) return speakerCardCache.get(id);
+  try {
+    const card = unwrap(await apiFetch(`characters/${id}`)) || null;
+    speakerCardCache.set(id, card);
+    return card;
+  } catch {
+    return null;
+  }
+}
+
 /** 轮到下一位发言者。只在开关打开且真的是群聊时才动。 */
 function rotateSpeaker() {
   if (!autoRotateEnabled()) return;
@@ -60,6 +80,13 @@ export function renderSpeakerRow() {
 
   const current = ids.includes(state.speakerId) ? state.speakerId : ids[0];
   state.speakerId = current;
+  // 这位的详情卡还没拿到过 → 拉一次；回来时若还停在开场态，重画一下。
+  // （缓存命中就直接跳过，不会又触发一轮重绘。）
+  if (!speakerCardCache.has(current)) {
+    ensureSpeakerCard(current).then((card) => {
+      if (card && !state.currentConv?.messages?.length) renderMessages();
+    });
+  }
   const auto = autoRotateEnabled();
   row.innerHTML =
     `<span class="speaker-label">这一轮谁说话</span>` +
@@ -106,11 +133,23 @@ export function renderMessages() {
 
   if (!state.currentConv.messages?.length) {
     const macro = state.macro || null;
-    const first = state.currentCharacter?.first_mes || "";
+    /*
+     * 群聊里“开场”该是谁的？——**这一轮选中的那位**。
+     * 用主角的会撒谎：明明选着任十九，屏幕上却是薇拉的开场白。
+     * 选中的卡在 charList 里找不到时（刚被删），宁可不说，
+     * 也不拿别人的顶上去——单人对话才退回 currentCharacter。
+     */
+    const ids = participantsOf(state.currentConv);
+    const speakId = ids.includes(state.speakerId) ? state.speakerId : (ids[0] || null);
+    const found = speakId
+      ? (speakerCardCache.get(speakId) || (state.charList || []).find(c => String(c.id) === String(speakId)))
+      : null;
+    const card = found || (ids.length < 2 ? state.currentCharacter : null) || null;
+    const first = card?.first_mes || "";
     const opening = first ? (macro ? macro.process(first) : first) : "";
     dom.messagesContainer.innerHTML = opening
       ? `<div class="empty scene-empty">
-           <div class="scene-kicker">开场</div>
+           <div class="scene-kicker">开场${ids.length > 1 && card ? ` · ${escapeHtml(card.name || "")}` : ""}</div>
            <div class="scene-body">${escapeHtml(opening)}</div>
            <div class="hint">发一条消息就开场；这一条会作为第一句发给模型</div>
          </div>`
