@@ -13,7 +13,8 @@
     "app/resources.read",
     "app/models.infer",
     "app/models.read",
-    "app/provider.credentials.read"
+    "app/provider.credentials.read",
+    "app/media.generate"
   ],
   "network": {
     "allowedHosts": ["api.siliconflow.cn", "zh.moegirl.org.cn", "export.arxiv.org"],

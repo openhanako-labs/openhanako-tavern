@@ -2671,3 +2671,19 @@ main.ctx-open .drawer:not(.hidden) {
   word-break: break-all;
 }
 .gen-src-link:hover { color: var(--accent); }
+/* 生成立绘：头像框里放真图 + 按钮下面那行状态 */
+.char-ctx-ava img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 9px;
+  display: block;
+}
+.char-ctx-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+  margin-top: 6px;
+  min-height: 0;
+}
+.char-ctx-note:empty { display: none; }

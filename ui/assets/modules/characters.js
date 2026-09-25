@@ -467,9 +467,19 @@ export async function renderCharContext(greetIdx = 0) {
       <div class="dim ctx-cast-note" id="ctx-cast-note">选一个=单人；多个=群聊。第一位是主角。新加的人不会补种开场白。</div>
     </div>` : "";
 
+  // 有头像就画头像，没有才退回首字母。
+  // 之前这里只会画首字母，于是「生成立绘」成功后界面上什么都没变——
+  // 用户唯一的反馈是一行 toast，看上去就像没成。
+  let avaUrl = "";
+  if (c.has_avatar) {
+    try { avaUrl = apiUrl(`characters/${c.id}/avatar`); } catch { avaUrl = ""; }
+  }
+
   box.innerHTML = `
     <div class="char-ctx-head">
-      <div class="char-ctx-ava">${escapeHtml(initial)}</div>
+      <div class="char-ctx-ava">${avaUrl
+        ? `<img src="${escapeHtml(avaUrl)}" alt="">`
+        : escapeHtml(initial)}</div>
       <div>
         <div class="char-ctx-name">${escapeHtml(c.name || "（未命名）")}</div>
         <div class="char-ctx-sub">${escapeHtml(creator)} · v${escapeHtml(ver)}</div>
@@ -482,9 +492,11 @@ export async function renderCharContext(greetIdx = 0) {
     ${castHtml}
     <div class="char-ctx-actions">
       <button class="btn btn-sm" data-ctx="edit">编辑</button>
+      <button class="btn btn-sm" id="ctx-portrait">生成立绘</button>
       <button class="btn btn-sm" data-ctx="export">导出</button>
       <button class="btn btn-sm danger" data-ctx="delete">删除</button>
-    </div>`;
+    </div>
+    <div class="char-ctx-note" id="ctx-portrait-note"></div>`;
 
   // 同场角色：保存名单。
   box.querySelector("#ctx-cast-save")?.addEventListener("click", async () => {
@@ -608,4 +620,8 @@ export async function renderCharContext(greetIdx = 0) {
   // 开场白轮换：只换预览，不动数据（真生效在建对话时随机取）
   box.querySelector("#greet-prev")?.addEventListener("click", () => renderCharContext(gi - 1));
   box.querySelector("#greet-next")?.addEventListener("click", () => renderCharContext(gi + 1));
+
+  // 生成立绘：按钮是每次重画重建的，所以绑定也要每次重来一趟
+  const { bindPortraitButton } = await import("./media.js");
+  bindPortraitButton();
 }

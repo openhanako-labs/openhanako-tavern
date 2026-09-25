@@ -42,6 +42,7 @@ import { loadGroupState, isGroupEnabled } from "./lib/tools/group.js";
 
 import { registerMigrationRoutes } from "./lib/migration/routes.js";
 import { registerGenRoutes } from "./lib/gen/routes.js";
+import { registerMediaRoutes } from "./lib/media/routes.js";
 import { LLMService } from "./lib/llm/service.js";
 import { runSelfCheck } from "./lib/selfcheck.js";
 
@@ -256,6 +257,10 @@ export default defineApp(async (sdk) => {
   // 生成器（自动创建卡与世界书）。net 在 init 时就从 sdk 拿到——
   // 出网只能走它，拿不到就在调用的那一步报「出网未就绪」。
   registerGenRoutes(app, { llm: llmService, net: sdk?.network || null });
+
+  // 出图（立绘写回卡）。sdk.media 就是宿主那道门——
+  // 拿不到就在调用的那一步报「出图未就绪」，不静默降级。
+  registerMediaRoutes(app, { sdk, characterRepo, transfer: characterTransfer });
     }
   });
   probe.record("routes registered");
