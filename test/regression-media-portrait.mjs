@@ -20,7 +20,7 @@ const { CharacterTransfer } = await import("../lib/characters/transfer.js");
 const { registerCharacterRoutes } = await import("../lib/characters/routes.js");
 const { registerMediaRoutes } = await import("../lib/media/routes.js");
 const { portraitPrompt } = await import("../lib/media/prompt.js");
-const { status, pickPaths } = await import("../lib/media/service.js");
+const { status, pickPaths, pickImageFile, isAbsolutePath } = await import("../lib/media/service.js");
 
 let pass = 0, fail = 0;
 async function okAsync(name, fn) {
@@ -48,15 +48,28 @@ const card = await charRepo.create({
 const fakeImg = path.join(tmp, "out.png");
 fs.writeFileSync(fakeImg, Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]));
 
-/** 记录收到的请求，便于断言"形状"。 */
-function makeSdk(files = [fakeImg], ok = true) {
+/** 记录收到的请求，便于断言"形状"。
+ *
+ * 默认返回形状按**真实观察到的那次**来（2026-09-25 一次真出图）：
+ *   files 里是**裸文件名**，完整路径在 sessionFiles[].filePath。
+ * 用真形状当默认值，是为了让后面的路由用例真的走过挑路径那一步；
+ * 否则测试会在一个比真机宽松的假世界上绿。
+ */
+function makeSdk(files = [path.basename(fakeImg)], ok = true) {
   const calls = [];
   return {
     calls,
     media: {
       async generateImage(req) {
         calls.push(req);
-        return ok ? { ok: true, files } : { ok: false, error: "上游 429" };
+        if (!ok) return { ok: false, error: "上游 429" };
+        // files 为空 = 一张都没出，那就不要挂 sessionFiles——
+        // 否则“空文件列表”那个用例会看到一个不是空的世界。
+        return {
+          ok: true,
+          files,
+          ...(files.length ? { sessionFiles: [{ filePath: fakeImg, realPath: fakeImg }] } : {})
+        };
       }
     }
   };
@@ -94,8 +107,34 @@ await okAsync("③ 没给 sdk / sdk 没 media 时，明确说清缺什么", () =
 });
 
 await okAsync("④ pickPaths：认得字符串与几种对象形状，读不出的丢掉", () => {
-  assert.deepStrictEqual(pickPaths(["a.png", { path: "b.png" }, { filePath: "c.png" }, { nope: 1 }, null]), ["a.png", "b.png", "c.png"]);
+  // 注意传的是**整个返回**（不是 files 数组）——
+  // 因为真返里路径可能在 sessionFiles，不看整体就会漏。
+  assert.deepStrictEqual(
+    pickPaths({ files: ["a.png", { path: "b.png" }, { filePath: "c.png" }, { nope: 1 }, null] }),
+    ["a.png", "b.png", "c.png"]
+  );
   assert.deepStrictEqual(pickPaths(null), []);
+  assert.deepStrictEqual(pickPaths({}), []);
+});
+
+// 这一条是墓碑：真实返回里 files 给的是**裸文件名**。
+// 只认 files、拿名字去 readFile 的写法会 ENOENT，
+// 而那句错只会说"找不到文件"，看不出是"我没找对地方"。
+await okAsync("④b 真实形状：路径在 sessionFiles，files 里只是文件名", () => {
+  const real = {
+    ok: true,
+    files: ["vera-frostwhisper-nightwatch-9db672bb.png"],
+    sessionFiles: [{ filePath: "W:\\Games\\Hanako\\Work\\OH-媒体库\\vera.png", realPath: "W:\\Games\\Hanako\\Work\\OH-媒体库\\vera.png" }]
+  };
+  assert.deepStrictEqual(pickPaths(real)[0], "W:\\Games\\Hanako\\Work\\OH-媒体库\\vera.png",
+    "sessionFiles 里的完整路径该排在前面");
+  assert.strictEqual(pickImageFile(real), "W:\\Games\\Hanako\\Work\\OH-媒体库\\vera.png");
+  assert.strictEqual(isAbsolutePath("vera.png"), false, "裸文件名不算路径");
+  assert.strictEqual(isAbsolutePath("W:\\a\\b.png"), true);
+  assert.strictEqual(isAbsolutePath("/tmp/a.png"), false, "这个 App 只跑在 Windows 上");
+
+  // 只有裸文件名 → 挑不出可读路径（要报错，不能当成路径用）
+  assert.strictEqual(pickImageFile({ files: ["only-a-name.png"] }), null);
 });
 
 // ── 路由 ───────────────────────────────────────────────
@@ -158,6 +197,21 @@ await okAsync("⑩ 缺 characterId / 卡不存在 → 各自的错", async () =>
 
   const b = await request(app, "POST", "/media/portrait", { body: { characterId: "nope" } });
   assert.strictEqual(b.status, 404, `状态 ${b.status}`);
+});
+
+// 宿主只回裸文件名（没有 sessionFiles）：不能把名字当路径读、也不能报一句看不懂的 ENOENT。
+await okAsync("⑪ 只有裸文件名 → 报错要说清拿到了什么", async () => {
+  const app5 = makeApp();
+  const bareSdk = {
+    media: {
+      async generateImage() { return { ok: true, files: ["bare-name.png"] }; }
+    }
+  };
+  registerMediaRoutes(app5, { sdk: bareSdk, characterRepo: charRepo, transfer });
+  const r = await request(app5, "POST", "/media/portrait", { body: { characterId: card.id } });
+  assert.strictEqual(r.status, 400, `状态该是 400，实为 ${r.status}`);
+  assert.ok(/可读的路径/.test(r.error || ""), "错误话没把拿到的东西写出来：" + r.error);
+  assert.ok(/bare-name\.png/.test(r.error || ""), "该把文件名当线索列出来：" + r.error);
 });
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} 出图立绘：${pass} 过 / ${fail} 败\n`);
