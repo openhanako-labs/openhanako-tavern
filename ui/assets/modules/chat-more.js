@@ -17,6 +17,14 @@ let previewKind = null;
 
 // ── 菜单开合 ──────────────────────────────────────────
 
+/** 把「更多」那一层收起来（开菜单时、或执行完动作后）。 */
+function collapseMore() {
+  const box = document.getElementById("more-more");
+  if (box) box.hidden = true;
+  const t = document.getElementById("more-toggle");
+  if (t) t.setAttribute("aria-expanded", "false");
+}
+
 /** 绑定 ⋯ 菜单。幂等，可重复调用。 */
 export function bindChatMore() {
   const btn = document.getElementById("chat-more-btn");
@@ -27,6 +35,9 @@ export function bindChatMore() {
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     menu.hidden = !menu.hidden;
+    // 每次重新打开都回到“收起”状态。
+    // 不还原的话，上一次展开的二级会一直留着——菜单每次长不一样，很难摸。
+    if (!menu.hidden) collapseMore();
   });
 
   // 点别处收起（捕获阶段，避免被内部按钮的 stopPropagation 抢先）
@@ -36,10 +47,21 @@ export function bindChatMore() {
     }
   });
 
+  // 「更多…」就地展开，不开第二层弹层。
+  // 两层弹层比一层长菜单更难用：鼠标一偏就全没了。
+  document.getElementById("more-toggle")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const box = document.getElementById("more-more");
+    if (!box) return;
+    box.hidden = !box.hidden;
+    e.currentTarget.setAttribute("aria-expanded", String(!box.hidden));
+  });
+
   menu.querySelectorAll("button[data-act]").forEach(item => {
     item.addEventListener("click", () => {
       const act = item.dataset.act;
       menu.hidden = true;
+      collapseMore();
       if (act === "persona") openPersona();
       else if (act === "activation") openPreview("activation");
       else if (act === "prompt") openPreview("prompt");

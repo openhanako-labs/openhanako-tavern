@@ -86,6 +86,10 @@ out["网络里跟 tts 有关的请求"] = performance.getEntriesByType("resource
 
 document.getElementById("chat-more-btn")?.click();
 await sleep(200);
+// 二级项要先展开「更多」——用户得先展开，探针也得先展开。
+// 直接点一个藏着的按钮，测的是用户到不了的路径（假绿）。
+document.getElementById("more-toggle")?.click();
+await sleep(150);
 const ttsItem = document.querySelector('#more-menu button[data-act="tts"]');
 out["⋯ 菜单里有语音朗读"] = ttsItem ? "有" : "没有";
 ttsItem?.click();
@@ -158,6 +162,8 @@ out["面板关掉了"] = document.getElementById("tts-modal")?.classList.contain
 if (out["面板关掉了"] === "是") {
   document.getElementById("chat-more-btn")?.click();
   await sleep(150);
+  document.getElementById("more-toggle")?.click();
+  await sleep(120);
   document.querySelector('#more-menu button[data-act="tts"]')?.click();
   await sleep(1000);
   const after = document.querySelector("#tts-voice-map .tts-vm-sel");
@@ -213,5 +219,29 @@ if (ttsEntry) {
   document.getElementById("tts-cancel")?.click();
   await sleep(200);
 }
+
+// ── 菜单分层：二级项必须先展开「更多」才够得着 ──
+document.body.click();
+await sleep(150);
+document.getElementById("chat-more-btn")?.click();
+await sleep(200);
+out["一级菜单项"] = [...document.querySelectorAll("#more-menu > button[data-act]")].map((b) => b.dataset.act).join(",") || "(无)";
+out["二级默认是收起的"] = document.getElementById("more-more")?.hidden ? "收起（对）" : "开着（错）";
+document.getElementById("more-toggle")?.click();
+await sleep(150);
+out["点了更多之后"] = document.getElementById("more-more")?.hidden ? "还收着（错）" : "展开了（对）";
+out["二级菜单项"] = [...document.querySelectorAll("#more-more button[data-act]")].map((b) => b.dataset.act).join(",");
+out["分组标题"] = [...document.querySelectorAll("#more-more .more-group")].map((e) => e.textContent.trim()).join(" / ");
+document.getElementById("more-toggle")?.click();
+await sleep(150);
+out["再点一次收回去"] = document.getElementById("more-more")?.hidden ? "收起来了（对）" : "没收（错）";
+// 重开菜单该回到收起状态：菜单每次长一样才好摸
+document.body.click();
+await sleep(150);
+document.getElementById("chat-more-btn")?.click();
+await sleep(200);
+out["重开菜单后是否回到收起"] = document.getElementById("more-more")?.hidden ? "是（对）" : "没还原（错）";
+document.body.click();
+await sleep(150);
 
 return out;

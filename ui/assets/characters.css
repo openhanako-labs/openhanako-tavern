@@ -2724,3 +2724,22 @@ main.ctx-open .drawer:not(.hidden) {
   background: var(--accent-soft); border-radius: var(--r-sm);
 }
 .tts-bar #tts-bar-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ── ⋯ 菜单的「更多」那一层 ──────────────────────────
+   一级只放这一场真会动的；配一次就不动的与诊断、危险操作折在里面。
+   就地展开，不再开第二层弹层。 */
+.more-toggle { position: relative; }
+.more-toggle em {
+  margin-left: auto; font-style: normal; font-size: 10px;
+  color: var(--fg-muted); letter-spacing: 0;
+}
+.more-more {
+  display: flex; flex-direction: column; gap: 1px;
+  margin: 2px 0 2px 8px; padding-left: 4px;
+  border-left: 1px solid var(--border);
+}
+.more-more[hidden] { display: none; }
+.more-group {
+  font-size: 10px; letter-spacing: .04em; color: var(--fg-muted);
+  padding: 6px 10px 2px;
+}
+.more-more .more-group:first-child { padding-top: 2px; }

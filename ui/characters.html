@@ -142,16 +142,30 @@
           <div class="more-wrap">
             <button id="chat-more-btn" class="btn btn-ghost btn-sm more-btn hidden" title="更多">⋯</button>
             <div id="more-menu" class="more-menu" hidden>
+              <!--
+                一级只放“这一场里真会动的”：人设 / 连播 / 导出。
+                配一次就不动的（语音、出图）与诊断类挤在同一个屏幕里，
+                结果就是八个入口平权——常用和不常用看起来一样重。
+              -->
               <button data-act="persona"><span class="mi">◍</span>本场人设</button>
-              <button data-act="activation"><span class="mi">✳</span>世界书会激活哪些</button>
-              <button data-act="prompt"><span class="mi">⌸</span>发给模型的整段文本</button>
-              <button data-act="tts"><span class="mi">◔</span>语音朗读</button>
-              <button data-act="image"><span class="mi">◨</span>出图设置</button>
-              <div class="sep"></div>
               <button data-act="play-all"><span class="mi">▶</span>连播这场</button>
-              <div class="sep"></div>
               <button data-act="export"><span class="mi">↓</span>导出</button>
-              <button data-act="delete" class="danger"><span class="mi">✕</span>删除</button>
+              <div class="sep"></div>
+              <button id="more-toggle" class="more-toggle" aria-expanded="false" aria-controls="more-more">
+                <span class="mi">⋯</span>更多<em>设置 · 诊断 · 删除</em>
+              </button>
+
+              <!-- 二级：不开弹层，就地展开。两层弹层比一层长菜单更难用。 -->
+              <div id="more-more" class="more-more" hidden>
+                <div class="more-group">设置（配一次就不动）</div>
+                <button data-act="tts"><span class="mi">◔</span>语音朗读</button>
+                <button data-act="image"><span class="mi">◨</span>出图设置</button>
+                <div class="more-group">诊断</div>
+                <button data-act="activation"><span class="mi">✳</span>世界书会激活哪些</button>
+                <button data-act="prompt"><span class="mi">⌸</span>发给模型的整段文本</button>
+                <div class="more-group">危险</div>
+                <button data-act="delete" class="danger"><span class="mi">✕</span>删除这场对话</button>
+              </div>
             </div>
           </div>
         </div>

@@ -19,6 +19,9 @@ await sleep(1500);
 
 document.getElementById("chat-more-btn")?.click();
 await sleep(200);
+// 二级项得先展开「更多」
+document.getElementById("more-toggle")?.click();
+await sleep(150);
 const item = document.querySelector('#more-menu button[data-act="image"]');
 out["⋯ 菜单里有出图设置"] = item ? "有" : "没有";
 item?.click();
@@ -71,6 +74,8 @@ out["切到本机后·按钮说的话"] = (document.getElementById("ctx-portrait
 // 切回宿主，按钮说的话也该跟着换
 document.getElementById("chat-more-btn")?.click();
 await sleep(150);
+document.getElementById("more-toggle")?.click();
+await sleep(120);
 document.querySelector('#more-menu button[data-act="image"]')?.click();
 await sleep(1200);
 document.querySelector('#image-backends .tts-prov[data-id="host"]')?.click();
