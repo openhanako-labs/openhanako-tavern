@@ -227,6 +227,52 @@ await okAsync("⑩ 任务明确失败 → 立刻返回，不白等，并带出 f
   );
 });
 
+await okAsync("⑪ local-file 引用优先走 ResourceIO —— 裸 fs 在 App 里是被拒的那个", async () => {
+  const want = Buffer.from("via-resource-local");
+  const seen = [];
+  const sdk = {
+    media: {
+      getTaskResources: async () => ({
+        resources: [{ name: "p.png", resource: { kind: "local-file", path: realPng } }]
+      })
+    },
+    resources: {
+      read: async (ref) => {
+        seen.push(ref);
+        assert.equal(ref.kind, "local-file", "该按 local-file 引用读");
+        return want;
+      }
+    }
+  };
+  const r = await readProductBytes(sdk, { taskId: "t11" }, FAST);
+  assert.equal(r.ok, true);
+  assert.equal(r.via, "local-file(资源)");
+  assert.deepEqual(r.buf, want);
+  assert.equal(seen.length, 1, "ResourceIO 不该被重复调用");
+});
+
+await okAsync("⑪b ResourceIO 也被拒时，两条原因都在（带 ERR_ACCESS_DENIED）", async () => {
+  const sdk = {
+    media: {
+      getTaskResources: async () => ({
+        resources: [{ name: "p.png", resource: { kind: "local-file", path: path.join(tmp, "not-there.png") } }]
+      }),
+      getTask: async () => ({ taskId: "t11b", status: "done", sessionId: "s", sessionFiles: [] })
+    },
+    resources: {
+      read: async () => {
+        const e = new Error("ERR_ACCESS_DENIED Access to this API has been restricted");
+        e.code = "ERR_ACCESS_DENIED";
+        throw e;
+      }
+    }
+  };
+  const r = await readProductBytes(sdk, { taskId: "t11b" }, FAST);
+  assert.equal(r.ok, false);
+  assert.ok(r.attempts.some((a) => /ERR_ACCESS_DENIED/.test(a.error)), "ResourceIO 那条要留下：" + JSON.stringify(r.attempts));
+  assert.ok(r.attempts.some((a) => /裸 fs/.test(a.via)), "裸 fs 那条也要留：" + JSON.stringify(r.attempts));
+});
+
 await fs.rm(tmp, { recursive: true, force: true });
 
 console.log("");
