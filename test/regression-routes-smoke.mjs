@@ -168,7 +168,7 @@ const EXPECTED = {
   characters: [
     "GET /characters", "GET /characters/tags", "GET /characters/:id",
     "POST /characters", "PUT /characters/:id", "DELETE /characters/:id",
-    "POST /characters/batch-delete", "GET /characters/:id/avatar",
+    "POST /characters/batch-delete", "GET /characters/:id/avatar", "GET /characters/:id/avatar.json",
     "POST /characters/import/prepare", "POST /characters/import/parse",
     "POST /characters/import/commit", "POST /characters/import/discard",
     "POST /characters/:id/import-book", "GET /characters/:id/export/:format"

@@ -1,6 +1,6 @@
 // characters.js — 由 characters.js 按功能拆分（B5）
 
-import { apiBlobUrl, apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatDate, friendlyError, toast } from "./core.js";
+import { apiAvatarBlobUrl, apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatDate, friendlyError, toast } from "./core.js";
 import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
 
@@ -532,11 +532,14 @@ export async function renderCharContext(greetIdx = 0) {
   // 所以改用带鉴权的 fetch 取字节、转 blob，再交给 <img>；取不回来就退回首字母。
   const avaImg = box.querySelector("img[data-ava]");
   if (avaImg) {
-    apiBlobUrl(`characters/${avaImg.dataset.ava}/avatar`)
+    apiAvatarBlobUrl(avaImg.dataset.ava)
       .then((url) => { avaImg.src = url; })
-      .catch(() => {
+      .catch((e) => {
+        // 退回字母占位，但把原因留在 title 里——不然它就是一块“没道理的空”
         const slot = avaImg.parentElement;
         if (slot) slot.textContent = initial;
+        if (slot) slot.title = `头像没显示出来：${e?.message || e}`;
+        console.warn("[tavern] 头像取回失败", e);
       });
   }
 

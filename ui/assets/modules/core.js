@@ -73,14 +73,29 @@ export function apiUrl(path) {
  *  它的意义是“换新的之前先把旧的收回来”，不回收就是一路漏内存。 */
 let lastAvatarBlob = "";
 
-export async function apiBlobUrl(path) {
-  const fn = hana?.api?.fetch;
-  if (typeof fn !== "function") throw new Error("宿主未提供 hana.api.fetch");
-  const res = await fn(apiUrl(path), { method: "GET" });
-  if (res && res.ok === false) throw new Error(res.error || `取图失败（${res.status ?? "?"}）`);
-  if (!res || typeof res.blob !== "function") throw new Error("拿回来的不是一个可读响应");
-  if (res.ok === false) throw new Error(`取图失败（${res.status}）`);
-  const url = URL.createObjectURL(await res.blob());
+/**
+ * 取一张 App 路由里的图片，返回一个能交给 <img src> 的 blob URL。
+ *
+ * 为什么不能直接把 apiUrl(...) 写进 <img src>：
+ *   <img> 不会自己带鉴权，真机里那条请求回的是 403（URL 里连 /_surface/<票据>/ 都没有）。
+ *
+ * 而 `hana.api.fetch` 那条也**不要假设它给 Response** —— 第一次就是栽在这上面：
+ *   它可能和宿主其他地方一样，回的是信封（{ok:false,error}），
+ *   于是我那句 `typeof res.blob !== "function"` 直接把它当失败，界面退回了首字母。
+ * 所以现在走已经证明是通的 JSON 通道：路由给 base64，自己拼 Blob。
+ * 这条路不依赖宿主 fetch 返回什么形状，只依赖“接口通了”——而它是通的。
+ *
+ * 用完要 revoke：卡片列表会反复重画，不回收就是一路漏内存。
+ */
+export async function apiAvatarBlobUrl(characterId) {
+  const env = await apiFetch(`characters/${encodeURIComponent(String(characterId))}/avatar.json`);
+  const data = unwrap(env);
+  const b64 = data?.base64;
+  if (typeof b64 !== "string" || !b64) throw new Error("宿主没给图（base64 为空）");
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: data?.mime || "image/png" }));
   if (lastAvatarBlob && lastAvatarBlob !== url) revokeBlobUrl(lastAvatarBlob);
   lastAvatarBlob = url;
   return url;
