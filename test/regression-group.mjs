@@ -82,6 +82,20 @@ await okAsync("群聊里主角发言也要署名（单人那条“多余”的�
   assert.strictEqual(sent.data.assistantMessage?.speakerId, vera.id, "主角在群聊里也要署名");
 });
 
+await okAsync("开场白在**落盘时**结算一次性宏（屏幕与 prompt 不能各说各话）", async () => {
+  const dmg = await charRepo.create({
+    name: "掷骰者", description: "开场白里有骰子", first_mes: "我掷了 {{roll 1d100}}。"
+  });
+  const app = makeApp();
+  registerConversationRoutes(app, convRepo, { available: true, generate: async () => ({ content: "x" }) }, charRepo, setRepo, null, null, null);
+
+  const r = await request(app, "POST", "/conversations", { body: { characterId: dmg.id } });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  const content = r.data.messages?.[0]?.content || "";
+  assert.ok(content.length > 0, "开场白该已经种下");
+  assert.ok(!content.includes("{{"), `落盘的开场白还带着宏：${content}`);
+});
+
 await okAsync("单人对话里同一个 id 仍然不写署名（与以前逐字节一致）", async () => {
   const app = makeApp();
   registerConversationRoutes(app, convRepo, { available: true, generate: async () => ({ content: "x" }) }, charRepo, setRepo, null, null, null);

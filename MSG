@@ -1,34 +1,22 @@
-fix(embed): 复核提出的 6 条（凭据与错误通道）
+fix(group): 群聊开场白 + 三处「单人规则套到多人身上」+ 开场白落盘时结算一次性宏
 
-GLaDOS 复核 lib/embed/ 提了 17 条，其中 6 条成立，全修：
+① 开场白只种主角那一句 → seedGreetings 按名册依次种，每位都署名
+   （单人走原路、不传 speakerId → 落盘形状逐字节不变；某位读不到卡逐位 catch）
 
-① 宿主给的 headers 会**覆盖**我们拼的 Authorization
-   展开顺序是 ...headers 在后 → 宿主带 authorization 就顶掉，
-   而且 key 大小写不同挡不住。改：先滤掉 auth 类字段，authorization 最后写。
-   （原测试只测了 x-org 这种不冲突的 key，覆盖不到。）
+② speakerOpts 把「主角不署名」也套到群聊 → 主角的话成了无主气泡
+   （探针原话：我 | 角色(薇拉·霜语) | 角色，最后那个就是主角）
+   改：多人一律署名；单人保持不写。
 
-② 错误消息里带着完整 baseUrl
-   会走三条通道出去：fetch 报错、500 响应体、Agent 上下文。
-   改：只报 origin（万一宿主把令牌塞在查询串里，整串回显就是泄漏）；
-       响应体摘要先打掉长串再截。
+③ 0 消息时的「开场」显示主角的开场白，不管这一轮选的是谁
+   改：显示选中那位的；找不到就宁可不显示。
+   顺带发现 GET /characters **只回摘要、没有 first_mes**（服务端注释写着）
+   → 新增按需取详情 + 缓存 speakerCardCache。
 
-③ routes.js 没兜错 → embed 抛的错一路走宿主 500 通道
-   改：HTTP 面 try/catch 回一句干净的话；/embed/status 不回宿主的原话
-       （typeError 只回"有没有"，内容留给工具面诊断）。
+④ 开场白落盘时**没结算一次性宏**（既有问题，这次撞见）
+   卡里写 {{roll}} 之类 → 屏幕每次重绘都重掷，而 prompt 用落盘那份
+   —— 同一个开场白，你看到的和模型看到的不是一个。
+   改：与别处同一条纪律，落盘时 freezeVolatileMacros。
 
-④ pickEmbeddingModel 的 prefer 用 includes
-   prefer="bge" 会命中 "BAAI/bge-reranker-v2-m3" → 拿重排模型打 /embeddings
-   → 400，而报错看着像 key 不对。改：先按 isEmbeddingCandidate 过滤再匹配。
-
-⑤ 凭据返回数组时 typeof 也是 object → 报"没有 apiKey"，把畸形数据说成没钥匙。
-   改：显式挡 Array.isArray。
-
-⑥ provider:models-by-type 返回 {error} 时被当成"没有模型"（与 credentials 同套信封）。
-   改：读出 error 留进 typeError，status 里如实报。
-
-测试 27 → 33。另：有一条 GLaDOS 说反了（"embedding 不含子串 embed"），
-顺手钉成反证 —— mistral-embedding-model / text-embeddings-3 都必须认。
-
-工具：trim-css 的报告现在会**逐条列出**"确认可删"的类名。
-（一份说"12 条可删"却说不出是哪 12 条的报告，等于没法验——
- 拿不到 shell 的复核者就卡在这上面。）
+测试：regression-group 11 → 14。
+新增探针 tools/flows/group-openers.js（专门跑「带开场的群聊」这条路——
+group-ui 全程用 greeting:false，所以这条新路在界面上从没被跑过）。
