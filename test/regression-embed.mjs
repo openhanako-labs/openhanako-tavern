@@ -27,13 +27,22 @@ console.log("\n=== 宿主的 embedding 模型 ===\n");
 const SECRET = "sk-fake-THIS-MUST-NOT-LEAK-0000";
 
 /** 假 bus：记录被问了什么，按 verb 回。 */
-function makeBus({ models = [{ id: "BAAI/bge-m3", providerId: "siliconflow" }], credentials = null } = {}) {
+function makeBus({
+  models = [{ id: "BAAI/bge-m3", providerId: "siliconflow" }],
+  catalog = [
+    { id: "BAAI/bge-m3", providerId: "siliconflow" },
+    { id: "BAAI/bge-reranker-v2-m3", providerId: "siliconflow" },
+    { id: "Qwen/Qwen3-8B", providerId: "siliconflow" }
+  ],
+  credentials = null
+} = {}) {
   const calls = [];
   return {
     calls,
-    async request(verb, input) {
+    async request(verb, input = {}) {
       calls.push({ verb, input });
       if (verb === "provider:models-by-type") return { models };
+      if (verb === "model:list") return { models: catalog };
       if (verb === "provider:credentials") {
         if (credentials !== null) return credentials;
         return { apiKey: SECRET, baseUrl: "https://api.example.com/v1", api: "openai-completions" };
@@ -165,13 +174,50 @@ await okAsync("返回成功但没 apiKey → 也要说清，不许硬发", async
 });
 
 // ── 三种失败要分得开 ──
-await okAsync("没有 embedding 模型 → 说「没有模型」，不说「取凭据失败」", async () => {
-  const bus = makeBus({ models: [] });
+await okAsync("没有 embedding 模型（按类型空 + 扫目录也没）→ 说“没有模型”", async () => {
+  const bus = makeBus({ models: [], catalog: [{ id: "gpt-5", providerId: "openai" }] });
   const { fn } = makeFetch();
   let msg = null;
   try { await embed(bus, ["甲"], { fetchImpl: fn }); }
   catch (e) { msg = e.message; }
-  assert.ok(msg && msg.includes("没有 type=embedding 的模型"), `错的失败信息：${msg}`);
+  assert.ok(msg && msg.includes("宿主里没有 embedding 模型"), `错的失败信息：${msg}`);
+});
+
+// ── 回退：按类型查空（宿主把没写 type 的一律算 chat）时扫目录 ──
+await okAsync("按类型查空 → 回退扫目录，认出 bge 而排掉 rerank", async () => {
+  const bus = makeBus({ models: [] });   // 按类型给 0 条
+  const { fn } = makeFetch();
+  const r = await embed(bus, ["甲", "乙"], { fetchImpl: fn });
+  assert.strictEqual(r.model, "BAAI/bge-m3");
+  assert.strictEqual(r.foundBy, "scan");
+  assert.ok(bus.calls.some((c) => c.verb === "model:list"), "没去扫目录");
+});
+
+await okAsync("扫目录也会排掉 rerank / 多模态 embedding", async () => {
+  const { isEmbeddingCandidate } = await import("../lib/embed/service.js");
+  assert.strictEqual(isEmbeddingCandidate({ id: "BAAI/bge-m3" }), true);
+  assert.strictEqual(isEmbeddingCandidate({ id: "text-embedding-3-small" }), true);
+  assert.strictEqual(isEmbeddingCandidate({ id: "BAAI/bge-reranker-v2-m3" }), false);
+  assert.strictEqual(isEmbeddingCandidate({ id: "Qwen/Qwen2-VL-embed" }), false);
+  assert.strictEqual(isEmbeddingCandidate({ id: "gpt-5" }), false);
+  assert.strictEqual(isEmbeddingCandidate({}), false);
+});
+
+await okAsync("回退扫目录时条目没有 provider → 说清卡在 provider，不去瞎猜", async () => {
+  const bus = makeBus({ models: [], catalog: [{ id: "BAAI/bge-m3" }] });
+  const { fn } = makeFetch();
+  let msg = null;
+  try { await embed(bus, ["甲"], { fetchImpl: fn }); }
+  catch (e) { msg = e.message; }
+  assert.ok(msg && msg.includes("providerId"), `错的失败信息：${msg}`);
+});
+
+await okAsync("默认路径仍按类型走（不白白扫目录）", async () => {
+  const bus = makeBus();
+  const { fn } = makeFetch();
+  const r = await embed(bus, ["甲", "乙"], { fetchImpl: fn });
+  assert.strictEqual(r.foundBy, "by-type");
+  assert.ok(!bus.calls.some((c) => c.verb === "model:list"), "按类型已拿到，不该再扫目录");
 });
 
 await okAsync("列模型就被拒（没授权）→ 报错要点出可能是缺授权", async () => {
@@ -257,8 +303,16 @@ await okAsync("status：能用时报 ok，并说清走的是哪个模型", async
   assert.strictEqual(s.candidates, 1);
 });
 
+await okAsync("status：按类型查空时把“这是正常的”说清楚（扫目录是回退）", async () => {
+  const s = await status(makeBus({ models: [] }));
+  assert.strictEqual(s.foundBy, "scan");
+  assert.match(s.note, /一律算 chat/);
+  assert.strictEqual(s.ok, true);
+  assert.strictEqual(s.model, "BAAI/bge-m3");
+});
+
 await okAsync("status：不能用时说清卡在哪一步（不抛错）", async () => {
-  const s1 = await status(makeBus({ models: [] }));
+  const s1 = await status(makeBus({ models: [], catalog: [{ id: "gpt-5" }] }));
   assert.strictEqual(s1.ok, false);
   assert.strictEqual(s1.step, "models");
 

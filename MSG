@@ -1,27 +1,30 @@
-docs(embed): 更正两处错的判断——App 有 bus 那条门，钥匙一直在磁盘上
+fix(embed): 按类型查 embedding 是空的（宿主把没写 type 的模型一律算 chat）
 
-我上一轮写下的两个结论都不对，这轮实测推翻了：
+用户在界面重载后真调了一次，得到 candidates: 0 ——
+宿主说没有 type=embedding 的模型。但 bge-m3 明明在清单里。
 
-① 「App 只能看见 embedding 模型、不能调用」
-   —— models 面里确实没有，但 queries 面里有：
-      ctx.bus.request("provider:credentials") → { apiKey, baseUrl }
-      授权名 app/provider.credentials.read。
-   酒馆已落地 lib/embed/（service + 工具 + 路由 + 22 条测试）。
+去读宿主的实现（bundle/index.js:196003）：
 
-② 「要用它只能直连、要用户给 key」
-   —— 钥匙一直在 ~/.hanako/provider-catalog.json 的 providers.<id>.api_key。
-      这个生态早就有人这么做：biaoqingbao/lib/shared.js:237 的
-      getProviderApiConfig 就是读它（它的 embedding-config 里
-      source: "hana" 就是这个意思）。
-      我的探针把 api_key 按「像 key 的字段」打码了，于是它明明在屏幕上，
-      我反而去问用户要——打码是为了不泄露，不该连自己都骗过去。
+  // Type resolution: model entry type field → known-models.json type → default "chat"
+  const u = (a && o.type) || c?.type || "chat";
+  if (u === s) push(...)
 
-另记两条实测事实：
-  · 宿主里那个 BAAI/bge-m3 真能用（1024 维），而且同一份 18 条观察 / 5 个问题：
-      mock 2/2/1，重叠度 77%（检索不随问题走）
-      bge-m3 4/1/0，重叠度 46%（跟着问题变了）
-    但 46% 还没过我跑之前给自己立的线（40%），所以只算方向对上，不算结论。
-  · Jev-Mem 自带 openai_encoder.py:30 每次都带 dimensions=，bge-m3 不吃
-    （400 · code 20015），所以实验台自己写了 HttpEncoder。
+服务端自带的 default-models.json / model-catalog.v1.json 里根本没有 bge，
+模型条目也没写 type → 一律算 "chat" → 所以按类型查是 0 条。
+**这是正常现象，不是配置错。**
 
-新增 tools/probe-embedding-config.mjs（看插件怎么配 embedding，值一律打码）。
+修法与它的生态先例一致（biaoqingbao/lib/shared.js:getAvailableEmbeddingModels）：
+按类型查空就回退扫 model:list，按 id 认（bge|embed，排掉 rerank 与多模态 embedding）。
+
+顺带：
+  · status 会报 foundBy: by-type|scan，并把「按类型查空是正常的」写进 note
+  · 回退扫到的条目可能没有 provider 字段 → 明确说卡在 provider，不瞎猜
+  · 两条路都失败时保留「缺 app/models.read 授权？」这句提示（诊断价值）
+
+test/regression-embed.mjs 22 → 27 条（回退、排除项、provider 缺失、默认不白扫）。
+
+另记一条实测行为（写进 docs/notes-host-embedding.md）：
+工具执行要求 App 实例活着。用户从界面重载后工具能调；
+我无界面 reload / disable+enable / 刷新目录都救不回来（RPC peer closed），
+而且旧工具一样死 —— 所以是通道，不是代码。inspect 的 host=on agent=on
+不代表工具能跑。

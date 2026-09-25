@@ -110,6 +110,39 @@ interface HanaPluginModelsV2 {
 （注意：**不要**加 `dimensions` 参数——那是 OpenAI text-embedding-3 的东西，
 `bge-m3` 收到会直接 400 `code 20015`。这个坑我在实验台上踩过了。）
 
+## 一条实测出来的行为：**工具执行要求 App 实例活着**（2026-09-25）
+
+现象：`lib/embed/` 装好后，**用户从界面重载** → 工具当场能调（真执行、真返回）；
+随后我用 `extension_manager` **无界面重载**几次 → 工具全部变成：
+
+```
+App tool "tavern_embed_status" failed: RPC peer closed; cannot call callback.tools.execute
+```
+
+而且**连旧的 `tavern_list_variables` 也一样死**——所以这不是新代码的问题，
+是通道的问题。（这就是“分开验”的价值：一个对照工具就能把
+“我写的新代码坏了”和“整个通道断了”分开。）
+
+试过并且**无效**的四条（都是不同假设，不是重复重试）：
+
+| 试的 | 结果 |
+|---|---|
+| `reload` 一次 | 依旧 closed |
+| 再 `reload` 一次 | 依旧 closed |
+| `disable` → `enable` | 依旧 closed |
+| 先 `tool_search` 刷新目录再调 | 依旧 closed（不是手柄过期） |
+
+**读法**：`peer` = App 的运行时实例。它在（比如窗口开着）→ 工具能执行；
+它不在（无界面重载之后）→ 工具只剩个名字。
+`inspect` 会报 `host=on agent=on`——**但那个 on 不代表工具能跑**。
+
+**怎么办**：要验工具，就趁 App 实例活着的时候验（从界面重载后立即调）；
+不要拿“工具在目录里”当成“工具能用”。
+
+（本文里的“工具能调”那一次就是这么来的：用户从界面重载 →
+我立刻调 → 真的执行了，返回了 `宿主说没有 type=embedding 的模型`。
+那句报错本身倒是真的——它直接帮我把类型解析的坑挖出来了。）
+
 ## 一句话
 
 卡住的位置不在实验台，也不在网络，甚至不在“能不能写代码”——
