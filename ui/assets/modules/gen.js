@@ -117,7 +117,7 @@ function poll(id, n) {
       const snap = (res.data || res);
       if (!snap) throw new Error("任务快照为空");
       job = snap;
-      renderProgress(snap);
+      renderJobSnapshot(snap);
 
       if (snap.state === "running") {
         if (n >= MAX_POLLS) throw new Error("等太久了，先停下");
@@ -163,6 +163,18 @@ function renderProgress(snap) {
 }
 
 // ── 渲染：结果（审查台）─────────────────────────────────
+
+/**
+ * 把一份任务快照渲染进结果区。
+ *
+ * 导出是为了探针（tools/flows/gen.js）能喂一份**假快照**验渲染——
+ * 真跑一次要模型与出网，那不是验 DOM 该付的代价。
+ * 这也是为什么它收快照而不是自己去取：取数是轮询的事，渲染是纯的。
+ */
+export function renderJobSnapshot(snap) {
+  renderProgress(snap);
+  if (snap?.state === "done") renderResult(snap);
+}
 
 function renderResult(snap) {
   const r = snap.result || {};

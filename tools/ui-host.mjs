@@ -51,6 +51,7 @@ const { registerToolRoutes } = await import("../lib/tools/routes.js");
 const { registerBoardRoutes } = await import("../lib/board/routes.js");
 const { registerRegexRoutes } = await import("../lib/regex/routes.js");
 const { registerMigrationRoutes } = await import("../lib/migration/routes.js");
+const { registerGenRoutes } = await import("../lib/gen/routes.js");
 const { loadGroupState } = await import("../lib/tools/group.js");
 
 // ── 数据：真实数据的临时副本 ──────────────────────────
@@ -130,7 +131,7 @@ const fakeLlm = {
 const apps = {
   characters: makeApp(), conversations: makeApp(), settings: makeApp(),
   variables: makeApp(), presets: makeApp(), board: makeApp(),
-  regex: makeApp(), tools: makeApp(), migration: makeApp()
+  regex: makeApp(), tools: makeApp(), migration: makeApp(), gen: makeApp()
 };
 registerCharacterRoutes(apps.characters, charRepo, transfer, setRepo);
 registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo);
@@ -141,6 +142,21 @@ registerToolRoutes(apps.tools, {});
 registerBoardRoutes(apps.board, boardRepo);
 registerRegexRoutes(apps.regex, regexRepo);
 registerMigrationRoutes(apps.migration, DATA);
+
+/*
+ * 生成器。
+ *
+ * net 在这里给的是一个 **dev 专用的直连 shim**：真宿主里出网只能走
+ * sdk.network.fetch（原始 fetch 被 AppHost 的权限模型拒），而这里是我们
+ * 自己的进程，直连就是通的。给 shim 的意义是——来源体检、真检索都能在
+ * 开发宿主里跑起来，而不用每次回到宿主去看一眼。
+ * llm 给 null：开发宿主没有模型凭据，提交任务会得到一句诚实的
+ *「模型服务未就绪」，正好把那条错误路径也露出来。
+ */
+registerGenRoutes(apps.gen, {
+  llm: null,
+  net: { fetch: (url, init) => fetch(url, init) }
+});
 
 // ── 静态文件 ──────────────────────────────────────────
 const MIME = {
