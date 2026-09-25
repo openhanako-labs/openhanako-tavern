@@ -82,6 +82,9 @@ async function loadConvs() {
       .slice(0, 24);
   } catch { convs = []; }
   renderConvs();
+  // 卡列表也要重画：卡项那行「N 场 · 最近 …」依赖 convs。
+  // 只画对话列表的话，卡片会一直停在“还没开过”——比不显示更糟。
+  renderChars();
 }
 
 // ── 渲染 ──────────────────────────────────────────────
@@ -93,12 +96,24 @@ function renderChars() {
     el.innerHTML = `<div class="empty">${query ? "没匹配的角色" : "还没有角色卡"}</div>`;
     return;
   }
-  el.innerHTML = chars.map(c => `
+  el.innerHTML = chars.map(c => {
+    // 点这张卡会发生什么，**点之前就要能看出来**：
+    // 1 场 → 直接续；0 场 → 开新场；多条 → 弹选择器（openChar 的事）。
+    // 不写这一行，三种行为在界面上长得一模一样。convs 已按 updatedAt 倒序，取 [0] 就是最近那场。
+    const mine = convs.filter(x => x.characterId === c.id);
+    const meta = mine.length
+      ? `${mine.length} 场 · 最近 ${fmtDate(mine[0].updatedAt)}`
+      : "还没开过 · 点一下开演";
+    return `
     <div class="item" data-char="${c.id}" role="button" tabindex="0" title="${esc(c.name || "")}">
       ${avatar(c)}
-      <div class="bd"><div class="nm">${esc(c.name || "（无名称）")}</div>${c.has_book ? '<div class="mt">带世界书</div>' : ""}</div>
+      <div class="bd">
+        <div class="nm">${esc(c.name || "（无名称）")}</div>
+        <div class="mt">${meta}${c.has_book ? " · 带世界书" : ""}</div>
+      </div>
     </div>
-  `).join("");
+  `;
+  }).join("");
   el.querySelectorAll(".item").forEach(item => {
     item.addEventListener("click", () => openChar(item.dataset.char));
     // 键盘与无障碍：role=button 必须可 Tab 可回车。
