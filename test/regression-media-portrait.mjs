@@ -82,19 +82,68 @@ registerMediaRoutes(app, { sdk, characterRepo: charRepo, transfer });
 // ── 提示词（纯函数）─────────────────────────────────────
 
 await okAsync("① 提示词只用卡里已有的字段，不编外貌", () => {
-  const { prompt, parts } = portraitPrompt(card);
+  const { prompt, parts, hasCharacter } = portraitPrompt(card);
   assert.ok(prompt.includes("薇拉·霜语"), "名字没进去");
   assert.ok(prompt.includes("守夜法师"), "描述没进去");
   assert.ok(prompt.includes("雪夜城墙"), "场景没进去");
   assert.ok(prompt.includes("守夜"), "标签没进去");
   assert.ok(!/金发|蓝眼|红瞳/.test(prompt), "编了卡里没有的外貌");
   assert.ok(parts.length >= 5, "parts 该能看清由什么拼成");
+  assert.strictEqual(hasCharacter, true, "卡里有描述/性格/场景/标签，该说有角色信息");
 });
 
 await okAsync("② 卡里没写的东西不会凭空出现（空卡的提示词只有风格）", () => {
-  const { prompt } = portraitPrompt({ name: "" });
+  const { prompt, parts, hasCharacter } = portraitPrompt({ name: "" });
   assert.ok(!/「」/.test(prompt), "空名字不该拼出空的引号");
   assert.ok(prompt.length > 0, "至少要留下风格那一句");
+  // 光有"非空"不算判据：真正要锁的是"卡里没东西时只剩风格那一句"，
+  // 而且要能告诉调用方"这段里没有这个人"（复核指出过）。
+  assert.strictEqual(parts.length, 1, `空卡该只剩风格，实为 ${parts.length} 段：${parts.join(" | ")}`);
+  assert.strictEqual(hasCharacter, false, "空卡不该说自己有角色信息");
+  // 只有名字（没有描述/性格/场景/标签）同理：名字不算"这个人"
+  const onlyName = portraitPrompt({ name: "林默" });
+  assert.strictEqual(onlyName.hasCharacter, false, "只有名字就算有角色信息了？");
+  assert.strictEqual(onlyName.cardParts, 1);
+});
+
+// 结构级判据：每个 part 都要能追回卡里的原文。
+// 为什么不用黑名单（金发|蓝眼）——那种写法在真出问题时也会过：
+// 卡里写着"银灰长发"，实现真去"提炼外貌"，提炼出来的也是银灰，命中不了黑名单。
+await okAsync("① 每个 part 都能追回卡里的原文（结构级，不靠黑名单）", () => {
+  const cardLike = {
+    name: "薇拉·霜语",
+    description: "守夜法师，银灰长发，深蓝斗篷上有霜纹",
+    personality: "话少，习惯先看再开口",
+    scenario: "雪夜城墙",
+    tags: ["守夜", "法师"]
+  };
+  const { parts } = portraitPrompt(cardLike);
+  const source = [cardLike.name, cardLike.description, cardLike.personality, cardLike.scenario, ...cardLike.tags]
+    .map((v) => String(v ?? "").replace(/\s+/g, " ").trim())
+    .join("︴");
+
+  const probes = [];
+  for (const p of parts) {
+    const m = /^角色「(.+)」的半身立绘$/.exec(p);
+    if (m) { probes.push(m[1]); continue; }           // 名字那一段
+    if (p === parts[parts.length - 1]) continue;       // 最后一段是风格，允许外来
+    probes.push(p.replace(/^(?:性格|场景|标签)：/, ""));
+  }
+  assert.ok(probes.length >= 3, `该有名字/描述/性格…几段可追，实为 ${probes.length}`);
+  for (const t of probes) {
+    // 标签那一段是"守夜、法师"这样拼起来的，拆开逐个追
+    const pieces = t.includes("、") ? t.split("、") : [t];
+    for (const piece of pieces) {
+      assert.ok(source.includes(piece), `这个 part 在卡里找不到原文，就是自己编的：「${piece}」`);
+    }
+  }
+});
+
+await okAsync("①b 卡里没有外貌词时，提示词里也不许冒出来", () => {
+  const bare = { name: "林默", description: "守夜法师", personality: "话少", scenario: "雪夜城墙", tags: ["守夜"] };
+  const { prompt } = portraitPrompt(bare);
+  assert.ok(!/(金|银|红|蓝|绿|黑|棕|紫|粉|灰)(发|发色|瞳|眼睛|眼|肤)/.test(prompt), "自造了外貌：" + prompt);
+  assert.ok(!/(长|短|卷|直|披肩|马尾)(发|发丝|发丝)/.test(prompt), "自造了发型：" + prompt);
 });
 
 // ── status ─────────────────────────────────────────────
@@ -103,6 +152,7 @@ await okAsync("③ 没给 sdk / sdk 没 media 时，明确说清缺什么", () =
   assert.strictEqual(status(null).available, false);
   assert.ok(/app\/media\.generate/.test(status(null).reason), "没提示缺的能力：" + status(null).reason);
   assert.strictEqual(status({ media: {} }).available, false);
+  assert.ok(/generateImage/.test(status({ media: {} }).reason), "契约对不上时该说清是哪个方法缺：" + status({ media: {} }).reason);
   assert.strictEqual(status({ media: { generateImage: () => {} } }).available, true);
 });
 
@@ -132,6 +182,10 @@ await okAsync("④b 真实形状：路径在 sessionFiles，files 里只是文�
   assert.strictEqual(isAbsolutePath("vera.png"), false, "裸文件名不算路径");
   assert.strictEqual(isAbsolutePath("W:\\a\\b.png"), true);
   assert.strictEqual(isAbsolutePath("/tmp/a.png"), false, "这个 App 只跑在 Windows 上");
+  // Windows 的绝对路径不止盘符一种写法（复核指出过）：
+  // Node 处理长路径会给 \\?\ 前缀，网络盘是 UNC。
+  assert.strictEqual(isAbsolutePath("\\\\?\\C:\\a\\b.png"), true, "长路径前缀该认");
+  assert.strictEqual(isAbsolutePath("\\\\server\\share\\b.png"), true, "UNC 该认");
 
   // 只有裸文件名 → 挑不出可读路径（要报错，不能当成路径用）
   assert.strictEqual(pickImageFile({ files: ["only-a-name.png"] }), null);
@@ -143,6 +197,14 @@ await okAsync("⑤ GET /media/status", async () => {
   const r = await request(app, "GET", "/media/status");
   assert.strictEqual(r.status, 200, `状态 ${r.status}`);
   assert.strictEqual(r.data.available, true);
+
+  // 契约对不上的那条分支也要走过（策略是 fail closed，不是“没有就当能用”）：
+  const halfApp = makeApp();
+  registerMediaRoutes(halfApp, { sdk: { media: {} }, characterRepo: charRepo, transfer });
+  const half = await request(halfApp, "GET", "/media/status");
+  assert.strictEqual(half.status, 200);
+  assert.strictEqual(half.data.available, false, "宿主给了 media 但没 generateImage，不该判可用");
+  assert.ok(/generateImage/.test(half.data.reason || ""), "理由该指到具体方法：" + half.data.reason);
 });
 
 await okAsync("⑥ POST /media/portrait：调用形状对（scope=app + response 交付）", async () => {
@@ -158,6 +220,9 @@ await okAsync("⑥ POST /media/portrait：调用形状对（scope=app + response
   assert.strictEqual(call.input?.delivery?.mode, "response",
     "宿主原话：app-scoped media generation requires response delivery");
   assert.ok(String(call.input?.prompt || "").includes("薇拉"), "提示词没带上");
+  // 应用域不能走异步交付：把不该出现的字段钉住，防日后手滑加回来
+  assert.ok(!("task" in (call.input || {})), "input 里不该有 task");
+  assert.ok(!("taskId" in (call.input || {})), "input 里不该有 taskId");
 });
 
 await okAsync("⑦ 立绘真的落到了 avatar.<ext>，头像接口取得到", async () => {
@@ -170,6 +235,55 @@ await okAsync("⑦ 立绘真的落到了 avatar.<ext>，头像接口取得到", 
   registerCharacterRoutes(app2, charRepo, transfer, null);
   const img = await request(app2, "GET", `/characters/${card.id}/avatar`);
   assert.strictEqual(img.status, 200, `状态 ${img.status}`);
+});
+
+// 扩展名换了（png→webp）不能留孤儿；认不得的扩展名不许落到盘上。
+await okAsync("⑦b 换扩展名清旧文件；认不得的扩展名一律当 png", async () => {
+  const webp = path.join(tmp, "out.webp");
+  fs.writeFileSync(webp, Buffer.from([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4]));
+  const appW = makeApp();
+  const sdkW = { media: { async generateImage() { return { ok: true, files: [], sessionFiles: [{ filePath: webp }] }; } } };
+  registerMediaRoutes(appW, { sdk: sdkW, characterRepo: charRepo, transfer });
+  const r = await request(appW, "POST", "/media/portrait", { body: { characterId: card.id } });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  assert.strictEqual(r.data.avatarExt, "webp");
+  assert.strictEqual(r.data.file, "avatar.webp");
+  const dir = path.join(charRepo.dir, card.id);
+  const after = fs.readdirSync(dir).filter((f) => f.startsWith("avatar."));
+  assert.deepStrictEqual(after, ["avatar.webp"], `旧头像没清干净：${after.join(",")}`);
+
+  // 怪扩展名（比如被人塞成 png.exe）不进盘
+  const evil = path.join(tmp, "portrait.png.exe");
+  fs.writeFileSync(evil, Buffer.from([1, 2, 3, 4]));
+  const appE = makeApp();
+  const sdkE = { media: { async generateImage() { return { ok: true, files: [], sessionFiles: [{ filePath: evil }] }; } } };
+  registerMediaRoutes(appE, { sdk: sdkE, characterRepo: charRepo, transfer });
+  const rE = await request(appE, "POST", "/media/portrait", { body: { characterId: card.id } });
+  assert.strictEqual(rE.status, 200, `状态 ${rE.status}：${rE.error || ""}`);
+  assert.strictEqual(rE.data.avatarExt, "png", "怪扩展名该被换成 png");
+  assert.strictEqual(rE.data.file, "avatar.png");
+  assert.ok(!fs.readdirSync(dir).some((f) => f.endsWith(".exe")), "盘上不该出现 .exe");
+});
+
+// 空卡：不能默默出一张不相干的图，得在返回里把话说出来。
+// create 对 description/first_mes 有必填校验，而**导入来的老卡真会字段为空**——
+// 所以用不校验的 restore 造这种卡（它本来就是导入那条路在用的）。
+await okAsync("⑦c 卡里没角色信息 → 返回里带 warning", async () => {
+  const hollow = await charRepo.restore({
+    name: "未命名的某人", description: " ", first_mes: " ", personality: "", scenario: "", tags: []
+  });
+  const appH = makeApp();
+  registerMediaRoutes(appH, { sdk: makeSdk(), characterRepo: charRepo, transfer });
+  const r = await request(appH, "POST", "/media/portrait", { body: { characterId: hollow.id } });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  assert.ok(/不会像这个角色/.test(r.data.warning || ""), "该提醒“图不会像她”：" + r.data.warning);
+
+  // 有角色信息的卡就不该报这句
+  const appOk = makeApp();
+  registerMediaRoutes(appOk, { sdk: makeSdk(), characterRepo: charRepo, transfer });
+  const rOk = await request(appOk, "POST", "/media/portrait", { body: { characterId: card.id } });
+  assert.strictEqual(rOk.status, 200);
+  assert.strictEqual(rOk.data.warning, undefined, "有内容的卡不该报警：" + rOk.data.warning);
 });
 
 await okAsync("⑧ 宿主返回空文件列表 → 报错，不当成功", async () => {

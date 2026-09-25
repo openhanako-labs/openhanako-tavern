@@ -1,42 +1,70 @@
 // media.js — 出图（v1：给角色卡生成立绘）
 //
-// 为什么按钮挂在"当前角色"面板上：立绘本来就是角色卡的东西，
-// 它该出现在你正看着这张卡的时候，而不是某个二级菜单里。
+// 两个入口，同一个动作：
+//   · 「当前角色」面板（在对话里）= 默认入口
+//   · 角色编辑器弹窗 = 复查指出的缺口：不给某张卡开一场对话就没法给它出图
 //
-// 三条交互纪律：
+// 四条交互纪律：
 //   · 长任务要说清"在做什么"——出图几十秒起步，按钮直接禁用 + 写一行状态，
 //     否则用户会连点三次（然后收到三张）。
-//   · 先体检再动手：/media/status 不通就直接说缺什么，别让人等半分钟才失败。
+//   · 先体检再提问：先问"能不能出"（/media/status），再问"要不要出"（空卡那一问）。
+//     反过来的话，后端不可用时用户白答一个问题。
 //   · 成功要看得见：换完头像立刻重画一次角色面板——图变了但面板没变
 //     等于告诉用户"没成功"。
+//   · 别把"没刷出来"说成成功：刷新失败时说清是界面没跟上，不是活没干。
 
-import { apiFetch, toast, escapeHtml, friendlyError } from "./core.js";
+import { apiFetch, toast, escapeHtml, friendlyError, confirmDialog } from "./core.js";
 import { state } from "./state.js";
 
 let busy = false;
 
 const $ = (id) => document.getElementById(id);
 
-function setNote(text) {
-  const el = $("ctx-portrait-note");
-  if (el) el.textContent = text || "";
+/** 卡里有没有“这个人的东西”。名字不算：光有名字，模型手里几乎没信息。
+ * 与 lib/media/prompt.js 的 hasCharacter 同一判据。 */
+function cardHasContent(card) {
+  const c = card || {};
+  const tags = Array.isArray(c.tags) ? c.tags.filter((t) => String(t || "").trim()) : [];
+  return [c.description, c.personality, c.scenario].some((v) => String(v || "").trim()) || tags.length > 0;
 }
 
-/** 绑定当前角色面板上的「生成立绘」。每次重画面板都会重新绑。 */
+const PANE = { card: null, btnId: "ctx-portrait", noteId: "ctx-portrait-note" };
+const MODAL = { btnId: "modal-portrait", noteId: "modal-portrait-note" };
+
+/** 绑定当前角色面板上的「生成立绘」。每次重画面板都会重建按钮，所以每次重绑。 */
 export function bindPortraitButton() {
-  const btn = $("ctx-portrait");
-  if (!btn || btn.dataset.bound === "1") return;
-  btn.dataset.bound = "1";
+  const btn = $(PANE.btnId);
+  if (!btn) return;
   btn.addEventListener("click", () => void makePortrait());
 }
 
-export async function makePortrait() {
-  if (busy) return;
-  const conv = state.currentConv;
-  const card = state.currentCharacter;
-  if (!conv || !card) { toast("先打开一场对话", "error"); return; }
+/** 绑定编辑器弹窗里的那一个（编辑既有卡时才显示）。 */
+export function bindModalPortrait() {
+  const btn = $(MODAL.btnId);
+  if (!btn || btn.dataset.bound === "1") return;
+  btn.dataset.bound = "1";
+  btn.addEventListener("click", () => void makePortrait({ ...MODAL, card: state.currentCharacter, target: "editor" }));
+}
 
-  const btn = $("ctx-portrait");
+/**
+ * @param {{card?: object, btnId?: string, noteId?: string, target?: "pane"|"editor"}} [opts]
+ */
+export async function makePortrait(opts = {}) {
+  if (busy) return;
+
+  const card = opts.card || state.currentCharacter;
+  const btnId = opts.btnId || PANE.btnId;
+  const noteId = opts.noteId || PANE.noteId;
+  const toEditor = opts.target === "editor";
+
+  const setNote = (text) => {
+    const el = $(noteId);
+    if (el) el.textContent = text || "";
+  };
+
+  if (!card || !card.id) { toast("先打开一张角色卡", "error"); return; }
+
+  const btn = $(btnId);
   busy = true;
   if (btn) btn.disabled = true;
   setNote("正在出图…（这一步要几十秒，可以先去做别的）");
@@ -62,22 +90,62 @@ export async function makePortrait() {
       return;
     }
 
+    // 空卡先问：出图要几十秒，而这一趟注定画不出“她”。
+    if (!cardHasContent(card)) {
+      const yes = await confirmDialog({
+        title: "这张卡里没有角色信息",
+        body: "描述、性格、场景、标签都是空的。出图只会按风格画一张，不会像这个角色。\n\n仍然生成吗？"
+      });
+      if (!yes) {
+        setNote("已取消——这张卡里没有可画的东西。");
+        return;
+      }
+    }
+
     const res = await apiFetch("media/portrait", {
       method: "POST",
       body: JSON.stringify({ characterId: card.id })
     });
     const r = res.data || res;
-    setNote(`已生成（${Math.round((r.bytes || 0) / 1024)} KB，${escapeHtml(r.avatarExt || "png")}）`);
+    // 扩展名照**盘上真写的那个文件**说（后端返回 file=avatar.xxx），
+    // 不自己猜一个——猜错就成了“界面说 png、盘上是别的”。
+    const what = r.file || (r.avatarExt ? `avatar.${r.avatarExt}` : "图");
+    setNote(`已生成（${Math.round((r.bytes || 0) / 1024)} KB，${escapeHtml(String(what))}）`);
 
     // 头像变了：内存里那份 currentCharacter 还是旧的（has_avatar=false），
     // 不重拉一次的话面板会继续画首字母——看上去就像没成功。
+    let refreshed = false;
     try {
       const fresh = await apiFetch(`characters/${encodeURIComponent(card.id)}`);
       state.currentCharacter = fresh.data || fresh;
-    } catch { /* 拿不到就用旧的，至少把提示写清 */ }
+      refreshed = true;
+    } catch { /* 下面把那句实话补上 */ }
 
-    const { renderCharContext } = await import("./characters.js");
-    await renderCharContext();
+    if (toEditor) {
+      // 编辑器里的图不走角色面板，所以这里只需要让用户知道该去哪看。
+      if (refreshed) {
+        setNote("已生成——关掉弹窗，头像就是新的了。");
+      } else {
+        setNote("头像已经生成好了，但这个界面没刷出来——重开一次就能看到。");
+        toast("头像已生成，界面没刷新", "error");
+        return;
+      }
+    } else {
+      const { renderCharContext } = await import("./characters.js");
+      await renderCharContext();
+      if (!refreshed) {
+        // 别把“没刷出来”说成成功：面板还在画首字母，用户会以为白跑了。
+        setNote("头像已经生成好了，但这个界面没刷出来——重开一次角色面板就能看到。");
+        toast("头像已生成，界面没刷新", "error");
+        return;
+      }
+    }
+
+    if (r.warning) {
+      setNote(String(r.warning));
+      toast("立绘已更新——但卡里没有角色信息，图不会像她", "error");
+      return;
+    }
     toast("立绘已更新", "success");
   } catch (e) {
     const why = friendlyError(e);
@@ -85,7 +153,7 @@ export async function makePortrait() {
     toast("出图失败: " + why, "error");
   } finally {
     busy = false;
-    const b = $("ctx-portrait");
+    const b = $(btnId);
     if (b) b.disabled = false;
   }
 }

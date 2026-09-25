@@ -88,10 +88,20 @@ export async function openCharacterEditor(id) {
     document.getElementById("f-notes").value = card.creator_notes || "";
     document.getElementById("modal-delete").classList.remove("hidden");
     document.getElementById("modal-export-st").classList.remove("hidden");
+    // 出图入口：只有编辑**已有**的卡时才出现（新卡还没有 id，出完图没地方放）
+    document.getElementById("modal-portrait").classList.remove("hidden");
+    const pnote = document.getElementById("modal-portrait-note");
+    if (pnote) pnote.textContent = "";
+    const { bindModalPortrait } = await import("./media.js");
+    bindModalPortrait();
   } else {
     document.getElementById("modal-title").textContent = "新建角色";
     document.getElementById("modal-delete").classList.add("hidden");
     document.getElementById("modal-export-st").classList.add("hidden");
+    // 新卡还没 id：出完图没地方放，所以这个入口不显示
+    document.getElementById("modal-portrait").classList.add("hidden");
+    const pnote = document.getElementById("modal-portrait-note");
+    if (pnote) pnote.textContent = "";
   }
   
   dom.modalEl.classList.remove("hidden");
