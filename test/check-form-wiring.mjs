@@ -46,18 +46,18 @@ const KNOWN_UNWIRED = new Map([
   ["rf-surface-display", "id 由模板拼出：getElementById(`rf-surface-${s}`)，regex.js:170/221/296"],
   ["rf-surface-prompt", "同 rf-surface-display：模板拼出"],
   ["rf-surface-stored", "同 rf-surface-display：模板拼出"],
-  // 以下几个是 2026-09-25 新发现的债：
-  // 全仓库 JS（含 dom.js 的集中 id 映射）里一次没出现。
-  // 是“改名/重构后遗留的死表单”还是“走了我们没看出来的读法”，
-  // 尚未逐条确认——所以记成债，不记成“已修”。
-  ["sf-description", "未查明：js/dom 里无引用（设定库编辑器表单）"],
-  ["sf-id", "未查明：js/dom 里无引用（设定库编辑器表单）"],
-  ["sf-logic", "未查明：js/dom 里无引用（设定库编辑器表单）"],
-  ["sf-regex", "未查明：js/dom 里无引用（设定库编辑器表单）"],
-  ["sf-type", "未查明：js/dom 里无引用（设定库编辑器表单）"],
-  ["vf-editable", "未查明：js/dom 里无引用（变量编辑器表单）"],
-  ["vf-id", "未查明：js/dom 里无引用（变量编辑器表单）"],
-  ["vf-label", "未查明：js/dom 里无引用（变量编辑器表单）"],
+  // 以下 8 个是 2026-09-25 用 check-form-wiring 查出来的**活表单里的死输入**：
+  // 同一张表单里其它字段都有读（setting-form 的 sf-name/sf-content/sf-keywords/sf-tier…），
+  // 只有这几个一次没人读——代码早已改用 tier/anchor/keywords 那套 schema。
+  // 用户能看到、能填，填了不生效。
+  ["sf-description", "死输入：setting-form 里无人读（旧 schema 遗留）"],
+  ["sf-id", "死输入：setting-form 里无人读（保存走 state.currentSetting，不再读隐藏域）"],
+  ["sf-logic", "死输入：setting-form 里无人读（旧 schema 遗留）"],
+  ["sf-regex", "死输入：setting-form 里无人读（旧 schema 遗留）"],
+  ["sf-type", "死输入：setting-form 里无人读（旧 schema 遗留）"],
+  ["vf-editable", "死输入：variable-form 里无人读（旧 schema 遗留）"],
+  ["vf-id", "死输入：variable-form 里无人读（保存走 state）"],
+  ["vf-label", "死输入：variable-form 里无人读（旧 schema 遗留）"],
   // 这条已经确认是**真死**：
   ["skip-existing-check", "已确认：无 name 属性、JS 里零引用 → 导入时这个勾选不起作用"],
 ]);
