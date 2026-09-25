@@ -387,4 +387,43 @@ await okAsync("id 启发式：embedding 单复数都认（“embedding”本来�
 });
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} ${pass} 过 / ${fail} 不过\n`);
+// ── 宿主那条面（models.embed）：长出来就用，没长就直连 ──
+//
+// 这两条测的不只是今天的代码，也是**契约**：哪天宿主真加了 embed，
+// 上面那条断言就是它的验收标准。
+await okAsync("宿主有 models.embed 就走它：不取凭据、不碰网络（via=host）", async () => {
+  const bus = makeBus({ credentials: { apiKey: SECRET, baseUrl: "https://api.siliconflow.cn/v1" } });
+  const seen = [];
+  const modelsFace = {
+    embed: async (req) => {
+      seen.push(req);
+      return { vectors: [[0.1, 0.2, 0.3]], dimension: 3 };
+    }
+  };
+  const r = await embed(bus, ["一句话"], {
+    modelsFace: modelsFace,
+    fetchImpl: () => { throw new Error("走宿主那条路时不该碰网络"); }
+  });
+  assert.strictEqual(r.via, "host");
+  assert.deepStrictEqual(r.vectors, [[0.1, 0.2, 0.3]]);
+  assert.strictEqual(r.dimension, 3);
+  assert.strictEqual(seen.length, 1);
+  assert.strictEqual(seen[0].model, "BAAI/bge-m3");
+  assert.deepStrictEqual(seen[0].input, ["一句话"]);
+  assert.ok(!JSON.stringify(bus.calls).includes("credentials"), "走宿主那条路不该去取凭据（能力收窄的意义就在这）");
+});
+
+await okAsync("宿主没这条面（只有 list/stream/utility/cancel）→ 退回直连（via=direct）", async () => {
+  const bus = makeBus({ credentials: { apiKey: SECRET, baseUrl: "https://api.siliconflow.cn/v1" } });
+  const r = await embed(bus, ["一句话"], {
+    modelsFace: { list: async () => [], stream: async () => {}, utility: async () => {}, cancel: () => {} },
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ data: [{ embedding: [1, 2] }] }),
+      text: async () => JSON.stringify({ data: [{ embedding: [1, 2] }] })
+    })
+  });
+  assert.strictEqual(r.via, "direct");
+});
+
 process.exit(fail ? 1 : 0);

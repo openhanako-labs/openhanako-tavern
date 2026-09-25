@@ -21,6 +21,7 @@ const { SettingRepo } = await import("../lib/settings/repo.js");
 const { registerConversationRoutes } = await import("../lib/conversations/routes.js");
 const { buildGenerationInput, resetPrefixWatch, renderCastRoster } = await import("../lib/conversations/pipeline.js");
 const { participantsOf, visibleMessagesFor } = await import("../lib/conversations/model.js");
+const { parsePrivateMarker, whisperRule } = await import("../lib/conversations/whisper.js");
 
 let pass = 0, fail = 0;
 async function okAsync(name, fn) {
@@ -241,6 +242,52 @@ await okAsync("路由：私语对象必须是这一场的人（不在就报错�
   });
   assert.ok(bad.status >= 400, `该报错，实际 ${bad.status}`);
   assert.ok(/私语对象不在这一场/.test(bad.error || ""), `报错要说清：${bad.error}`);
+});
+
+await okAsync("角色也能私下说：[[私语:名字]] → audience，正文从第二行开始", () => {
+  const r = parsePrivateMarker("[[私语:任十九]]\n他把碗推回去，没抬头。", {
+    roster: [{ id: ren.id, name: "任十九" }, { id: vera.id, name: "薇拉·霜语" }]
+  });
+  assert.strictEqual(r.text, "他把碗推回去，没抬头。");
+  assert.deepStrictEqual(r.audience, [ren.id]);
+});
+
+await okAsync("私语标记：『你』落成 @user（永远对不上角色 → 只说给你）", () => {
+  const r = parsePrivateMarker("[[私语:你]]\n只跟你说。", { roster: [{ id: ren.id, name: "任十九" }] });
+  assert.deepStrictEqual(r.audience, ["@user"]);
+  assert.strictEqual(r.text, "只跟你说。");
+});
+
+await okAsync("私语标记：名字一个都没对上 → 谁都不给（fail closed）", () => {
+  const r = parsePrivateMarker("[[私语:查无此人]]\n你说呢。", { roster: [{ id: ren.id, name: "任十九" }] });
+  assert.deepStrictEqual(r.audience, []);
+  assert.strictEqual(r.resolved, 0);
+});
+
+await okAsync("私语标记：只认开头第一行（正文里同样的字样是台词）", () => {
+  const raw = "他说：[[私语:任十九]] 这句话该被留下。";
+  const r = parsePrivateMarker(raw, { roster: [{ id: ren.id, name: "任十九" }] });
+  assert.strictEqual(r.text, raw);
+  assert.strictEqual(r.audience, undefined);
+});
+
+await okAsync("私语标记：半边名字也对得上（薇拉 → 薇拉·霜语）", () => {
+  const r = parsePrivateMarker("[[私语:薇拉]]\n……", { roster: [{ id: vera.id, name: "薇拉·霜语" }] });
+  assert.deepStrictEqual(r.audience, [vera.id]);
+});
+
+await okAsync("听得到私语的那位提示词里多一段「别复述」；别人没有", async () => {
+  const conv = await convRepo.create(vera.id, { characterIds: [vera.id, ren.id] });
+  await convRepo.addMessage(conv.id, "user", "公开一句。");
+  await convRepo.addMessage(conv.id, "user", "私下说：别告诉别人。", { audience: [ren.id] });
+  const fresh = await convRepo.get(conv.id);
+  const forRen = await buildGenerationInput(repos, fresh, ren, "嗯", { ...OPT, speakerId: ren.id });
+  const forVera = await buildGenerationInput(repos, fresh, vera, "嗯", { ...OPT, speakerId: vera.id });
+  const dump = (r) => `${r.systemPrompt}\n${(r.messages || []).map(m => m.content).join("\n")}`;
+  assert.ok(dump(forRen).includes("## 私语"), "听到私语的人该被告知这件事");
+  assert.ok(dump(forRen).includes("不要复述"), "该说清不能复述");
+  assert.ok(dump(forRen).includes("[[私语:对方的名字]]"), "私下回应这条路要交给她");
+  assert.ok(!dump(forVera).includes("## 私语"), "没听到的人不该有这一段");
 });
 
 // ── ⑥ 自动轮换：存在**对话**上，不是全局设置 ──────────
