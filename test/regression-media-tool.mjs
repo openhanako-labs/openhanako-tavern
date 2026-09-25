@@ -33,7 +33,9 @@ const card = await charRepo.create({
 
 const tools = createMediaTools({ characterRepo: charRepo, transfer });
 const tool = tools.find((t) => t.name === "tavern_apply_avatar");
-const call = (args) => tool.handler(args);
+// 按宿主读的那个键调（execute）。这里曾经写成 .handler——于是测试和代码一起错，
+// 一起绿，而真调用路径（宿主读 execute）永远没被碰过。
+const call = (args) => tool.execute(args);
 const body = (r) => r.content[0].text;
 
 /** 造一张真图片文件（内容无所谓，这一层不校验图片格式）。 */
@@ -45,7 +47,7 @@ function makeFile(name, bytes = 64) {
 
 await okAsync("① 工具名与形状", () => {
   assert.ok(tool, "没找到 tavern_apply_avatar");
-  assert.deepStrictEqual(tool.inputSchema.required, ["characterId", "path"]);
+  assert.deepStrictEqual(tool.parameters.required, ["characterId", "path"]);
 });
 
 await okAsync("② 缺参数 / 卡不存在 → 各自的错", async () => {
@@ -118,7 +120,7 @@ await okAsync("⑦ 扩展名以落盘为准；怪扩展名当 png", async () => 
 
 await okAsync("⑧ 没给仓储/转移层 → 说清缺什么（不是静默成功）", async () => {
   const bare = createMediaTools({})[0];
-  const out = bare.handler({ characterId: "x", path: "C:\\a.png" }).then(body);
+  const out = await bare.execute({ characterId: "x", path: "C:\\a.png" }).then(body);
   assert.match(await out, /未就绪/);
 });
 
