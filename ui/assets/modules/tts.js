@@ -10,6 +10,7 @@
 // 理由是别让人猜"我刚才填的到底生效了没有"——试听用的就是已经存下来的那份配置。
 
 import { apiFetch, toast, escapeHtml, friendlyError, apiUrl } from "./core.js";
+import { state } from "./state.js";
 
 let providersLoaded = false;
 let providers = [];
@@ -88,7 +89,8 @@ export function isSpeaking(key) {
  * 读一段文字，或者停掉正在读的那段。
  *
  * @param {string} text
- * @param {{key?: string, onState?: (s: string) => void, autoSave?: boolean}} [opts]
+ * @param {{key?: string, characterId?: string, onState?: (s: string) => void, autoSave?: boolean}} [opts]
+ *   characterId：谁在说。传了就按角色分配的声音读（群聊一人一嗓）。
  */
 export async function speakText(text, opts = {}) {
   const key = opts.key || "text";
@@ -105,7 +107,10 @@ export async function speakText(text, opts = {}) {
   try {
     const res = await apiFetch("tts/speak", {
       method: "POST",
-      body: JSON.stringify({ text: say })
+      body: JSON.stringify({
+        text: say,
+        ...(opts.characterId ? { characterId: String(opts.characterId) } : {})
+      })
     });
     r = readEnvelope(res, "朗读");
     if (!r || !r.url) throw new Error("服务端没给出音频地址");
@@ -188,7 +193,66 @@ function fillForm(cfg) {
   const rate = $("tts-rate");
   if (rate) rate.value = cfg.rate || "";
 
+  renderVoiceMap(cfg);
   renderStatus(cfg);
+}
+
+/** 这场对话里的角色（群聊就是名单里的人；单人就是主角）。 */
+function convCharacters() {
+  const conv = state.currentConv;
+  // 名字从 state.charList 取（跟 chat.js 的 charNameOf 同一个源）——
+  // 别处没有第二份名单，自创一个就会得到“角色已不在库”这种假话（探针里就摸到过）。
+  const all = Array.isArray(state.charList) ? state.charList : [];
+  const ids = Array.isArray(conv?.characterIds) && conv.characterIds.length
+    ? conv.characterIds
+    : (conv?.characterId ? [conv.characterId] : []);
+  return ids.map((id) => all.find((c) => String(c.id) === String(id)) || { id, name: "（角色已删除）" });
+}
+
+/**
+ * 按角色分配声音。
+ *
+ * 改动即时保存（不等那个“保存”键）：一条声音的得失是一笔小而清楚的写，
+ * 而“改完了忘了按保存”是这类面板最常见的怨气。
+ */
+function renderVoiceMap(cfg) {
+  const box = $("tts-voice-map");
+  if (!box) return;
+  const chars = convCharacters();
+  if (chars.length === 0) {
+    box.innerHTML = `<div class="hint">先开一场对话——按角色分配是“这场里谁该是什么声音”。</div>`;
+    return;
+  }
+
+  const meta = providers.find((x) => x.id === cfg.provider);
+  const voices = [...(meta?.voices || [])];
+  for (const v of Object.values(cfg.voices || {})) if (v && !voices.includes(v)) voices.push(v);
+
+  box.innerHTML = chars.map((ch) => {
+    const cur = cfg.voices?.[ch.id] || "";
+    const opts = [`<option value="">跟随默认${cfg.voice ? `（${escapeHtml(cfg.voice)}）` : ""}</option>`]
+      .concat(voices.map((v) => `<option value="${escapeHtml(v)}"${v === cur ? " selected" : ""}>${escapeHtml(v)}</option>`));
+    return `<div class="tts-vm-row">
+      <span class="tts-vm-name">${escapeHtml(ch.name || ch.id)}</span>
+      <select class="tts-vm-sel" data-cid="${escapeHtml(ch.id)}">${opts.join("")}</select>
+    </div>`;
+  }).join("");
+
+  box.querySelectorAll(".tts-vm-sel").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      try {
+        const res = await apiFetch("tts/config", {
+          method: "PUT",
+          body: JSON.stringify({ voices: { [sel.dataset.cid]: sel.value } })
+        });
+        const fresh = readEnvelope(res, "保存角色声音");
+        current = fresh;
+        renderStatus(fresh);
+      } catch (e) {
+        toast("存不住这个声音：" + friendlyError(e), "error");
+      }
+    });
+  });
 }
 
 function renderStatus(cfg) {

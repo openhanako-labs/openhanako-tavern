@@ -659,7 +659,7 @@
         <h3>声音</h3>
         <div class="field-row">
           <div class="field">
-            <label>声音</label>
+            <label>默认声音（没分配角色的用它）</label>
             <select id="tts-voice"></select>
           </div>
           <div class="field">
@@ -674,6 +674,15 @@
           </div>
           <button type="button" id="tts-preview" class="btn btn-sm">试听</button>
         </div>
+      </section>
+
+      <!--
+        按角色分配声音：群聊里两个人一个嗓子很出戏。
+        只列**这场对话里有的**角色——一个角色库几十张卡全铺出来，这面板就成了名单墙。
+      -->
+      <section class="tts-sec">
+        <h3>按角色分配声音 <span class="hint">这场对话里的角色</span></h3>
+        <div id="tts-voice-map" class="tts-voice-map"></div>
       </section>
 
       <div id="tts-status" class="tts-status"></div>

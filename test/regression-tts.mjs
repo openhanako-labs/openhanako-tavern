@@ -257,5 +257,81 @@ await okAsync("⑯ /tts/providers 给设置面板足够画选项的东西", asyn
   assert.ok(az.voices.length > 3, "该给几个可选声音");
 });
 
+await okAsync("⑰ 声音优先序：调用方指定 > 配置里的全局 > 供应商默认", () => {
+  const az = { ...AZ, voice: "zh-CN-YunxiNeural" };
+  assert.strictEqual(buildRequest(az, "x").voice, "zh-CN-YunxiNeural", "没指定时用全局");
+  assert.strictEqual(buildRequest(az, "x", { voice: "zh-CN-XiaoyiNeural" }).voice, "zh-CN-XiaoyiNeural",
+    "指定了就该盖过全局——这是群聊一人一嗓的地基");
+  assert.strictEqual(buildRequest(AZ, "x").voice, "zh-CN-XiaoxiaoNeural", "都没填就用默认");
+  assert.ok(buildRequest(az, "x", { voice: "zh-CN-XiaoyiNeural" }).body.includes('name="zh-CN-XiaoyiNeural"'),
+    "SSML 里的声音名没跟着换");
+});
+
+await okAsync("⑱ 按角色分配：逐键合并，空串去掉那个角色，别的角色不受影响", () => {
+  let cfg = mergeConfig({ provider: "azure", azure: { region: "eastasia", key: "k" } }, {
+    voices: { c1: "zh-CN-YunxiNeural", c2: "zh-CN-XiaoyiNeural" }
+  });
+  assert.deepStrictEqual(cfg.voices, { c1: "zh-CN-YunxiNeural", c2: "zh-CN-XiaoyiNeural" });
+
+  cfg = mergeConfig(cfg, { voices: { c1: "zh-CN-YunjianNeural" } });
+  assert.strictEqual(cfg.voices.c1, "zh-CN-YunjianNeural");
+  assert.strictEqual(cfg.voices.c2, "zh-CN-XiaoyiNeural", "只改一个人不该动别人");
+
+  cfg = mergeConfig(cfg, { voices: { c1: "" } });
+  assert.ok(!("c1" in cfg.voices), "空串该把那个角色的声音去掉");
+  assert.strictEqual(cfg.voices.c2, "zh-CN-XiaoyiNeural");
+
+  // 只改全局声音，voices 不该被顺手清掉
+  const after = mergeConfig(cfg, { voice: "zh-CN-YunyangNeural" });
+  assert.strictEqual(after.voices.c2, "zh-CN-XiaoyiNeural");
+});
+
+await okAsync("⑲ synthesize 把声音传下去，并说清这个声音是哪来的", async () => {
+  const f1 = fakeFetch();
+  const r1 = await synthesize({ config: AZ, text: "你好", voice: "zh-CN-YunxiNeural", fetchImpl: f1 });
+  assert.strictEqual(r1.voice, "zh-CN-YunxiNeural");
+  assert.strictEqual(r1.voiceSource, "caller");
+  assert.ok(f1.calls[0].init.body.includes("zh-CN-YunxiNeural"), "请求里没带上这个声音");
+
+  const r2 = await synthesize({ config: { ...AZ, voice: "zh-CN-XiaoyiNeural" }, text: "你好", fetchImpl: fakeFetch() });
+  assert.strictEqual(r2.voiceSource, "global");
+
+  const r3 = await synthesize({ config: AZ, text: "你好", fetchImpl: fakeFetch() });
+  assert.strictEqual(r3.voiceSource, "default");
+});
+
+await okAsync("⑳ /tts/speak 带 characterId → 用那个角色的声音；不带就用全局", async () => {
+  const app = makeApp();
+  const sdk = { network: { fetch: fakeFetch() } };
+  registerTtsRoutes(app, { sdk, dataDir: path.join(tmp, "voices") });
+
+  await request(app, "PUT", "/tts/config", {
+    body: {
+      provider: "azure",
+      voice: "zh-CN-XiaoxiaoNeural",
+      azure: { region: "eastasia", key: "k" },
+      voices: { "char-a": "zh-CN-YunxiNeural" }
+    }
+  });
+
+  const a = await request(app, "POST", "/tts/speak", { body: { text: "甲说", characterId: "char-a" } });
+  assert.strictEqual(a.status, 200, `状态 ${a.status}：${a.error || ""}`);
+  assert.strictEqual(a.data.voice, "zh-CN-YunxiNeural", "没按角色分配的声音读");
+  assert.strictEqual(a.data.voiceSource, "caller");
+  assert.strictEqual(a.data.characterId, "char-a");
+
+  const b = await request(app, "POST", "/tts/speak", { body: { text: "乙说", characterId: "char-b" } });
+  assert.strictEqual(b.data.voice, "zh-CN-XiaoxiaoNeural", "没分配的用全局");
+  assert.strictEqual(b.data.voiceSource, "global");
+
+  const c = await request(app, "POST", "/tts/speak", { body: { text: "旁白" } });
+  assert.strictEqual(c.data.voiceSource, "global");
+  assert.strictEqual(c.data.characterId, null);
+
+  // 配置读回里要能看到分配表（而它是公开形状，本来就不含密钥）
+  const cfgBack = await request(app, "GET", "/tts/config");
+  assert.strictEqual(cfgBack.data.voices["char-a"], "zh-CN-YunxiNeural");
+});
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} 语音合成：${pass} 过 / ${fail} 败\n`);
 process.exit(fail === 0 ? 0 : 1);

@@ -110,10 +110,45 @@ out["清空密钥的勾选框（存过之后）"] = document.getElementById("tts
 out["界面文本里有没有密钥原文"] = (document.body.innerText || "").includes("probe-fake-key-123") ? "漏了（错）" : "没有（对）";
 out["页面 HTML 里有没有密钥原文"] = document.documentElement.outerHTML.includes("probe-fake-key-123") ? "漏了（错）" : "没有（对）";
 
+// ── 按角色分配声音 ─────────────────────────────────
+// 这场对话是单人（薇拉），名单应该就一行。
+const vmRows = [...document.querySelectorAll("#tts-voice-map .tts-vm-row")];
+out["声音分配名单行数"] = vmRows.length;
+out["名单里是谁"] = vmRows.map((r) => r.querySelector(".tts-vm-name")?.textContent?.trim()).join(",");
+out["默认选项"] = vmRows[0]?.querySelector("option")?.textContent?.trim() || "(没有)";
+out["可选声音数（含默认）"] = vmRows[0]?.querySelectorAll("option").length || 0;
+
+const sel0 = vmRows[0]?.querySelector(".tts-vm-sel");
+const pick = [...(sel0?.options || [])].map((o) => o.value).find((v) => v && v !== "zh-CN-XiaoxiaoNeural");
+out["挑了哪个声音"] = pick || "(没得挑)";
+if (sel0 && pick) {
+  sel0.value = pick;
+  sel0.dispatchEvent(new Event("change"));
+  await sleep(1200);
+  const core = await import(new URL("./assets/modules/core.js", location.href).href);
+  const cfgEnv = await core.apiFetch("tts/config");
+  out["存下来的分配"] = JSON.stringify((cfgEnv?.data || cfgEnv)?.voices || {});
+}
+
 // 关掉面板
-document.getElementById("tts-cancel")?.click();
-await sleep(200);
+const closedOnce = document.getElementById("tts-cancel");
+closedOnce?.click();
+await sleep(250);
 out["面板关掉了"] = document.getElementById("tts-modal")?.classList.contains("hidden") ? "是" : "否";
+
+// 重新开一次：分配过的声音该带着选中状态回来——
+// “存下来了但界面不记得”是这类面板最坑的一种假成功。
+if (out["面板关掉了"] === "是") {
+  document.getElementById("chat-more-btn")?.click();
+  await sleep(150);
+  document.querySelector('#more-menu button[data-act="tts"]')?.click();
+  await sleep(1000);
+  const after = document.querySelector("#tts-voice-map .tts-vm-sel");
+  out["重开后的选中项"] = after?.value || "(没读到)";
+  out["重开后是不是刚挑的那个"] = after?.value === pick ? "是（对）" : "不是（错）";
+  document.getElementById("tts-cancel")?.click();
+  await sleep(150);
+}
 
 out["有没有 4xx（除 favicon）"] = performance
   .getEntriesByType("resource")

@@ -288,9 +288,12 @@ export function renderMessages() {
       // 动态 import：语音模块只在真去点它的时候才加载，
       // 也让 chat.js 不必在启动时就依赖播放那套东西。
       const { speakText, isSpeaking } = await import("./tts.js");
+      // 谁在说 → 用谁的声音。群聊里每条消息的 speakerId 就是那个人；
+      // 单人对话没 speakerId，就用这场的主角。
+      const speakerId = m.speakerId || state.currentConv?.characterId || "";
       const label = btn.textContent;
       try {
-        const r = await speakText(plain, { key: id, onState: () => { btn.textContent = label; } });
+        const r = await speakText(plain, { key: id, characterId: speakerId, onState: () => { btn.textContent = label; } });
         // 播起来了显示“停”（再点一下就是停）；否则保持原样
         btn.textContent = r && r.ok ? "停" : label;
       } catch {
