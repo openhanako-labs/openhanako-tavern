@@ -1,126 +1,95 @@
-# 需求：App 侧算 embedding 的两条路（附：`models.embed` 的价值在哪）
+# 需求：让沙箱内的 App 能算 embedding（`models.embed`）
 
-> **2026-09-25 当日更正**：这份文档的第一版把原因写错了。
-> 我当时的结论是"沙箱内的 App 出不了网，所以缺一条 `models.embed` 面"。
-> 查清了不是这么回事——真正挡住的是 **App 自己 `manifest.json` 里的
-> `network.allowedHosts` 是空数组**。那是我自己写的，**门就在我手上**。
-> 把域名填进去就能跑。
+> 这份文档改过三版，前两版的原因都是错的。这一版有确诊证据。
 >
-> 所以这份文档现在分两半：
-> ① **已经能跑的路**（App 自己发请求 + 白名单）——记录原因与做法，不需要谁改宿主；
-> ② **仍然值得提的一条**（`models.embed`）——不是"做不到"，是"更干净"。
+> 结论：**白名单补了、能力加了、用户在界面上也批准了、宿主也重启了 ——
+> App 进程的网络仍然被进程级拒绝。**
 
-## ① 已经能跑的路：App 自己发请求 + manifest 白名单
-
-### 走通它需要什么
-
-App 的 `manifest.json` 里有一个出站白名单：
-
-```json
-"network": {
-  "allowedHosts": [],          // ← 空数组 = 全部拒绝
-  "methods": [],
-  "allowLocalhost": false
-}
-```
-
-填上要访问的域名即可。参照 `bilibili-intake-v2`（它那份里本来就写着 `api.siliconflow.cn`）：
-
-```json
-"network": {
-  "allowedHosts": ["api.siliconflow.cn"],
-  "methods": ["GET", "POST"],
-  "allowLocalhost": false,
-  "defaultTimeoutMs": 30000,
-  "maxResponseBytes": 5242880
-}
-```
-
-改完，宿主会把它判定为**新增权限**，reload 时返回：
+证据（酒馆 `tavern_embed` 的真实报错，2026-09-25）：
 
 ```
-Reload of app:eleckoi-tavern needs the user's review for newly declared authority.
+连不上 embedding 端点（https://api.siliconflow.cn）：
+  fetch failed（cause: ERR_ACCESS_DENIED getaddrinfo ERR_ACCESS_DENIED api.siliconflow.cn）
 ```
 
-→ 需要用户批准。这是对的：出站白名单就该有人过一眼。
+`getaddrinfo` 返回 `ERR_ACCESS_DENIED`（Windows 上对应 WSAEACCES / 10013）
+——**这不是 DNS 解析失败，也不是白名单不放行，是这次调用被权限层拒绝了。**
+App 进程连域名都解析不出去。
 
-### 当时的误判（留档，别再犯）
+## 对照组（同一台机、同一把凭据、同一个端点）
 
-先看到 `fetch failed`，又从"宿主给 App 的能力清单里没有 network 字样"推成
-"宿主根本没有这条路"——**推过头了**。实际上：
+| 谁在发 | 结果 |
+|---|---|
+| 宿主外的普通 node 进程 | `HTTP 200`　1024 维　367ms |
+| App 进程（eleckoi-tavern） | `fetch failed` + `ERR_ACCESS_DENIED` |
 
-- App 出站**不看能力清单**，看的是 manifest 里的 `network.allowedHosts`；
-- `app/runtime.network` 是另一回事（那是 `ctx.runtime.*` 那条面，
-  `comfyui-hana`、`hana-mail`、`token-tracker-app` 在用）；
-- `bilibili-intake-v2` 既没 `app/runtime.network`、也不走 `ctx.runtime`，
-  它声明 `app/process.spawn`，靠**子进程**联网。
+## 已经排除的（每一条都实测过）
 
-一句话：**门在我自己的清单里，我一直在外面找。**
+- **API**：好的（200 / 1024 维 / usage 正常）。
+- **凭据**：好的（`tavern_embed_status` 拿得到 baseUrl + apiKey）。
+- **模型**：找得到（`BAAI/bge-m3`，`foundBy=scan`——按 `type:"embedding"` 查是 0 条，
+  宿主把没写 `type` 的模型一律算 chat，扫目录才认出来）。
+- **白名单**：`network.allowedHosts: ["api.siliconflow.cn"]`、`methods: ["GET","POST"]` 已填。
+- **能力**：`app/runtime.network` 已加（另外五家能联网的 App 都带着这条：
+  comfyui-hana / hana-downloader / hana-media-manager / hanako-gallery / token-tracker-app；
+  唯一例外 bilibili-intake-v2 走 `app/process.spawn`，是子进程联网）。
+- **用户批准**：App 详情页那排权限开关**全是打开的**（含「允许受管程序联网」）。
+- **宿主重启**：重启过（工具通道恢复了，网络仍然被拒）。
 
-## ② 仍然值得提的一条：`models.embed`（不是"做不到"，是"更干净"）
+## 所以真正缺的是什么
 
-现在这条路（App 自己取凭据 + 自己拼端点）**能跑**，但有两个代价：
+App 进程的网络访问在**进程级**被拒。这不在 App 能改的范围内——
+manifest 里的白名单与能力都只能"申请"，真正决定放不放行的是宿主，
+以及它给 App 进程套的那层限制。
 
-1. App 手里是一把**完整凭据**（`provider:credentials` 返回明文 `apiKey`）。
-   出站白名单一开，它就能把 key 带到任何被允许的域名去。
-2. 端点差异要 App 自己记。比如 `dimensions`——那是 OpenAI text-embedding-3 的东西，
-   `bge-m3` 收到直接 `400 · code 20015`（酒馆侧实测踩过）。
+**请求（按优先级）：**
 
-而契约自己写着：
+1. **让 App 进程的网络访问真正开通**，或者写清楚它还需要什么才能开通
+   （某条能力？某个开关？安装时物化？）。现在的状态是：
+   manifest 两处都写对了、用户在界面上批准了，进程仍然连 DNS 都出不去。
+   顺带：被拒时的报错最好能直接说"网络被沙箱拒绝"，
+   而不是让它伪装成 `fetch failed`（我是把 undici 的 `cause` 挖出来才看见 `ERR_ACCESS_DENIED` 的）。
+2. **或者**：给一条 `models.embed` 面，让宿主代劳算向量。这条更贴设计——
+   契约自己写着：
+   > Provider credentials, endpoints, headers and transport configuration are
+   > **deliberately absent**: Hana keeps those in its shared model runtime.
 
-> Provider credentials, endpoints, headers and transport configuration are
-> **deliberately absent**: Hana keeps those in its shared model runtime.
+   宿主有网、有凭据、能抹平端点差异，App 只要向量。
 
-所以长期更贴设计的是宿主补一条：
+   ```ts
+   embed(request: {
+     requestId: string;
+     provider: string;
+     model: string;
+     input: string | string[];
+   }): Promise<{ vectors: number[][]; dimension: number }>;
+   ```
 
-```ts
-embed(request: {
-  requestId: string;
-  provider: string;
-  model: string;
-  input: string | string[];
-}): Promise<{ vectors: number[][]; dimension: number }>;
-```
+   - 能力名建议 `app/models.embed`（与 `models.read` / `models.infer` 并列）。
+     **不复用 `infer`**：这条面存在的意义就是能力收窄——只给向量，不给一把完整钥匙。
+   - ⚠️ **不要**加 `dimensions`：那是 OpenAI text-embedding-3 的东西，
+     `bge-m3` 收到直接 `400 · code 20015`（酒馆侧实测踩过）。
+   - 验收：酒馆侧 `lib/embed/service.js` 那个分支就在等它（两个调用点已经把 `sdk.models`
+     传进去了），`test/regression-embed.mjs` 里两条——有这条面就走它
+     （`via: "host"`，并用 `fetchImpl` 抛错证明它**没去取凭据**）；没有就直连（`via: "direct"`）。
 
-- 能力名建议 `app/models.embed`（与 `models.read` / `models.infer` 并列）。
-  **不复用 `infer`**：这条面存在的意义就是能力收窄——只给向量，不给一把完整钥匙。
-- ⚠️ **不要**加 `dimensions`（见上）。
-- 验收：酒馆侧 `test/regression-embed.mjs` 里两条 —— 有这条面就走它
-  （`via: "host"`，并且用 `fetchImpl` 抛错来证明它**没去取凭据**）；
-  没有这条面就退回直连（`via: "direct"`）。
-  `lib/embed/service.js` 里那个分支就在等它，两个调用点都已经把 `sdk.models` 传进去了。
+## 附带一条（小，不急）：工具通道会被一次 reload 静默掐断
 
-## 附带一条（小，不急）：工具可执行性
+App 暴露给模型的工具（`app/tools.expose-to-model`），**只在宿主启动时建立通道**：
 
-App 暴露给模型的工具（`app/tools.expose-to-model`），只在 App 的 UI 实例（窗口）
-活着时才能执行；窗口一关，工具**仍出现在工具目录里**，但调用返回：
-
-```
-RPC peer closed; cannot call callback.tools.execute
-```
-
-同一时刻 `extension_manager inspect` 报 `host=on agent=on`（不代表工具能跑）。
-自己 `reload`、二次 `reload`、`disable → enable`、先刷新工具目录都不管用。
-
-**2026-09-25 当天更正（观察更准了，前面那版说成“窗口活着就能跑”是错的）**：
-
-- 重启宿主 → 工具立刻可调。实测：重启后 `tavern_list_characters`、
-  `tavern_embed_status` 都真返回了，而 `tavern_embed` 已经能一路走到
-  “拿凭据、算请求”那一步。
+- 重启宿主 → 工具立刻可调（实测：`tavern_list_characters`、`tavern_embed_status` 真返回）。
 - 此后**只要重载一次 App**（从界面重载也好、用扩展管理工具重载也好）→ 通道断掉，
-  之后调用全是 `RPC peer closed`；而且**把 App 的界面打开也没用**（窗口开着，peer 仍然 closed）。
-- 界面开着/关着都不影响这个判断：窗口列表可以一直是 0 个而工具照旧能用（刚重启那阵），
-  也可以是窗口开着而工具全死（重载之后）。
+  之后调用全是 `RPC peer closed; cannot call callback.tools.execute`；
+  而且**把 App 的界面打开也没用**（窗口开着，peer 仍然 closed）。
+- 自己 `reload`、二次 `reload`、`disable → enable`、先刷新工具目录都不管用。
 
-→ 操作结论：**改完 App 不要重载，直接重启宿主。**
-→ 对设计者的请求不变，只是更具体：**这条通道不应该被一次 reload 静默掐掉**，
-要么让它重建，要么让 `inspect` / 工具目录如实反映它已经断了。
+同一时刻 `extension_manager inspect` 报 `host=on agent=on`，不代表工具能跑。
 
-**请求**：要么让工具执行不依赖 UI 窗口，要么让 `inspect` 如实反映"此刻能不能执行"
-——现在那个 `on` 会让人以为能跑。（我已用"重启宿主"绕过，故列为小项。）
+**请求**：要么让工具通道在 reload 后能重建，要么让 `inspect` / 工具目录如实反映
+"它已经断了"——现在那个 `on` 会让人以为能跑。
 
 ---
 
-记录人：奥菲莉娅（月曦夜的助手） · 2026-09-25（当日更正一版）
+记录人：奥菲莉娅（月曦夜的助手） · 2026-09-25（当日第三版，附确诊证据）
 来源仓库：`W:\Games\Hanako\.hanako\apps\eleckoi-tavern`
 相关文件：`lib/embed/{service,tool,routes}.js`、`manifest.json`、`docs/notes-host-embedding.md`

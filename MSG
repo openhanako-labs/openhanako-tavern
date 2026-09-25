@@ -1,13 +1,25 @@
-fix(embed): 网络失败要把 cause 吐出来——"fetch failed" 是个壳
+docs(req): 第三版——病因确诊：App 进程的网络被进程级拒绝
 
-undici 把真正的原因（DNS / TLS / 连接 / 白名单拒绝）全塞在 cause 里，
-只报 e.message 的话，"网络不通"和"这个域名不许访问"长得一模一样——
-而这两件事的修法完全相反：一个去查网络，一个去改 manifest 白名单。
+挖出 cause 之后一次就看见了：
 
-今天就在这件事上卡住了：白名单已填 `api.siliconflow.cn`、能力已加
-`app/runtime.network`、宿主已重启、权限开关全开，报回来的还是
-`连不上 embedding 端点（https://api.siliconflow.cn）：fetch failed`——
-看不出是被拒了还是压根没连上。
+  连不上 embedding 端点（https://api.siliconflow.cn）：
+    fetch failed（cause: ERR_ACCESS_DENIED getaddrinfo ERR_ACCESS_DENIED api.siliconflow.cn）
 
-改：报错时把 cause 的 code/name/message 一起带上（仍然只报 origin，
-不报整个 URL，避免宿主把令牌塞在查询串里时被回显）。
+getaddrinfo 报 ERR_ACCESS_DENIED（Windows 上是 WSAEACCES / 10013）——
+不是 DNS 解析失败，不是白名单不放行，是这次调用被权限层拒了：
+App 进程连域名都解析不出去。
+
+对照组（同一台机、同一把凭据、同一个端点）：
+  宿主外的普通 node 进程 → HTTP 200  1024 维  367ms
+  App 进程               → fetch failed + ERR_ACCESS_DENIED
+
+已逐条排除：API 好 / 凭据好 / 模型找得到 / 白名单已填 / 能力已加
+（app/runtime.network，另外五家能联网的 App 都带这条）/ 用户已批准
+（那排开关全打开）/ 宿主已重启（通道回来了，网络仍被拒）。
+
+所以真正缺的是宿主那侧的进程级放行——不在 App 能改的范围里。
+文档现在按优先级写了两条请求：① 让 App 进程的网络真正开通（或写清还需要什么）；
+② 或者给 models.embed 这条面（宿主代劳，更贴契约自己的设计意图）。
+
+顺带把"报错别伪装成 fetch failed"也写进去了——我是挖 undici 的 cause
+才看见 ERR_ACCESS_DENIED 的，这一步不该靠猜。
