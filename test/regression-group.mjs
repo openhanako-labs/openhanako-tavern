@@ -20,7 +20,7 @@ const { CharacterRepo } = await import("../lib/characters/repo.js");
 const { SettingRepo } = await import("../lib/settings/repo.js");
 const { registerConversationRoutes } = await import("../lib/conversations/routes.js");
 const { buildGenerationInput, resetPrefixWatch, renderCastRoster } = await import("../lib/conversations/pipeline.js");
-const { participantsOf } = await import("../lib/conversations/model.js");
+const { participantsOf, visibleMessagesFor } = await import("../lib/conversations/model.js");
 
 let pass = 0, fail = 0;
 async function okAsync(name, fn) {
@@ -192,7 +192,58 @@ await okAsync("改名单不动历史：已有消息的署名一条不变", async
   assert.strictEqual(r.data.messages.length, 2, "新加的人不该被补种开场白");
 });
 
-// ── ④ 自动轮换：存在**对话**上，不是全局设置 ──────────
+// ── ⑤ 私语：只给该听的人听 ────────────────────
+await okAsync("可见性：没标签的公开 / 空数组谁都看不到 / 指定了才给（fail closed）", () => {
+  const conv = {
+    messages: [
+      { role: "user", content: "公开的" },
+      { role: "user", content: "给十九的", audience: [ren.id] },
+      { role: "user", content: "谁都不给", audience: [] }
+    ]
+  };
+  assert.deepStrictEqual(visibleMessagesFor(conv, vera.id).map(m => m.content), ["公开的"], "薇拉不该看到给十九的");
+  assert.deepStrictEqual(visibleMessagesFor(conv, ren.id).map(m => m.content), ["公开的", "给十九的"]);
+  assert.deepStrictEqual(visibleMessagesFor(conv, null).map(m => m.content), ["公开的"], "没有发言人时私语一律不给");
+});
+
+await okAsync("生成时按发言人过滤：私语进得了该听的人、进不了别人", async () => {
+  const conv = await convRepo.create(vera.id, { characterIds: [vera.id, ren.id] });
+  await convRepo.addMessage(conv.id, "user", "大家都听得到的。");
+  await convRepo.addMessage(conv.id, "user", "只跟十九说的话。", { audience: [ren.id] });
+
+  const fresh = await convRepo.get(conv.id);
+  const forVera = await buildGenerationInput(repos, fresh, vera, "嗯", { ...OPT, speakerId: vera.id });
+  const forRen = await buildGenerationInput(repos, fresh, ren, "嗯", { ...OPT, speakerId: ren.id });
+  const dump = (r) => `${r.systemPrompt}\n${(r.messages || []).map(m => m.content).join("\n")}`;
+
+  assert.ok(!dump(forVera).includes("只跟十九说的话"), "薇拉的 prompt 里出现了给别人的私语");
+  assert.ok(dump(forRen).includes("只跟十九说的话"), "十九该听得到那条私语");
+});
+
+await okAsync("私语**永不进共享摘要**（摘要是所有人共用的一份）", async () => {
+  const { prepareHistory } = await import("../lib/llm/history.js");
+  const messages = [
+    { role: "user", content: "很久以前的一句普通话。".repeat(40) },
+    { role: "user", content: "很久以前的私语：『别告诉别人』。".repeat(40), audience: [ren.id] },
+    { role: "user", content: "最近的一句。".repeat(40) }
+  ];
+  const r = prepareHistory(messages, { maxTokens: 400, summarize: true, keepRecent: 1, summaryFilter: (m) => !m.audience });
+  assert.ok(r.dropped > 0, "这个预算下该有东西被折");
+  const text = r.summaryRecord?.text || "";
+  assert.ok(!text.includes("别告诉别人"), `私语漏进摘要了：${text.slice(0, 120)}`);
+});
+
+await okAsync("路由：私语对象必须是这一场的人（不在就报错说清）", async () => {
+  const app = groupApp();
+  const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+  const bad = await request(app, "POST", `/conversations/${made.data.id}/messages`, {
+    body: { content: "喂", audience: [solo.id] }
+  });
+  assert.ok(bad.status >= 400, `该报错，实际 ${bad.status}`);
+  assert.ok(/私语对象不在这一场/.test(bad.error || ""), `报错要说清：${bad.error}`);
+});
+
+// ── ⑥ 自动轮换：存在**对话**上，不是全局设置 ──────────
 await okAsync("新对话默认不自动轮换", async () => {
   const app = groupApp();
   const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
