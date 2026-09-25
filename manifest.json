@@ -11,7 +11,6 @@
     "app/tools.expose-to-model",
     "app/ui.open-external",
     "app/resources.read",
-    "app/runtime.network",
     "app/models.infer",
     "app/models.read",
     "app/provider.credentials.read"

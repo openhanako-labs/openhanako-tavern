@@ -426,4 +426,22 @@ await okAsync("宿主没这条面（只有 list/stream/utility/cancel）→ 退�
   assert.strictEqual(r.via, "direct");
 });
 
+await okAsync("出网走宿主的门：给了 network.fetch 就用它，绝不碰原始 fetch", async () => {
+  const bus = makeBus({ credentials: { apiKey: SECRET, baseUrl: "https://api.siliconflow.cn/v1" } });
+  const seen = [];
+  const net = {
+    fetch: async (url, init) => {
+      seen.push({ url: String(url), method: init?.method });
+      return { ok: true, text: async () => JSON.stringify({ data: [{ embedding: [1, 2] }] }), json: async () => ({ data: [{ embedding: [1, 2] }] }) };
+    }
+  };
+  await embed(bus, ["一句话"], {
+    net,
+    fetchImpl: () => { throw new Error("该走宿主的门，不该碰原始 fetch"); }
+  });
+  assert.strictEqual(seen.length, 1, "应该只发一次");
+  assert.strictEqual(seen[0].method, "POST");
+  assert.ok(seen[0].url.includes("/embeddings"), `该打到 /embeddings，实际 ${seen[0].url}`);
+});
+
 process.exit(fail ? 1 : 0);

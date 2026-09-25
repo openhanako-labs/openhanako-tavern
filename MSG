@@ -1,25 +1,25 @@
-docs(req): 第三版——病因确诊：App 进程的网络被进程级拒绝
+fix(embed): 出网改走宿主的门 sdk.network.fetch（原始 fetch 被 AppHost 拒掉）
 
-挖出 cause 之后一次就看见了：
+一天里第三次改口，这次是 SKILL 里明写的答案（hana-app-creator）：
 
-  连不上 embedding 端点（https://api.siliconflow.cn）：
-    fetch failed（cause: ERR_ACCESS_DENIED getaddrinfo ERR_ACCESS_DENIED api.siliconflow.cn）
+  "The default App entry runs in a separate AppHost child with raw networking
+   denied by Node Permission Model; sdk.network.fetch crosses IPC to the host
+   for these checks."
 
-getaddrinfo 报 ERR_ACCESS_DENIED（Windows 上是 WSAEACCES / 10013）——
-不是 DNS 解析失败，不是白名单不放行，是这次调用被权限层拒了：
-App 进程连域名都解析不出去。
+所以 getaddrinfo ERR_ACCESS_DENIED 不是故障，是设计：App 入口跑在独立的
+AppHost 子进程里，原始网络被 Node 权限模型拒掉。正门是 sdk.network.fetch
+——它跨 IPC 让宿主代为检查（白名单 → 私网/HTTPS → 方法 → 超时 → 字节上限）
+并发出，用的就是 manifest 里那个 network.allowedHosts。
 
-对照组（同一台机、同一把凭据、同一个端点）：
-  宿主外的普通 node 进程 → HTTP 200  1024 维  367ms
-  App 进程               → fetch failed + ERR_ACCESS_DENIED
+改：
+· embed() 多接一个 net（= sdk.network）；有它就用自己的门，没有才退回
+  fetchImpl（fetchImpl 现在只给测试注入用）。
+· 两个调用点（工具 / 路由）都传 sdk.network。
+· 测试 +1：给了 network.fetch 就用它，且绝不碰原始 fetch。
 
-已逐条排除：API 好 / 凭据好 / 模型找得到 / 白名单已填 / 能力已加
-（app/runtime.network，另外五家能联网的 App 都带这条）/ 用户已批准
-（那排开关全打开）/ 宿主已重启（通道回来了，网络仍被拒）。
+顺带撤掉 app/runtime.network：SKILL 写着 "v2 has no separate network.fetch
+capability"，那条能力是给受管运行时 / 外部命令用的；酒馆不出进程，
+不需要它，留着只会多一次权限复核。
 
-所以真正缺的是宿主那侧的进程级放行——不在 App 能改的范围里。
-文档现在按优先级写了两条请求：① 让 App 进程的网络真正开通（或写清还需要什么）；
-② 或者给 models.embed 这条面（宿主代劳，更贴契约自己的设计意图）。
-
-顺带把"报错别伪装成 fetch failed"也写进去了——我是挖 undici 的 cause
-才看见 ERR_ACCESS_DENIED 的，这一步不该靠猜。
+教训（今天第四次栽在同一件事上）：契约和 SKILL 里写着的东西，
+我不该靠推理去找——先读文档，再动脑。
