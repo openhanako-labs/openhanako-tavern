@@ -58,6 +58,41 @@ export function apiUrl(path) {
   return fn(String(path ?? "").replace(/^\/+/, ""));
 }
 
+/**
+ * 取一张 App 路由里的图片，返回一个可以直接交给 <img src> 的 blob URL。
+ *
+ * 为什么不能直接把 apiUrl(...) 写进 <img src>：
+ *   <img> 不会自己带鉴权，而宿主对 App 路由是有校验的——真机里那条请求回的是
+ *   403（日志里看得清清楚楚），URL 里连 /_surface/<票据>/ 那一段都没有。
+ *   而 App 手里的 hana.api.fetch 是带鉴权的正门，用它取字节、转 blob，
+ *   图片就不用自己拿着裸 URL 去撞门了。
+ *
+ * 用完要 revoke：卡片列表会反复重画，不回收就是一路漏内存。
+ */
+/** 上一张发出去的 blob URL。卡片列表一次只会显示一张，单槽够用——
+ *  它的意义是“换新的之前先把旧的收回来”，不回收就是一路漏内存。 */
+let lastAvatarBlob = "";
+
+export async function apiBlobUrl(path) {
+  const fn = hana?.api?.fetch;
+  if (typeof fn !== "function") throw new Error("宿主未提供 hana.api.fetch");
+  const res = await fn(apiUrl(path), { method: "GET" });
+  if (res && res.ok === false) throw new Error(res.error || `取图失败（${res.status ?? "?"}）`);
+  if (!res || typeof res.blob !== "function") throw new Error("拿回来的不是一个可读响应");
+  if (res.ok === false) throw new Error(`取图失败（${res.status}）`);
+  const url = URL.createObjectURL(await res.blob());
+  if (lastAvatarBlob && lastAvatarBlob !== url) revokeBlobUrl(lastAvatarBlob);
+  lastAvatarBlob = url;
+  return url;
+}
+
+/** 把之前发出去的 blob URL 收回来。 */
+export function revokeBlobUrl(url) {
+  if (typeof url === "string" && url.startsWith("blob:")) {
+    try { URL.revokeObjectURL(url); } catch { /* 收了就好，失败不影响别的 */ }
+  }
+}
+
 /** 单次请求的超时。App 内请求都是本地回环，10 秒足够；卡住不放比失败更糟。 */
 const FETCH_TIMEOUT_MS = 10_000;
 

@@ -1,6 +1,6 @@
 // characters.js — 由 characters.js 按功能拆分（B5）
 
-import { apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatDate, friendlyError, toast } from "./core.js";
+import { apiBlobUrl, apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatDate, friendlyError, toast } from "./core.js";
 import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
 
@@ -499,15 +499,15 @@ export async function renderCharContext(greetIdx = 0) {
   // 有头像就画头像，没有才退回首字母。
   // 之前这里只会画首字母，于是「生成立绘」成功后界面上什么都没变——
   // 用户唯一的反馈是一行 toast，看上去就像没成。
-  let avaUrl = "";
+  let avaPending = false;
   if (c.has_avatar) {
-    try { avaUrl = apiUrl(`characters/${c.id}/avatar`); } catch { avaUrl = ""; }
+    try { apiUrl(`characters/${c.id}/avatar`); avaPending = true; } catch { avaPending = false; }
   }
 
   box.innerHTML = `
     <div class="char-ctx-head">
-      <div class="char-ctx-ava">${avaUrl
-        ? `<img src="${escapeHtml(avaUrl)}" alt="">`
+      <div class="char-ctx-ava">${avaPending
+        ? `<img data-ava="${escapeHtml(String(c.id))}" alt="">`
         : escapeHtml(initial)}</div>
       <div>
         <div class="char-ctx-name">${escapeHtml(c.name || "（未命名）")}</div>
@@ -526,6 +526,19 @@ export async function renderCharContext(greetIdx = 0) {
       <button class="btn btn-sm danger" data-ctx="delete">删除</button>
     </div>
     <div class="char-ctx-note" id="ctx-portrait-note"></div>`;
+
+  // 头像：不能让 <img> 拿着裸 URL 去撞门。真机里那条请求回的是 403——
+  // 请求 URL 里连 /_surface/<票据>/ 那段都没有，而 <img> 又不会自己带鉴权。
+  // 所以改用带鉴权的 fetch 取字节、转 blob，再交给 <img>；取不回来就退回首字母。
+  const avaImg = box.querySelector("img[data-ava]");
+  if (avaImg) {
+    apiBlobUrl(`characters/${avaImg.dataset.ava}/avatar`)
+      .then((url) => { avaImg.src = url; })
+      .catch(() => {
+        const slot = avaImg.parentElement;
+        if (slot) slot.textContent = initial;
+      });
+  }
 
   // 同场角色：保存名单。
   box.querySelector("#ctx-cast-save")?.addEventListener("click", async () => {
