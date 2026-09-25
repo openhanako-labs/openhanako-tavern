@@ -2272,6 +2272,71 @@ main.ctx-open .drawer:not(.hidden) {
 
 .ctx-cast-note { font-size: 11px; line-height: 1.5; }
 
+/* 私语：这一句给谁听（群聊才有）。单独一行——
+   「这一轮谁说话」与「这句给谁听」是两个问题，挤一行里选错是迟早的事。 */
+.whisper-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 2px 0;
+}
+
+.whisper-toggle {
+  padding: 3px 9px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  opacity: .8;
+  transition: border-color var(--t) var(--ease), color var(--t) var(--ease), opacity var(--t) var(--ease);
+}
+
+.whisper-toggle:hover { border-color: var(--accent-line); color: var(--accent); opacity: 1; }
+
+.whisper-toggle.on {
+  border-style: solid;
+  border-color: var(--accent-line);
+  color: var(--accent);
+  opacity: 1;
+  font-weight: 600;
+}
+
+.whisper-label { font-size: 11px; color: var(--fg-muted); }
+
+.whisper-chip {
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  opacity: .7;
+  transition: border-color var(--t) var(--ease), color var(--t) var(--ease), opacity var(--t) var(--ease);
+}
+
+.whisper-chip.on {
+  border-color: var(--accent-line);
+  color: var(--accent);
+  opacity: 1;
+  font-weight: 600;
+}
+
+.whisper-note { font-size: 11px; color: var(--fg-muted); }
+
+/* 气泡上标出“这句当时只给了谁”——历史的一部分，不能因为屏幕上谁都看得到就抹掉。 */
+.whisper-badge {
+  margin: 0 0 2px 2px;
+  font-size: 11px;
+  color: var(--accent);
+  opacity: .85;
+}
+
 /* 气泡上方的说话人：只在群聊里出现（单人对话不写 speakerId） */
 .msg-speaker {
   margin: 0 0 2px 2px;

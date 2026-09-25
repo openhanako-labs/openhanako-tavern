@@ -27,6 +27,10 @@ export const state = {
   // 那个开关**存在对话上**（conv.autoRotate），不是全局设置：
   // 「这一场怎么轮」是场景属性，与 presetId 同一条设计。
   speakerId: null,
+  // 私语：这一条只给谁听（null/空 = 公开）。**一次性的**——
+  // 发完复位，免得下一条又惄惄发出去了。存在 state 而不是对话上，
+  // 因为它是“这次要说的话”的属性，不是场景设置。
+  whisperTo: null,
   currentSetting: null,
   currentVariable: null,
   currentForm: null,

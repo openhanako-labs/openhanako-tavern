@@ -122,6 +122,58 @@ export function renderSpeakerRow() {
   });
 }
 
+/**
+ * 私语：这一句给谁听（群聊才有）。
+ *
+ * 为什么单独一行、不塞进发言者那行：那是两个不同的问题——
+ * 「这一轮谁说话」与「这句给谁听」。挤在一行里，选错是迟早的事。
+ * 单人对话整行不出现（没有“别人”可矞）。
+ */
+function renderWhisperRow() {
+  const row = document.getElementById("speaker-row");
+  if (!row) return;
+  let wr = document.getElementById("whisper-row");
+  const conv = state.currentConv;
+  const ids = participantsOf(conv);
+
+  if (!conv || ids.length < 2) {
+    if (wr) { wr.classList.add("hidden"); wr.innerHTML = ""; }
+    state.whisperTo = null;
+    return;
+  }
+  if (!wr) {
+    wr = document.createElement("div");
+    wr.id = "whisper-row";
+    wr.className = "whisper-row hidden";
+    row.parentNode?.insertBefore(wr, row.nextSibling);
+  }
+  const on = Array.isArray(state.whisperTo) && state.whisperTo.length > 0;
+  wr.innerHTML =
+    `<button type="button" class="whisper-toggle${on ? " on" : ""}" id="whisper-toggle" aria-pressed="${on ? "true" : "false"}" title="这句只给选中的那几位听">私语</button>` +
+    (on
+      ? `<span class="whisper-label">给</span>` +
+        ids.map(id => `<button type="button" class="whisper-chip${state.whisperTo.includes(id) ? " on" : ""}" data-whisper="${escapeHtml(id)}">${escapeHtml(charNameOf(id))}</button>`).join("") +
+        `<span class="whisper-note">其他人看不到这句</span>`
+      : `<span class="whisper-note">打开后选谁听得到</span>`);
+  wr.classList.remove("hidden");
+
+  wr.querySelector("#whisper-toggle")?.addEventListener("click", () => {
+    // 默认全选，再点掉不想给的——比“一个一个加”快。
+    state.whisperTo = on ? null : [...ids];
+    renderWhisperRow();
+  });
+  wr.querySelectorAll("[data-whisper]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.whisper;
+      const cur = Array.isArray(state.whisperTo) ? [...state.whisperTo] : [];
+      const i = cur.indexOf(id);
+      if (i >= 0) cur.splice(i, 1); else cur.push(id);
+      state.whisperTo = cur;
+      renderWhisperRow();
+    });
+  });
+}
+
 export function renderMessages() {
   /*
    * 发言者行放在**最上面**，不能放在有消息的那条路径里。
@@ -131,6 +183,7 @@ export function renderMessages() {
    * 选“这一轮谁说话”的时刻。函数有三个早退分支，放最上面才不挑分支。
    */
   renderSpeakerRow();
+  renderWhisperRow();
   /*
    * 空的时候分两种，而且两种都不该只说「暂无消息」。
    *
@@ -203,9 +256,15 @@ export function renderMessages() {
       ? `<div class="msg-vars">${m.varDiff.map(d => `<span class="var-chip" data-change="${escapeHtml(d.change || "set")}">${escapeHtml(d.text || d.name || "")}</span>`).join("")}</div>`
       : "";
     // 群聊：这条回复是谁说的。名字从角色列表解（消息上只存 id）。
-    const spk = m.role === "assistant" && m.speakerId
+    const spk = (m.role === "assistant" && m.speakerId
       ? `<div class="msg-speaker">${escapeHtml(charNameOf(m.speakerId))}</div>`
-      : "";
+      : "") +
+      // 私语要标出来：屏幕上谁都看得到全部，但“这句当时只给了谁”是历史的一部分。
+      (Array.isArray(m.audience)
+        ? `<div class="whisper-badge">${m.audience.length === 0
+            ? "私语 · 谁都没给"
+            : "私语 · 只给 " + m.audience.map(id => escapeHtml(charNameOf(id))).join("、")}</div>`
+        : "");
     return `<div class="message ${m.role}" data-id="${m.id}">
       ${spk}
       <div class="bubble">${body}</div>
@@ -243,6 +302,11 @@ export async function sendMessage() {
   dom.sendBtn.disabled = true;
 
   const userMsg = { id: Date.now(), role: "user", content, timestamp: new Date().toISOString() };
+  // 本地这份也要带 audience：服务端存的有，但气泡是靠本地这条画的——
+  // 不带的话“私语”标记要等重载才出现（屏幕先撒了一次谎）。
+  if (Array.isArray(state.whisperTo) && state.whisperTo.length > 0) {
+    userMsg.audience = [...state.whisperTo];
+  }
   state.currentConv.messages.push(userMsg);
   renderMessages();
 
@@ -283,7 +347,7 @@ export async function sendMessage() {
       // 降级为同步
       const res = await apiFetch(`conversations/${state.currentConv.id}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content, speakerId: state.speakerId || undefined })
+        body: JSON.stringify({ content, speakerId: state.speakerId || undefined, audience: state.whisperTo || undefined })
       });
       if (res.data?.assistantMessage) {
         loadingEl.remove();
@@ -295,12 +359,15 @@ export async function sendMessage() {
       }
     }
     // 发成功了才轮换。抛错走不到这里——换人依赖“这一轮真的落盘了”。
+    // 私语是一次性的：发完就复位，免得下一条又惄惄发出去了。
+    state.whisperTo = null;
     rotateSpeaker();
     // 轮完必须重画那一行：
     // 否则 state 已经到下一位、屏幕上还高亮着上一位。
     // （这条就是 group-ui 探针抓出来的：⑥b 开关全对，⑦ 发前发后都是同一个人。）
     // 界面撒谎比不轮换更坏——下一轮真的会换人，而用户以为没换。
     renderSpeakerRow();
+    renderWhisperRow();
     await loadConversations();
   } catch (e) {
     loadingEl.remove();
@@ -323,7 +390,7 @@ export async function sendMessageStream(content) {
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, speakerId: state.speakerId || undefined })
+      body: JSON.stringify({ content, speakerId: state.speakerId || undefined, audience: state.whisperTo || undefined })
     });
     
     if (!response.ok) {
