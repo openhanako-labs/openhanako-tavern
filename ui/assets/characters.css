@@ -2743,3 +2743,51 @@ main.ctx-open .drawer:not(.hidden) {
   padding: 6px 10px 2px;
 }
 .more-more .more-group:first-child { padding-top: 2px; }
+
+/* ─────────────────────────────────────────────────────────────
+   两块"从未写过样式"的面板（2026-09-25）
+
+   事实：.setting-card 与 .tool-row 在整份 characters.css 里**一条规则都没有**。
+   不是写差了，是从没写。它们看起来的"样子"全来自容器的 .list.drawer-body——
+   而那个容器是 flex column 且把自由空间分掉了，于是：
+     · 设定库两条卡被拉开，一张贴顶一张快到底，像东西掉了；
+     · 工具清单成了一行行裸文本，工具名和组名还挤在一起。
+   用 id 选择器压过容器的 class（id 比 class 硬），不动容器本身——
+   那个容器别的面板也在用，不该为这两块改它。
+   ───────────────────────────────────────────────────────────── */
+
+/* 设定库：条目按内容高排，别被拉散 */
+#settings-list { justify-content: flex-start; align-content: flex-start; }
+#settings-list .setting-card { flex: 0 0 auto; }
+
+/* 工具清单：一行一个，名字在左、组名在右、描述独占下一行 */
+#tools-list { justify-content: flex-start; }
+#tools-list .tool-row {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 10px;
+  row-gap: 3px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+#tools-list .tool-row .t-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+#tools-list .tool-row .t-group {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  opacity: 0.62;
+}
+#tools-list .tool-row .t-desc {
+  grid-column: 1 / -1;
+  font-size: 11.5px;
+  line-height: 1.5;
+  opacity: 0.78;
+}
+#tools-list .tool-row.off { opacity: 0.5; }
