@@ -53,6 +53,7 @@ const { registerRegexRoutes } = await import("../lib/regex/routes.js");
 const { registerMigrationRoutes } = await import("../lib/migration/routes.js");
 const { registerGenRoutes } = await import("../lib/gen/routes.js");
 const { registerMediaRoutes } = await import("../lib/media/routes.js");
+const { registerTtsRoutes } = await import("../lib/tts/routes.js");
 const { loadGroupState } = await import("../lib/tools/group.js");
 
 // ── 数据：真实数据的临时副本 ──────────────────────────
@@ -132,7 +133,8 @@ const fakeLlm = {
 const apps = {
   characters: makeApp(), conversations: makeApp(), settings: makeApp(),
   variables: makeApp(), presets: makeApp(), board: makeApp(),
-  regex: makeApp(), tools: makeApp(), migration: makeApp(), gen: makeApp(), media: makeApp()
+  regex: makeApp(), tools: makeApp(), migration: makeApp(), gen: makeApp(), media: makeApp(),
+  tts: makeApp()
 };
 registerCharacterRoutes(apps.characters, charRepo, transfer, setRepo);
 registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo);
@@ -167,6 +169,13 @@ registerGenRoutes(apps.gen, {
  * 而不是一个 404——前者看得出来缺什么，后者只让人怀疑路由没注册。
  */
 registerMediaRoutes(apps.media, { sdk: null, characterRepo: charRepo, transfer });
+
+/*
+ * 语音合成。dataDir 用 dev 自己的那份（DATA 每次启动重建）——
+ * 探针会往里写 region/key，不能碰真 App 的数据目录。
+ * sdk 给 null：正门不存在，service 会自动退到运行时那扇门。
+ */
+registerTtsRoutes(apps.tts, { sdk: null, dataDir: DATA });
 
 // ── 静态文件 ──────────────────────────────────────────
 const MIME = {

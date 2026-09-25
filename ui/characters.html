@@ -145,6 +145,7 @@
               <button data-act="persona"><span class="mi">◍</span>本场人设</button>
               <button data-act="activation"><span class="mi">✳</span>激活预览</button>
               <button data-act="prompt"><span class="mi">⌸</span>组装预览</button>
+              <button data-act="tts"><span class="mi">◔</span>语音朗读</button>
               <div class="sep"></div>
               <button data-act="export"><span class="mi">↓</span>导出</button>
               <button data-act="delete" class="danger"><span class="mi">✕</span>删除</button>
@@ -590,6 +591,97 @@
       <button id="modal-delete" class="btn btn-sm danger hidden">删除</button>
     </div>
     <div class="char-ctx-note" id="modal-portrait-note"></div>
+  </div>
+</div>
+
+<!-- ── 语音朗读设置 ────────────────────────────────── -->
+<!--
+  为什么这个面板长这样：宿主没有 TTS 这条能力（docs/req-tts.md 是实测证据），
+  所以管子做在 App 里、水由用户自己填。面板只有一个任务：
+  让人填完之后**立刻知道自己通没通**——而不是去聊天里点一条才会遇到错。
+  因此底部那行状态比上面的输入框重要。
+-->
+<div id="tts-modal" class="modal hidden">
+  <div class="modal-content tts-content">
+    <div class="modal-header">
+      <h2>语音朗读</h2>
+      <button id="tts-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <section class="tts-sec">
+        <h3>用哪家的声音</h3>
+        <div id="tts-providers" class="tts-providers"></div>
+        <div id="tts-hint" class="hint"></div>
+      </section>
+
+      <section class="tts-sec" id="tts-azure-box">
+        <h3>微软（Azure 语音服务）</h3>
+        <div class="field-row">
+          <div class="field">
+            <label>region</label>
+            <input type="text" id="tts-azure-region" placeholder="eastasia">
+          </div>
+          <div class="field">
+            <label>key</label>
+            <input type="password" id="tts-azure-key" placeholder="留空 = 不改动已存的">
+            <label class="checkbox-label hidden">
+              <input type="checkbox" id="tts-azure-clear">
+              清掉已存的 key
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="tts-sec" id="tts-openai-box">
+        <h3>OpenAI 兼容 / 本机服务</h3>
+        <div class="field">
+          <label>baseUrl</label>
+          <input type="text" id="tts-openai-base" placeholder="https://api.openai.com/v1 或 http://127.0.0.1:9880/v1">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>模型</label>
+            <input type="text" id="tts-openai-model" placeholder="tts-1">
+          </div>
+          <div class="field">
+            <label>key（本机服务多半留空）</label>
+            <input type="password" id="tts-openai-key" placeholder="留空 = 不改动已存的">
+            <label class="checkbox-label hidden">
+              <input type="checkbox" id="tts-openai-clear">
+              清掉已存的 key
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section class="tts-sec">
+        <h3>声音</h3>
+        <div class="field-row">
+          <div class="field">
+            <label>声音</label>
+            <select id="tts-voice"></select>
+          </div>
+          <div class="field">
+            <label>语速（可留空，例 -10%）</label>
+            <input type="text" id="tts-rate" placeholder="留空 = 供应商默认">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>试听文本</label>
+            <input type="text" id="tts-sample" value="夜色落在城墙上，我在这里守夜。">
+          </div>
+          <button type="button" id="tts-preview" class="btn btn-sm">试听</button>
+        </div>
+      </section>
+
+      <div id="tts-status" class="tts-status"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="tts-save" class="btn btn-primary">保存</button>
+      <button id="tts-cancel" class="btn">关闭</button>
+    </div>
   </div>
 </div>
 

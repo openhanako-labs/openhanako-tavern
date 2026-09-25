@@ -244,6 +244,7 @@ export function renderMessages() {
       : escapeHtml(expand(m.content));
     const acts = `<div class="msg-acts">
         <button class="mini" data-act="copy" data-id="${m.id}" title="复制">复制</button>
+        <button class="mini" data-act="speak" data-id="${m.id}" title="读出来">朗读</button>
         <button class="mini" data-act="edit" data-id="${m.id}">编辑</button>
         <button class="mini" data-act="del" data-id="${m.id}">删除</button>
         ${m.role === "assistant" ? `<button class="mini" data-act="swipe" data-id="${m.id}">换一版</button>
@@ -278,6 +279,25 @@ export function renderMessages() {
   dom.messagesContainer.querySelectorAll(".message").forEach(el => {
     const id = el.dataset.id;
     el.querySelector('[data-act="copy"]')?.addEventListener("click", () => copyMessage(id));
+    el.querySelector('[data-act="speak"]')?.addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const m = (state.currentConv?.messages || []).find(x => x.id === id);
+      if (!m) return;
+      // 读的是**还原宏之后**的文本：{{user}} 不该被念成花括号。
+      const plain = macro ? macro.process(String(m.content ?? "")) : String(m.content ?? "");
+      // 动态 import：语音模块只在真去点它的时候才加载，
+      // 也让 chat.js 不必在启动时就依赖播放那套东西。
+      const { speakText, isSpeaking } = await import("./tts.js");
+      const label = btn.textContent;
+      try {
+        const r = await speakText(plain, { key: id, onState: () => { btn.textContent = label; } });
+        // 播起来了显示“停”（再点一下就是停）；否则保持原样
+        btn.textContent = r && r.ok ? "停" : label;
+      } catch {
+        btn.textContent = label;
+      }
+      if (!isSpeaking(id)) btn.textContent = label;
+    });
     el.querySelector('[data-act="edit"]')?.addEventListener("click", () => startEditMessage(id));
     el.querySelector('[data-act="del"]')?.addEventListener("click", () => deleteMessage(id));
     el.querySelector('[data-act="swipe"]')?.addEventListener("click", () => swipeVariant(id));

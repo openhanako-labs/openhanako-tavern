@@ -2687,3 +2687,26 @@ main.ctx-open .drawer:not(.hidden) {
   min-height: 0;
 }
 .char-ctx-note:empty { display: none; }
+/* ── 语音朗读：设置面板 ────────────────────────────── */
+.tts-content { max-width: 640px; }
+.tts-sec { margin-bottom: 18px; }
+.tts-sec h3 {
+  font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  color: var(--fg-muted); margin: 0 0 8px;
+}
+.tts-providers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tts-prov {
+  text-align: left; padding: 10px 12px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface-2); color: var(--fg);
+  font-family: inherit;
+}
+.tts-prov:hover { border-color: var(--fg-muted); }
+.tts-prov.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.tts-prov-name { display: block; font-size: 13px; font-weight: 600; }
+.tts-prov-sub { display: block; font-size: 11px; color: var(--fg-muted); margin-top: 2px; }
+.tts-status {
+  font-size: 12px; line-height: 1.6; padding: 9px 11px;
+  border-radius: 8px; background: var(--surface-2); color: var(--fg-muted);
+}
+.tts-status.bad { color: var(--danger, #d9534f); }

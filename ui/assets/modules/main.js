@@ -19,6 +19,7 @@ import { loadTools, renderToolGroups, renderTools } from "./tools.js";
 import { importFile, handleMigrationFile, loadExports, renderExports, downloadExport, downloadExportFile, deleteExportFile, copyExport, formatFileSize, exportAll } from "./migration.js";
 import { saveBoardCell, deleteBoardCell, bindBoard } from "./board.js";
 import { bindGen } from "./gen.js";
+import { bindTts } from "./tts.js";
 import { saveRegexRule, deleteRegexRule, bindRegex } from "./regex.js";
 
 
@@ -122,6 +123,9 @@ dom.migrationFileInput?.addEventListener("change", handleMigrationFile);
 
 // AI 生成台的按钮（弹窗由左栏的 ✧ 生成 → nav → shell.js 打开）
 bindGen();
+
+// 语音朗读的设置面板（入口在聊天头 ⋯ 菜单里），以及面板自己的按钮
+bindTts();
 
 // 聊天输入：Enter 发送，Shift+Enter 换行
 dom.chatInput?.addEventListener("keydown", (e) => {
