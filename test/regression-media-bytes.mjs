@@ -136,6 +136,39 @@ await okAsync("⑥ 只有 batchId 也能走通（app 域出图就只给这个）
   assert.equal(asked.length, 1, "listTasks 只该问一次");
 });
 
+await okAsync("⑦ getTaskResources 报错也不放弃：getTask 里的 fileId 同样能读", async () => {
+  const want = Buffer.from("via-getTask");
+  const sdk = {
+    media: {
+      listTasks: async () => ({ tasks: [{ taskId: "t7", completedAt: "2026-09-25T11:00:00Z", sessionId: "sess-7" }] }),
+      getTaskResources: async () => {
+        const e = new Error("APP_HOST_ERROR");
+        e.code = "APP_HOST_ERROR";
+        throw e;
+      },
+      getTask: async () => ({
+        taskId: "t7",
+        sessionId: "sess-7",
+        sessionFiles: [{ fileId: "f7", name: "p7.png", mime: "image/png", size: 9 }]
+      })
+    },
+    resources: {
+      read: async (ref) => {
+        assert.deepEqual(ref, { kind: "session-file", fileId: "f7", sessionId: "sess-7" }, "该用 task 自带的 fileId/sessionId");
+        return want;
+      }
+    }
+  };
+  const r = await readProductBytes(sdk, { ok: true, kind: "image", batchId: "b7" });
+  assert.equal(r.ok, true, "该走通第二条正路");
+  assert.equal(r.via, "session-file(task)");
+  assert.deepEqual(r.buf, want);
+  assert.ok(
+    r.attempts.some((a) => /APP_HOST_ERROR/.test(a.error)),
+    "第一条正路的失败该被记下来：" + JSON.stringify(r.attempts)
+  );
+});
+
 await fs.rm(tmp, { recursive: true, force: true });
 
 console.log("");
