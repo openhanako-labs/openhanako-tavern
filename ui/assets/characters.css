@@ -1926,6 +1926,33 @@ main.ctx-open .drawer:not(.hidden) {
 
 .message.assistant .msg-acts { left: 8px; right: auto; }
 
+/*
+ * 本轮变量变化：正文下方一行小 chips。
+ *
+ * 它是「这一轮发生了什么」的读数，不属于正文——所以它在气泡**外面**，
+ * 不会被误读成角色说的话。（也因为 .message 现在不再是 pre-wrap，
+ * 模板里那些换行+缩进不会再变成真的空行。）
+ */
+.msg-vars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.var-chip {
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.var-chip[data-change="add"] { border-color: var(--accent-line); color: var(--accent); }
+.var-chip[data-change="remove"] { text-decoration: line-through; }
+
 .message:hover .msg-acts {
   opacity: 1;
   pointer-events: auto;

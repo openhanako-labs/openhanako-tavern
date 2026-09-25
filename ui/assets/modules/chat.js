@@ -37,8 +37,15 @@ export function renderMessages() {
         ${m.role === "assistant" ? `<button class="mini" data-act="swipe" data-id="${m.id}">换一版</button>
         <button class="mini" data-act="regen" data-id="${m.id}">重生</button>` : ""}
       </div>`;
+    // 本轮变量变化的账：正文下方一行小 chips。
+    // 服务端连显示用的字都拼好了（text）——前端只负责印，
+    // 免得同一条拼字逻辑长成第二份双胞胎镜像。
+    const varLine = Array.isArray(m.varDiff) && m.varDiff.length > 0
+      ? `<div class="msg-vars">${m.varDiff.map(d => `<span class="var-chip" data-change="${escapeHtml(d.change || "set")}">${escapeHtml(d.text || d.name || "")}</span>`).join("")}</div>`
+      : "";
     return `<div class="message ${m.role}" data-id="${m.id}">
       <div class="bubble">${body}</div>
+      ${varLine}
       ${acts}
       <div class="time">${formatTime(m.timestamp)}</div>
     </div>`;
@@ -187,6 +194,10 @@ export async function sendMessageStream(content) {
               fullContent = data.content ?? fullContent;
               ensureBubble();   // 一帧增量都没收到，结果也得站出来
               paint();
+              // 服务端落盘后的那条消息带回来的不只是正文：还有这一轮的变量账、
+              // 行动候选项、以及真 id（没有它，刚出现的回复连按钮都没有）。
+              // 收进内存再重画，屏上那条才和库里那条是同一个东西。
+              if (acceptSavedMessage(data.message)) renderMessages();
             } else if (data.type === "cancelled") {
               // 用户点了停止：把已经到的半截留在屏上，不当作失败
               fullContent = data.content ?? fullContent;
@@ -466,6 +477,27 @@ function genMetaOff() {
  * 关掉读数条。只藏，不改任何采集——下次生成照样记 usage，只是不摆出来。
  */
 // ── 行动候选项（正文之后的岔路）────────────────────
+
+/**
+ * 把服务端落盘后的那条消息收进内存，然后重画。
+ *
+ * 为什么必须收进来，不能只“在屏上画个气泡”：
+ * 流式路径里那条回复**从来没进过 state.currentConv.messages**——
+ * ensureBubble 只建了一个 DOM 节点。后果有两个：
+ *   · 重画一次它就消失（我第一版就是这么做，真把回复抹掉了一次）；
+ *   · 它没有 data-id，复制/编辑/删除/换一版这些按钮**一个都没有**，
+ *     要等下一次整场重载才出现。
+ * 服务端在 done 事件里把落盘结果给了我们，收下它就是正解——
+ * 顺带把这一轮的变量账和行动候选项一起带回来。
+ */
+function acceptSavedMessage(saved) {
+  if (!saved || typeof saved !== "object" || !state.currentConv) return false;
+  const msgs = state.currentConv.messages || (state.currentConv.messages = []);
+  const at = msgs.findIndex(m => m.id === saved.id);
+  if (at >= 0) msgs[at] = saved;
+  else msgs.push(saved);
+  return true;
+}
 
 /** 正在向模型要方向——防连点。 */
 let suggesting = false;

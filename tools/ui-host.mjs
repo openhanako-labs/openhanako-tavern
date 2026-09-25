@@ -80,12 +80,18 @@ await loadGroupState(DATA);
 
 // 假 llm：界面流程要能跑到底，但不需要真花 token。
 // 生成路由少一个方法就是 TypeError，那样「点了没反应」会被误当成界面 bug。
+/** 桩自己数轮次：正文尾巴上那笔 {{setvar}} 的值要递增，界面上才看得出变化。 */
+let stubRound = 0;
+
 const fakeLlm = {
   available: true,
   lastTarget: { model: "ui-host-stub" },
   resolveContextWindow: async () => 32000,
   // 按系统提示分流：要候选项就给一份清单，否则给一句正文。
-  // （桩要能跑完两条路，不然「点了没反应」会被误当成界面 bug）
+  //（桩要能跑完两条路，不然「点了没反应」会被误当成界面 bug）
+  //
+  // 正文尾巴上带一笔 {{setvar}}：界面上才能看见「本轮变量变化」那行 chips。
+  // 值递增：写同一个值确实不该出 chip（账从状态来），也就看不到变化了。
   generate: async (messages, options) => {
     const sys = String(options?.systemPrompt || "");
     if (/候选项/.test(sys)) {
@@ -100,15 +106,24 @@ const fakeLlm = {
         target: { model: "ui-host-stub" }
       };
     }
+    stubRound += 1;
     return {
-      content: "「我在。」她没回头。",
+      content: `「我在。」她没回头。{{setvar::好感::${5 + stubRound}}}`,
       usage: { prompt_tokens: 120, completion_tokens: 18 },
       target: { model: "ui-host-stub" }
     };
   },
-  async *streamEvents() {
-    yield { type: "text-delta", delta: "「我在。」" };
-    yield { type: "done", usage: { prompt_tokens: 120, completion_tokens: 18 }, stopReason: "end_turn" };
+  // 流式 = 把 generate 的结果切块吐出去。
+  //
+  // 别在这里另写一份回复文本。桩里「回复」有两份实现就一定会漂——
+  // 今天已经漂过一次：流式那份还留着旧回复，于是「界面上没有变量 chips」
+  // 看起来像界面 bug，实际上是桩自己没把 setvar 吐出来。
+  async *streamEvents(messages, options) {
+    const r = await fakeLlm.generate(messages, options);
+    for (const ch of String(r.content)) {
+      yield { type: "text-delta", delta: ch };
+    }
+    yield { type: "done", usage: r.usage, stopReason: "end_turn" };
   }
 };
 
