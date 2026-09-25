@@ -197,7 +197,11 @@ export async function sendMessageStream(content) {
               // 服务端落盘后的那条消息带回来的不只是正文：还有这一轮的变量账、
               // 行动候选项、以及真 id（没有它，刚出现的回复连按钮都没有）。
               // 收进内存再重画，屏上那条才和库里那条是同一个东西。
+              //
+              // 压力读数（meta）按「这一轮」算，不挂在消息上——它是读数不是记录。
+              if (data.meta) state.lastMeta = data.meta;
               if (acceptSavedMessage(data.message)) renderMessages();
+              renderUsageBar();
             } else if (data.type === "cancelled") {
               // 用户点了停止：把已经到的半截留在屏上，不当作失败
               fullContent = data.content ?? fullContent;
@@ -606,11 +610,32 @@ export function renderUsageBar() {
 
   const tEl = document.getElementById("gen-tokens");
   const cEl = document.getElementById("gen-cache");
-
   bar.classList.remove("hidden");
-  if (tEl) tEl.textContent = prompt == null
-    ? "上下文 —"
-    : `上下文 ${prompt >= 1000 ? (prompt / 1000).toFixed(1) + "k" : prompt}`;
+
+  if (tEl) {
+    const p = state.lastMeta?.pressure || null;
+    let s;
+    if (prompt != null) s = `上下文 ${fmtK(prompt)}`;
+    else if (p?.used) s = `上下文 ${fmtK(p.used)}（估算）`;
+    else s = "上下文 —";
+
+    /*
+     * 上限只在**真窗口**时才报比例。
+     * 拿不到模型真实窗口时 allocateBudget 会拿 8000 兜底，
+     * 而用兜底值算出来的百分比是**假读数**——比没有读数更坏
+     *（会让人以为还有余量）。那就如实说「上限未知」。
+     */
+    if (p?.window) {
+      s += p.windowReal ? ` / ${fmtK(p.window)} · ${p.pct}%` : " / 上限未知";
+    }
+    // 折过历史就把条数说出来：压力高的时候这一条比百分比有用
+    if (p?.dropped > 0) s += ` · 折叠 ${p.dropped} 条`;
+
+    tEl.textContent = s;
+    // 压力警戒：85% 以上不再标绿，往前就该看到「该折叠了」
+    tEl.classList.toggle("tight", !!(p?.windowReal && p.used && p.pct >= 85));
+  }
+
   if (cEl) {
     if (cached > 0 && prompt > 0) {
       const pct = Math.round((cached / prompt) * 100);
@@ -621,6 +646,12 @@ export function renderUsageBar() {
       cEl.classList.remove("hit");
     }
   }
+}
+
+/** 读数里的大数：1280 → 1.3k。小数字原样，免得「120」被写成「120」。 */
+function fmtK(n) {
+  const v = Number(n) || 0;
+  return v >= 1000 ? `${(v / 1000).toFixed(1)}k` : String(v);
 }
 
 /** 打开一个对话：拉全文、渲染、显示输入区。 */
