@@ -4,3 +4,6 @@ _recovery/
 node_modules/
 *.log
 
+
+# 提交消息的临时文件（写完就删，别进仓库）
+MSG*
