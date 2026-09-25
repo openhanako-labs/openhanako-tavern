@@ -202,6 +202,11 @@ export async function sendMessageStream(content) {
               if (data.meta) state.lastMeta = data.meta;
               if (acceptSavedMessage(data.message)) renderMessages();
               renderUsageBar();
+              // 这一轮可能写进了变量（{{setvar}}）。变量抽屉开着就顺手刷新，
+              // 不然它会一直显示上一轮的值。
+              if (!document.getElementById("drawer-variables")?.classList.contains("hidden")) {
+                import("./variables.js").then(m => m.loadConvValues()).catch(() => {});
+              }
             } else if (data.type === "cancelled") {
               // 用户点了停止：把已经到的半截留在屏上，不当作失败
               fullContent = data.content ?? fullContent;

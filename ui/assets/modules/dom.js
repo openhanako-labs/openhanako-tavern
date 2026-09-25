@@ -26,6 +26,8 @@ export const dom = {
 
   variablesListEl: document.getElementById("variables-list"),
   variablesCountEl: document.getElementById("variables-count"),
+  convVarsListEl: document.getElementById("conv-vars-list"),
+  convVarsCountEl: document.getElementById("conv-vars-count"),
 
   toolsListEl: document.getElementById("tools-list"),
   toolsCountEl: document.getElementById("tools-count"),

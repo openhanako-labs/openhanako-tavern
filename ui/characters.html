@@ -169,8 +169,22 @@
       <div id="variables-list" class="list drawer-body">
         <div class="empty">加载中…</div>
       </div>
-      <textarea id="vf-test-input" rows="2" placeholder="输入含 {{宏}} 的文本"></textarea>
-        <pre id="vf-test-output" class="test-out"></pre>
+
+      <!--
+        这一场正在生效的值：只读。
+
+        定义在上面（叫什么、什么类型），值随对话走——
+        回复里的 {{setvar}} 写的就是这一块。
+        此前它没有任何地方能看见：刚修好 setvar 落盘，界面上却看不到结果。
+        不做可编辑：值由对话持有，要改就改对话里那一笔，
+        不然会和宏写回的值互相盖。
+      -->
+      <div class="var-sec">
+        <div class="var-sec-head">这一场<span id="conv-vars-count" class="count"></span></div>
+        <div id="conv-vars-list" class="conv-vars">
+          <div class="empty">（还没打开对话）</div>
+        </div>
+      </div>
         <div class="panel">
         <h3>测试替换</h3>
         <div class="field">

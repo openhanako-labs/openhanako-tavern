@@ -18,6 +18,8 @@ export async function loadVariables() {
     const list = extractArray(res);
     state.variableList = list;
     renderVariables(list);
+    // 值也要拉：抽屉一开，两边都得是最新的
+    await loadConvValues();
   } catch (e) {
     console.error("[Variables] load failed:", e);
     toast("加载失败: " + friendlyError(e), "error");
@@ -34,7 +36,7 @@ export function renderVariables(list) {
   }
   if (arr.length === 0) {
     dom.variablesListEl.innerHTML =
-      '<div class="empty">暂无变量<br><span class="hint">变量可在对话中被宏读写</span></div>';
+      '<div class="empty">还没有定义<br><span class="hint">定义决定叫什么、什么类型；值在下面「这一场」里</span></div>';
     return;
   }
 
@@ -59,6 +61,67 @@ export function renderVariables(list) {
     card.querySelector('[data-act="edit"]')?.addEventListener("click", () => openVariableEditor(id));
     card.querySelector('[data-act="delete"]')?.addEventListener("click", () => deleteVariable(id));
   });
+}
+
+/**
+ * 拉「这一场正在生效的值」。
+ *
+ * 为什么要单开一块：定义列表回答的是「叫什么、什么类型」，
+ * 而我这一刻真正会读到的是**值**——回复里的 {{setvar}} 写的就是它。
+ * 之前界面上没有任何地方能看到它，只能猜一个宏名往「测试替换」里敲。
+ *
+ * 只读：值由对话持有。要改就改对话里那一笔，
+ * 不然会和宏写回的值互相盖（那正是当初把所有变量写收敛到一个回调的原因）。
+ */
+export async function loadConvValues() {
+  if (!dom.convVarsListEl) return;
+  const conv = state.currentConv;
+  if (!conv) {
+    renderConvValues(null);
+    return;
+  }
+  try {
+    const res = await apiFetch(`conversations/${conv.id}/variables`);
+    const data = res?.data ?? res;
+    renderConvValues(data?.variables ?? data ?? {});
+  } catch (e) {
+    dom.convVarsListEl.innerHTML =
+      `<div class="empty">读不到这一场的值：${escapeHtml(friendlyError(e))}</div>`;
+  }
+}
+
+/** 渲染「这一场」的值列表。空值说人话，且说清它从哪来。 */
+export function renderConvValues(vars) {
+  if (!dom.convVarsListEl) return;
+  const obj = vars && typeof vars === "object" ? vars : null;
+  const names = obj ? Object.keys(obj).sort() : [];
+
+  if (dom.convVarsCountEl) {
+    dom.convVarsCountEl.textContent = obj && names.length > 0 ? `${names.length} 个` : "";
+  }
+  // 存一份：下面的「测试替换」不填 JSON 时就拿这一场的值跑
+  state.convVars = obj || {};
+
+  if (!obj) {
+    dom.convVarsListEl.innerHTML = '<div class="empty">（还没打开对话）</div>';
+    return;
+  }
+  if (names.length === 0) {
+    dom.convVarsListEl.innerHTML =
+      '<div class="empty">这一场还没有取值<br><span class="hint">回复里的 {{setvar}} 写的就是这里</span></div>';
+    return;
+  }
+
+  dom.convVarsListEl.innerHTML = names.map((n) => {
+    const raw = obj[n];
+    const full = typeof raw === "string" ? raw : JSON.stringify(raw);
+    const text = String(full ?? "");
+    const short = text.length > 80 ? `${text.slice(0, 80)}…` : text;
+    return `<div class="conv-var">
+        <code class="vf-name">${escapeHtml(n)}</code>
+        <span class="cv-val" title="${escapeHtml(text)}">${escapeHtml(short)}</span>
+      </div>`;
+  }).join("");
 }
 
 /** 打开编辑器；id 为空 → 新建。 */
@@ -159,23 +222,64 @@ export function handleVariableAction(action, id) {
 
 /**
  * 测试替换：拿一段文本跑一遍宏，看变量是否正确展开。
- * 对排查「宏没生效」很有用——一眼看出是名字写错还是值没存上。
+ *
+ * 读的是**它自己那张卡里的字段**（输入文本 + 变量值 JSON）。
+ * 原先读的是 `#vf-test-input`——一个没有标题、贴在抽屉顶部的孤儿框；
+ * 用户会填的却是标着「输入文本」的这个，填了也对不上。
+ * 那个孤儿已经删掉（连同 `#vf-test-output`）。
+ *
+ * 不填 JSON 就用**这一场的真实值**：面板上下两块本来就该是同一个东西，
+ * （上面刚能看到值，这里却要人手输一遗，那就成了两个口径）。
+ *
+ * `references` 也要显示：它列出文本里引用的变量名——
+ * 名字写错时一眼能看出来，那才是这个工具存在的理由。
  */
 export async function testReplace() {
-  const el = document.getElementById("vf-test-input");
-  const out = document.getElementById("vf-test-output");
-  const text = el?.value ?? "";
+  const text = document.getElementById("replace-test-input")?.value ?? "";
+  const rawVars = document.getElementById("replace-test-vars")?.value ?? "";
+  const box = document.getElementById("replace-test-result");
   if (!text.trim()) { toast("先输入要测试的文本", "error"); return; }
-  if (!out) return;
+  if (!box) return;
 
+  let vars = null;
+  if (rawVars.trim()) {
+    try {
+      const parsed = JSON.parse(rawVars);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        toast("变量值要是一个 JSON 对象", "error");
+        return;
+      }
+      vars = parsed;
+    } catch (e) {
+      toast("变量值不是合法 JSON：" + friendlyError(e), "error");
+      return;
+    }
+  }
+  const usedReal = vars === null;
+  if (usedReal) vars = state.convVars || {};
+
+  box.classList.remove("hidden");
   try {
     const res = await apiFetch("variables/test-replace", {
       method: "POST",
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text, variables: vars })
     });
     const data = res.data || res;
-    out.textContent = data.result ?? data.text ?? "";
+    const nameOf = (r) => (typeof r === "string" ? r : r?.name || "");
+    const refs = (Array.isArray(data.references) ? data.references : []).map(nameOf).filter(Boolean);
+    const missing = refs.filter((n) => !(n in vars));
+
+    const lines = [String(data.result ?? "")];
+    lines.push("");
+    lines.push(usedReal
+      ? (Object.keys(vars).length > 0 ? `（用的是这一场的值，共 ${Object.keys(vars).length} 个；在「变量值」里填 JSON 可覆盖）` : "（这一场还没有取值）")
+      : "（用的是你填的 JSON）");
+    lines.push(refs.length
+      ? `引用到的变量：${refs.join("、")}`
+      : "没引用到任何变量（{{}} 里的名字得先有定义或在 JSON 里给上值）");
+    if (missing.length) lines.push(`值没给：${missing.join("、")}——给上值才会展开`);
+    box.textContent = lines.join("\n");
   } catch (e) {
-    out.textContent = "失败: " + friendlyError(e);
+    box.textContent = "失败: " + friendlyError(e);
   }
 }

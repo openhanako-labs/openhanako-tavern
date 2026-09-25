@@ -13,6 +13,13 @@
  * JS 动态加的开关（hidden / on / loading）。所以：
  *   - 命中集合 = HTML 的 class 字面量 + JS 里所有字符串里出现的 class 形态
  *   - 认不出来的一律进「存疑」列表，只有明确的两类才算数
+ *
+ * ⚠ 已知盲区（别把它当成“全都查过了”）：
+ *   「裸类」那一侧**只看 HTML**，所以**由 JS 模板字符串生成的类名扫不到**。
+ *   真实例子：变量抽屉的 `.var-card` / `.vf-name` / `.var-meta` 系列
+ *   （在 variables.js 的模板里），一条样式都没有，这个检查器当时是绿的。
+ *   若要把它们收进来：得把“JS 里 `class="…"` 字面量”也算作落点，
+ *   而那会把状态类一并拖进来——得先想清楚白名单再动。
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";

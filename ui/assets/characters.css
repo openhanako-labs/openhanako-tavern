@@ -1963,6 +1963,108 @@ main.ctx-open .drawer:not(.hidden) {
 .var-chip[data-change="add"] { border-color: var(--accent-line); color: var(--accent); }
 .var-chip[data-change="remove"] { text-decoration: line-through; }
 
+/* ── 变量抽屉：定义卡片 + 「这一场」的值 ───────────────────
+   这些类名由 variables.js 的模板字符串生成，不在 HTML 里——
+   所以 check-css-wiring 的「裸类」那一侧扫不到它们（只扫 HTML），
+   而它们确实一条样式都没有。盲区记在那个检查器的文件头上。 */
+.var-card {
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  margin-bottom: 8px;
+}
+
+.var-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.vf-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.vf-type {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 10.5px;
+  color: var(--fg-muted);
+}
+
+.vf-description {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--fg);
+  margin-bottom: 6px;
+}
+
+.var-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--fg-muted);
+  margin-bottom: 7px;
+}
+
+.var-meta .scope,
+.var-meta .flag {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.var-meta .flag {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.var-actions { display: flex; gap: 5px; }
+
+/* 这一场正在生效的值（只读） */
+.var-sec {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.var-sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.conv-vars { display: flex; flex-direction: column; gap: 4px; }
+
+.conv-var {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.conv-var .cv-val {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--fg);
+  word-break: break-all;
+}
+
 .message:hover .msg-acts {
   opacity: 1;
   pointer-events: auto;
