@@ -40,6 +40,7 @@ import { registerEmbedRoutes } from "./lib/embed/routes.js";
 import { loadGroupState, isGroupEnabled } from "./lib/tools/group.js";
 
 import { registerMigrationRoutes } from "./lib/migration/routes.js";
+import { registerGenRoutes } from "./lib/gen/routes.js";
 import { LLMService } from "./lib/llm/service.js";
 import { runSelfCheck } from "./lib/selfcheck.js";
 
@@ -245,6 +246,10 @@ export default defineApp(async (sdk) => {
 
     if (dataDir) {
       registerMigrationRoutes(app, dataDir);
+
+  // 生成器（自动创建卡与世界书）。net 在 init 时就从 sdk 拿到——
+  // 出网只能走它，拿不到就在调用的那一步报「出网未就绪」。
+  registerGenRoutes(app, { llm: llmService, net: sdk?.network || null });
     }
   });
   probe.record("routes registered");

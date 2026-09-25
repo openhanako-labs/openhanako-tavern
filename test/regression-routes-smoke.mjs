@@ -43,6 +43,7 @@ const { registerVariableRoutes } = await import("../lib/variables/routes.js");
 const { registerPresetRoutes } = await import("../lib/presets/routes.js");
 const { registerToolRoutes } = await import("../lib/tools/routes.js");
 const { registerMigrationRoutes } = await import("../lib/migration/routes.js");
+const { registerGenRoutes } = await import("../lib/gen/routes.js");
 const { registerBoardRoutes } = await import("../lib/board/routes.js");
 const { registerRegexRoutes } = await import("../lib/regex/routes.js");
 
@@ -102,7 +103,8 @@ const apps = {
   board: makeApp(),
   regex: makeApp(),
   tools: makeApp(),
-  migration: makeApp()
+  migration: makeApp(),
+  gen: makeApp()
 };
 
 // 假 llm。生成路由需要它，而**不能因为麻烦就跳过这一段**——
@@ -143,6 +145,9 @@ registerVariableRoutes(apps.variables, varRepo, convRepo, charRepo);
 registerPresetRoutes(apps.presets, presetRepo);
 registerToolRoutes(apps.tools, {});
 registerMigrationRoutes(apps.migration, tmp);
+// 生成器（自动创建卡与世界书）：三条路由。
+// net 给 null —— 这里只验「路由注册与可达」，真流程在 regression-gen-routes。
+registerGenRoutes(apps.gen, { llm: fakeLlm, net: null });
 // 板上与正则各自的深测在 regression-board-routes / regression-regex-routes，
 // 这里注册它们只是为了让下面那张表是**完整的九张脸**。
 registerBoardRoutes(apps.board, boardRepo);
@@ -219,6 +224,9 @@ const EXPECTED = {
     "POST /migration/export", "POST /migration/preview", "POST /migration/import",
     "GET /migration/exports/:filename", "GET /migration/exports",
     "DELETE /migration/exports/:filename", "GET /migration/health"
+  ],
+  gen: [
+    "GET /gen/sources", "POST /gen/jobs", "GET /gen/jobs/:id"
   ]
 };
 

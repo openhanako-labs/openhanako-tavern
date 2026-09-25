@@ -106,18 +106,124 @@ function stripRegexLiterals(s) {
 let bad = 0;
 const files = walk(LIB);
 
+/**
+ * 一次扫描剥掉注释 / 正则字面量 / 字符串。
+ *
+ * 为什么不能分步用正则剥：
+ *   · `"…"` 遇到“字符串里含引号”（`quot: '"'`）就错位，跨行吞到文件末——
+ *     实测把 149 行的 text.js 吃成 24 行，已定义的函数被报成未定义；
+ *     更糟的是被吞掉的区段里若有真的未定义调用，**也看不见**（假阴性）。
+ *   · `//` 遇到“字符串里有双斜杠”（`startsWith("//")`）会把该行后半段
+ *     当注释删掉，同样让引号变成未闭合，同时吞掉后面真代码。
+ *
+ * 所以只能从左到右一次扫，知道“现在在什么里面”。
+ * 两条硬规则：单双引号字符串**不许跨行**；删掉的内容要**保留换行数**，
+ * 否则报出来的行号是错的（比没有行号更让人迷路）。
+ *
+ * @returns {{out: string, unterminated: number}}
+ */
+function stripJs(src) {
+  let out = "";
+  let i = 0;
+  let unterminated = 0;
+
+  const prevChar = () => out.replace(/\s+$/, "").slice(-1);
+  const keepLines = (slice) => slice.replace(/[^\n]/g, "");
+
+  while (i < src.length) {
+    const ch = src[i];
+    const next = src[i + 1];
+
+    // 块注释：保留其中换行数
+    if (ch === "/" && next === "*") {
+      const end = src.indexOf("*/", i + 2);
+      const slice = src.slice(i, end === -1 ? src.length : end + 2);
+      out += " " + keepLines(slice);
+      i = end === -1 ? src.length : end + 2;
+      continue;
+    }
+
+    // 行注释：停在换行处（换行本身留给下一轮）
+    if (ch === "/" && next === "/") {
+      const end = src.indexOf("\n", i);
+      i = end === -1 ? src.length : end;
+      out += " ";
+      continue;
+    }
+
+    // 正则字面量：只在“只能接表达式起始”的位置才算
+    if (ch === "/") {
+      const prev = prevChar();
+      if (prev === "" || "([{,!&|?:;=+-*%~^<>".includes(prev)) {
+        let j = i + 1;
+        let inClass = false;
+        let closed = false;
+        while (j < src.length) {
+          const c = src[j];
+          if (c === "\\") { j += 2; continue; }
+          if (c === "[") inClass = true;
+          else if (c === "]") inClass = false;
+          else if (c === "/" && !inClass) { closed = true; break; }
+          else if (c === "\n") break;
+          j++;
+        }
+        if (closed) { out += " RE "; i = j + 1; continue; }
+      }
+    }
+
+    // 字符串：不许跨行
+    if (ch === "\"" || ch === "'") {
+      let j = i + 1;
+      let closed = false;
+      while (j < src.length) {
+        const c = src[j];
+        if (c === "\\") { j += 2; continue; }
+        if (c === ch) { closed = true; break; }
+        if (c === "\n") break;
+        j++;
+      }
+      if (closed) { out += ch + ch; i = j + 1; continue; }
+      unterminated++;
+      out += src.slice(i, Math.min(j, src.length));
+      i = j;
+      continue;
+    }
+
+    // 模板串：允许跨行（本来就是多行的）
+    if (ch === "`") {
+      let j = i + 1;
+      let closed = false;
+      while (j < src.length) {
+        const c = src[j];
+        if (c === "\\") { j += 2; continue; }
+        if (c === "`") { closed = true; break; }
+        j++;
+      }
+      const slice = src.slice(i, closed ? j + 1 : src.length);
+      out += " `` " + keepLines(slice);
+      i = closed ? j + 1 : src.length;
+      continue;
+    }
+
+    out += ch;
+    i++;
+  }
+
+  return { out, unterminated };
+}
+
 for (const file of files) {
   const raw = fs.readFileSync(file, "utf8");
+  const { out: src, unterminated } = stripJs(raw);
 
-  // 剥注释与字符串（模板字符串整体剥掉——里面 ${} 的调用不追）
-  const src = stripRegexLiterals(
-    raw
-      .replace(/\/\*[\s\S]*?\*\//g, " ")
-      .replace(/(^|[^:])\/\/[^\n]*/g, "$1")
-      .replace(/`(?:[^`\\]|\\.)*`/g, " `` ")
-      .replace(/"(?:[^"\\]|\\.)*"/g, ' "" ')
-      .replace(/'(?:[^'\\]|\\.)*'/g, " '' ")
-  );
+  // 引号没闭合 = 剥法错位，这个文件的判据**不可信**。
+  // 不许静默——要么修剥法，要么把这个文件写进 ALLOW 并说明原因。
+  if (unterminated > 0) {
+    bad++;
+    console.log(`\n  ❌ ${path.relative(ROOT, file).replace(/\\/g, "/")}`);
+    console.log(`     有 ${unterminated} 处引号未闭合——剥法错位，这个文件的判据不可信`);
+    continue;
+  }
 
   const known = new Set([...BUILTINS]);
 
