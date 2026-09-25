@@ -416,25 +416,11 @@
       </form>
 
       <form id="setting-form" class="form hidden">
-        <input type="hidden" id="sf-id">
         <div class="field"><label>名称 *</label><input type="text" id="sf-name" required></div>
-        <div class="field-row">
-          <div class="field">
-            <label>类型</label>
-            <select id="sf-type">
-              <option value="character">角色</option>
-              <option value="location">场景</option>
-              <option value="object">物品</option>
-              <option value="event">事件</option>
-              <option value="custom">自定义</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>优先级</label>
-            <input type="number" id="sf-priority" value="100" min="0" max="1000">
-          </div>
+        <div class="field">
+          <label>优先级</label>
+          <input type="number" id="sf-priority" value="100" min="0" max="1000">
         </div>
-        <div class="field"><label>描述</label><textarea id="sf-description" rows="2"></textarea></div>
         <div class="field"><label>内容 *</label><textarea id="sf-content" rows="5" required></textarea></div>
         <div class="field">
           <label>触发类型</label>
@@ -446,7 +432,7 @@
           </select>
         </div>
         <div class="field" id="sf-keywords-field">
-          <label>关键词（逗号分隔）</label>
+          <label>关键词 <span class="hint">逗号分隔；正则写成 /模式/</span></label>
           <input type="text" id="sf-keywords">
         </div>
         <div class="field">
@@ -458,10 +444,6 @@
             <option value="not_all">NOT ALL · 不全中</option>
           </select>
         </div>
-        <div class="field hidden" id="sf-regex-field">
-          <label>正则表达式</label>
-          <input type="text" id="sf-regex">
-        </div>
         <div class="field">
           <label class="checkbox-label">
             <input type="checkbox" id="sf-enabled" checked>
@@ -471,13 +453,8 @@
       </form>
 
       <form id="variable-form" class="form hidden">
-        <input type="hidden" id="vf-id">
         <div class="field"><label>名称 *</label><input type="text" id="vf-name" required></div>
         <div class="field-row">
-          <div class="field">
-            <label>标签</label>
-            <input type="text" id="vf-label">
-          </div>
           <div class="field">
             <label>类型</label>
             <select id="vf-type">
@@ -490,19 +467,11 @@
         </div>
         <div class="field"><label>默认值</label><input type="text" id="vf-default"></div>
         <div class="field"><label>描述</label><textarea id="vf-description" rows="2"></textarea></div>
-        <div class="field-row">
-          <div class="field">
-            <label class="checkbox-label">
-              <input type="checkbox" id="vf-visible" checked>
-              显示
-            </label>
-          </div>
-          <div class="field">
-            <label class="checkbox-label">
-              <input type="checkbox" id="vf-editable" checked>
-              可编辑
-            </label>
-          </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="vf-visible" checked>
+            显示
+          </label>
         </div>
       </form>
       <form id="board-form" class="form hidden">
@@ -764,6 +733,12 @@
 
 <input type="file" id="file-input" multiple accept=".json,.png" style="display:none">
 <input type="file" id="st-import-input" accept=".json" style="display:none">
+<!--
+  备份导入专用。以前它借用了 #file-input（角色卡那个）：于是“导入备份”弹的是
+  卡片文件框，选中的备份还会被卡片导入器接手；而真正的迁移导入函数
+  （handleMigrationFile）从头到尾没被绑到任何元素上。
+-->
+<input type="file" id="migration-file-input" accept=".json" style="display:none">
 
 <script type="module" src="./assets/modules/main.js"></script>
 </body>

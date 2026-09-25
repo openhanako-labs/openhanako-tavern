@@ -48,7 +48,7 @@ export function makeApp() {
   return app;
 }
 
-export function makeCtx({ query = {}, params = {}, body } = {}) {
+export function makeCtx({ query = {}, params = {}, body, headers = {}, formData } = {}) {
   const out = { payload: undefined, status: 200, headers: undefined };
 
   const ctx = {
@@ -58,6 +58,24 @@ export function makeCtx({ query = {}, params = {}, body } = {}) {
       json: async () => {
         if (body === undefined) throw new Error("no body");
         return body;
+      },
+      /*
+       * header / formData 是路由真在用的两样：
+       *   · characters 与 migration 的导入都先看 Content-Type 分流（JSON vs multipart）
+       *   · 上传的备份文件走 c.req.formData()
+       * 台子不提供它们，这两条路就根本跑不起来——而它们恰恰是
+       * “界面能点、但一按就错”的重灾区。
+       */
+      header: (name) => {
+        const want = String(name).toLowerCase();
+        for (const [k, v] of Object.entries(headers)) {
+          if (String(k).toLowerCase() === want) return v;
+        }
+        return undefined;
+      },
+      formData: async () => {
+        if (!formData) throw new Error("no formData");
+        return formData;
       }
     },
     json: (payload, status = 200) => { out.payload = payload; out.status = status; return out; },

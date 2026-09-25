@@ -21,12 +21,22 @@ export async function handleMigrationFile(e) {
   if (!file) return;
   const formData = new FormData();
   formData.append("file", file);
+  // 「跳过已存在的数据」以前没人读：后端 skipExisting 默认 false，
+  // 于是把勾选搵在那儿、看着像默认开了，实际导入的条目会直接覆盖本地的。
+  formData.append("skipExisting", String(document.getElementById("skip-existing-check")?.checked === true));
 
   try {
     const res = await apiFetch("migration/import", { method: "POST", body: formData });
     const data = res.data || res;
     const r = data.result || data;
-    toast(`导入完成：角色 ${r.characters?.added ?? 0}、对话 ${r.conversations?.added ?? 0}`, "success");
+    const kinds = ["characters", "conversations", "variables", "settings"];
+    const added = kinds.reduce((n, k) => n + (r[k]?.added ?? 0), 0);
+    const skipped = kinds.reduce((n, k) => n + (r[k]?.skipped ?? 0), 0);
+    const failed = kinds.reduce((n, k) => n + (r[k]?.errors?.length ?? 0), 0);
+    const parts = [`新增 ${added}`];
+    if (skipped) parts.push(`跳过 ${skipped}`);
+    if (failed) parts.push(`失败 ${failed}`);
+    toast(`导入完成：${parts.join("、")}`, failed ? "error" : "success");
     await loadExports();
   } catch (err) {
     toast("导入失败: " + friendlyError(err), "error");

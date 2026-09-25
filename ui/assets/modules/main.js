@@ -16,7 +16,7 @@ import { bindPresets } from "./presets.js";
 import { loadSettings, renderSettings, openSettingEditor, saveSetting, deleteSetting, toggleSetting, handleSettingAction, importSTWorldBook, handleSTImport, updateTriggerFields } from "./settings.js";
 import { loadVariables, renderVariables, openVariableEditor, saveVariable, deleteVariable, handleVariableAction, testReplace } from "./variables.js";
 import { loadTools, renderToolGroups, renderTools } from "./tools.js";
-import { importFile, loadExports, renderExports, downloadExport, downloadExportFile, deleteExportFile, copyExport, formatFileSize, exportAll } from "./migration.js";
+import { importFile, handleMigrationFile, loadExports, renderExports, downloadExport, downloadExportFile, deleteExportFile, copyExport, formatFileSize, exportAll } from "./migration.js";
 import { saveBoardCell, deleteBoardCell, bindBoard } from "./board.js";
 import { saveRegexRule, deleteRegexRule, bindRegex } from "./regex.js";
 
@@ -114,6 +114,10 @@ dom.fileInput?.addEventListener("change", (e) => {
 });
 
 dom.stImportInput?.addEventListener("change", handleSTImport);
+
+// 备份导入。以前这里没有这行：handleMigrationFile 写好了、却从没被绑过，
+// 而按钮借的是 #file-input —— 选备份会被角色卡导入器接手。
+dom.migrationFileInput?.addEventListener("change", handleMigrationFile);
 
 // 聊天输入：Enter 发送，Shift+Enter 换行
 dom.chatInput?.addEventListener("keydown", (e) => {

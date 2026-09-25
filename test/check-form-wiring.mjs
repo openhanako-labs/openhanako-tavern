@@ -46,20 +46,6 @@ const KNOWN_UNWIRED = new Map([
   ["rf-surface-display", "id 由模板拼出：getElementById(`rf-surface-${s}`)，regex.js:170/221/296"],
   ["rf-surface-prompt", "同 rf-surface-display：模板拼出"],
   ["rf-surface-stored", "同 rf-surface-display：模板拼出"],
-  // 以下 8 个是 2026-09-25 用 check-form-wiring 查出来的**活表单里的死输入**：
-  // 同一张表单里其它字段都有读（setting-form 的 sf-name/sf-content/sf-keywords/sf-tier…），
-  // 只有这几个一次没人读——代码早已改用 tier/anchor/keywords 那套 schema。
-  // 用户能看到、能填，填了不生效。
-  ["sf-description", "死输入：setting-form 里无人读（旧 schema 遗留）"],
-  ["sf-id", "死输入：setting-form 里无人读（保存走 state.currentSetting，不再读隐藏域）"],
-  ["sf-logic", "死输入：setting-form 里无人读（旧 schema 遗留）"],
-  ["sf-regex", "死输入：setting-form 里无人读（旧 schema 遗留）"],
-  ["sf-type", "死输入：setting-form 里无人读（旧 schema 遗留）"],
-  ["vf-editable", "死输入：variable-form 里无人读（旧 schema 遗留）"],
-  ["vf-id", "死输入：variable-form 里无人读（保存走 state）"],
-  ["vf-label", "死输入：variable-form 里无人读（旧 schema 遗留）"],
-  // 这条已经确认是**真死**：
-  ["skip-existing-check", "已确认：无 name 属性、JS 里零引用 → 导入时这个勾选不起作用"],
 ]);
 
 // id → 理由。空着最好；往里加东西之前先问"它真的不需要 JS 吗"。

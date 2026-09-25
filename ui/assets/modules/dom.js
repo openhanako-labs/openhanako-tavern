@@ -51,7 +51,7 @@ export const dom = {
   exportsListEl: document.getElementById("exports-list"),
   exportInfoEl: document.getElementById("export-info"),
   importResultEl: document.getElementById("import-result"),
-  migrationFileInput: document.getElementById("file-input"),
+  migrationFileInput: document.getElementById("migration-file-input"),
 };
 
 /**

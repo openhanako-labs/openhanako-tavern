@@ -113,6 +113,9 @@ function fillSettingForm(s) {
   set("sf-secondary-keys", (s.secondaryKeys || []).join(", "));
   set("sf-trigger-type", s.anchor || "");
   set("sf-tier", s.tier || "core");
+  // 副键逻辑：以前这个下拉没人读，保存时永远写死 and_any——
+  // ST 导入进来的 not_all / not_any 一编辑就被抺掉。
+  set("sf-logic", s.selectiveLogic || "and_any");
   set("sf-order", s.order ?? 100);
   set("sf-priority", s.priority ?? 100);
   set("sf-probability", s.probability ?? 100);
@@ -128,7 +131,7 @@ export async function saveSetting() {
   const val = (id) => document.getElementById(id)?.value ?? "";
 
   const body = {
-    selectiveLogic: state.currentSetting?.selectiveLogic || "and_any",
+    selectiveLogic: val("sf-logic") || "and_any",
     comment: val("sf-name").trim(),
     content: val("sf-content"),
     keywords: val("sf-keywords").split(/[,，]/).map(x => x.trim()).filter(Boolean),
