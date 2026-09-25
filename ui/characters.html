@@ -164,6 +164,12 @@
 
       <div id="suggest-row" class="suggest-row hidden"></div>
 
+    <!--
+      群聊才出现的「这一轮谁说话」。
+      单人对话时整行隐藏——多一行没有意义的选择，只会让人以为非选不可。
+    -->
+    <div id="speaker-row" class="speaker-row hidden"></div>
+
       <div id="chat-input-area" class="chat-input-area hidden">
         <textarea id="chat-input" placeholder="输入消息…" rows="2"></textarea>
         <div class="input-actions">
@@ -637,7 +643,7 @@
     <div class="modal-body">
       <div class="field">
         <label>选择角色</label>
-        <select id="conv-character-select">
+        <select id="conv-character-select" multiple size="6">
           <option value="">加载中…</option>
         </select>
       </div>

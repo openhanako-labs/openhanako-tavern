@@ -12,7 +12,61 @@ import { dom } from "./dom.js";
 import { state } from "./state.js";
 
 
+/**
+ * 角色 id → 名字。群聊的气泡与发言者行都要用。
+ * （消息上只存 id，不存名字——名字改了不该让旧消息说谎。）
+ */
+function charNameOf(id) {
+  const hit = (state.charList || []).find(c => String(c.id) === String(id));
+  return hit?.name || "（角色已删除）";
+}
+
+/**
+ * 群聊的「这一轮谁说话」。
+ *
+ * 单人对话整行不出现——一个没分支的选择只会让人以为非选不可。
+ * 换人**不自动**：谁开口是作者的判断。
+ */
+export function renderSpeakerRow() {
+  const row = document.getElementById("speaker-row");
+  if (!row) return;
+  const conv = state.currentConv;
+  // 这条读法必须与 lib/conversations/model.js 的 participantsOf 一致：
+  // 旧对话文件里只有 characterId，读侧要能兜。
+  const ids = Array.isArray(conv?.characterIds) && conv.characterIds.length > 0
+    ? conv.characterIds
+    : (conv?.characterId ? [conv.characterId] : []);
+
+  if (ids.length < 2) {
+    row.classList.add("hidden");
+    row.innerHTML = "";
+    state.speakerId = null;
+    return;
+  }
+
+  const current = ids.includes(state.speakerId) ? state.speakerId : ids[0];
+  state.speakerId = current;
+  row.innerHTML =
+    `<span class="speaker-label">这一轮谁说话</span>` +
+    ids.map(id => `<button type="button" class="speaker-chip${String(id) === String(current) ? " on" : ""}" data-speaker="${escapeHtml(id)}">${escapeHtml(charNameOf(id))}</button>`).join("");
+  row.classList.remove("hidden");
+  row.querySelectorAll("[data-speaker]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.speakerId = btn.dataset.speaker;
+      renderSpeakerRow();
+    });
+  });
+}
+
 export function renderMessages() {
+  /*
+   * 发言者行放在**最上面**，不能放在有消息的那条路径里。
+   *
+   * 教训：它原先被我插在主路径（有消息）末尾，于是**刚建好的群聊**——
+   * 0 条消息、走的空态分支——根本看不到它，而那时恰恰是最需要
+   * 选“这一轮谁说话”的时刻。函数有三个早退分支，放最上面才不挑分支。
+   */
+  renderSpeakerRow();
   /*
    * 空的时候分两种，而且两种都不该只说「暂无消息」。
    *
@@ -72,7 +126,12 @@ export function renderMessages() {
     const varLine = Array.isArray(m.varDiff) && m.varDiff.length > 0
       ? `<div class="msg-vars">${m.varDiff.map(d => `<span class="var-chip" data-change="${escapeHtml(d.change || "set")}">${escapeHtml(d.text || d.name || "")}</span>`).join("")}</div>`
       : "";
+    // 群聊：这条回复是谁说的。名字从角色列表解（消息上只存 id）。
+    const spk = m.role === "assistant" && m.speakerId
+      ? `<div class="msg-speaker">${escapeHtml(charNameOf(m.speakerId))}</div>`
+      : "";
     return `<div class="message ${m.role}" data-id="${m.id}">
+      ${spk}
       <div class="bubble">${body}</div>
       ${varLine}
       ${acts}
@@ -136,7 +195,7 @@ export async function sendMessage() {
       // 降级为同步
       const res = await apiFetch(`conversations/${state.currentConv.id}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content })
+        body: JSON.stringify({ content, speakerId: state.speakerId || undefined })
       });
       if (res.data?.assistantMessage) {
         loadingEl.remove();
@@ -169,7 +228,7 @@ export async function sendMessageStream(content) {
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content })
+      body: JSON.stringify({ content, speakerId: state.speakerId || undefined })
     });
     
     if (!response.ok) {
@@ -282,15 +341,19 @@ export async function createConversation() {
 }
 
 export async function confirmNewConversation() {
-  const characterId = document.getElementById("conv-character-select").value;
-  if (!characterId) { toast("请选择角色", "error"); return; }
+  const select = document.getElementById("conv-character-select");
+  // 多选：选一个 = 单人；选多个 = 群聊（**第一个是主角**，开场白由他出）。
+  // 单人时只发 characterId，路径与以前逐字一样。
+  const picked = [...(select?.selectedOptions || [])].map(o => o.value).filter(Boolean);
+  if (picked.length === 0) { toast("请选择角色", "error"); return; }
   try {
-    const res = await apiFetch("conversations", { method: "POST", body: JSON.stringify({ characterId }) });
+    const body = picked.length > 1 ? { characterId: picked[0], characterIds: picked } : { characterId: picked[0] };
+    const res = await apiFetch("conversations", { method: "POST", body: JSON.stringify(body) });
     const conv = res.data || res;
     await loadConversations();
     await openConversation(conv.id);
     closeNewConvModal();
-    toast("对话已创建", "success");
+    toast(picked.length > 1 ? `群聊已创建（${picked.length} 位）` : "对话已创建", "success");
   } catch (e) {
     toast(`创建失败: ${e.message}`, "error");
   }
@@ -712,9 +775,13 @@ export async function openConversation(id) {
        *
        * 后端会把首条消息截成对话标题（repo.js:158，那是给列表用的），
        * 直接摆到顶栏当大标题，读起来就是「用户那句话成了这一场的题目」。
+       *
+       * 群聊时要把人数带上：只写主角名会让人以为这是一场单人对话——
+       * 而屏幕下方正摆着两个可以换的发言者。
        */
-      dom.chatTitle.textContent =
-        state.currentCharacter?.name || state.currentConv.characterName || state.currentConv.title || "（无标题）";
+      const ids = Array.isArray(state.currentConv.characterIds) ? state.currentConv.characterIds : [];
+      const base = state.currentCharacter?.name || state.currentConv.characterName || state.currentConv.title || "（无标题）";
+      dom.chatTitle.textContent = ids.length > 1 ? `${base} · 群聊 ${ids.length} 人` : base;
     }
     renderHeaderMeta();
     dom.chatInputArea?.classList.remove("hidden");

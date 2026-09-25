@@ -2524,6 +2524,45 @@ main.ctx-open .drawer:not(.hidden) {
   color: var(--fg-dim, var(--fg-muted));
 }
 
+/* ── 群聊：这一轮谁说话 ─────────────────────────────── */
+
+.speaker-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 2px 0;
+}
+
+.speaker-label { font-size: 11px; color: var(--fg-muted); }
+
+.speaker-chip {
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: border-color var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.speaker-chip:hover { border-color: var(--accent-line); color: var(--accent); }
+
+.speaker-chip.on {
+  border-color: var(--accent-line);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 气泡上方的说话人：只在群聊里出现（单人对话不写 speakerId） */
+.msg-speaker {
+  margin: 0 0 2px 2px;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
 .bc-head {
   display: flex;
   align-items: center;

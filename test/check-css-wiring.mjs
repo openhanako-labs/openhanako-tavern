@@ -65,10 +65,18 @@ for (const f of files) {
   const src = readFileSync(f, "utf8");
   const isHtml = f.endsWith(".html");
   // class="a b c" / className = "a b" / classList.add("a","b") / :class 之类
+  //
+  // 外加一条专治**带插值的类属性**：`class="speaker-chip${cond ? " on" : ""}"`。
+  // 上面那三条都要求名字后面**紧跟引号**，所以这种写法整条扫不到——
+  // 后果是真实的类被当成死规则（群聊的 .speaker-chip 就是这么被报的）。
+  // 只取插值前面的字面量部分。
+  // 已知未覆盖：插值在**前面**的写法（`class="${x} on"`）——那种还没出现过，
+  // 等真出现时连这条一起补，别在这儿凭空猜。
   const patterns = [
     /class(?:Name)?\s*=\s*[`"']([^`"']+)[`"']/g,
     /classList\.(?:add|remove|toggle)\(([^)]*)\)/g,
-    /\bclass="([^"]*)"/g
+    /\bclass="([^"]*)"/g,
+    /\bclass="([^"${}]+)\$\{/g
   ];
   for (const re of patterns) {
     for (const m of src.matchAll(re)) {

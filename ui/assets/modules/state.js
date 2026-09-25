@@ -21,6 +21,9 @@ export const state = {
   toolList: null,
   exportList: null,
   isGenerating: false,
+  // 群聊：这一轮由哪位参与者发言（null = 主角）。
+  // 发完一条**不自动换人**——换谁开口是作者的判断，系统不该替他轮转。
+  speakerId: null,
   currentSetting: null,
   currentVariable: null,
   currentForm: null,
