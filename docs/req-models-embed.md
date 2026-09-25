@@ -1,61 +1,77 @@
-# 需求：让沙箱内的 App 能算 embedding（`models.embed`）
+# 需求：App 侧算 embedding 的两条路（附：`models.embed` 的价值在哪）
 
-> 一句话：App 找得到模型、拿得到凭据、也拼得出请求，但**发不出去** ——
-> 沙箱内的 App 没有出站网络。按宿主契约自己的设计意图，这件事本该由宿主代劳。
+> **2026-09-25 当日更正**：这份文档的第一版把原因写错了。
+> 我当时的结论是"沙箱内的 App 出不了网，所以缺一条 `models.embed` 面"。
+> 查清了不是这么回事——真正挡住的是 **App 自己 `manifest.json` 里的
+> `network.allowedHosts` 是空数组**。那是我自己写的，**门就在我手上**。
+> 把域名填进去就能跑。
+>
+> 所以这份文档现在分两半：
+> ① **已经能跑的路**（App 自己发请求 + 白名单）——记录原因与做法，不需要谁改宿主；
+> ② **仍然值得提的一条**（`models.embed`）——不是"做不到"，是"更干净"。
 
-## 现象（可复现）
+## ① 已经能跑的路：App 自己发请求 + manifest 白名单
 
-酒馆 App（eleckoi-tavern）用 `app/models.read` + `app/provider.credentials.read`
-找到 `BAAI/bge-m3` 并拿到 `{ baseUrl, apiKey }` 后，按 OpenAI 形状 POST `/embeddings`：
+### 走通它需要什么
+
+App 的 `manifest.json` 里有一个出站白名单：
+
+```json
+"network": {
+  "allowedHosts": [],          // ← 空数组 = 全部拒绝
+  "methods": [],
+  "allowLocalhost": false
+}
+```
+
+填上要访问的域名即可。参照 `bilibili-intake-v2`（它那份里本来就写着 `api.siliconflow.cn`）：
+
+```json
+"network": {
+  "allowedHosts": ["api.siliconflow.cn"],
+  "methods": ["GET", "POST"],
+  "allowLocalhost": false,
+  "defaultTimeoutMs": 30000,
+  "maxResponseBytes": 5242880
+}
+```
+
+改完，宿主会把它判定为**新增权限**，reload 时返回：
 
 ```
-连不上 embedding 端点（https://api.siliconflow.cn）：fetch failed
+Reload of app:eleckoi-tavern needs the user's review for newly declared authority.
 ```
 
-同一个端点、同一台机、**宿主之外**的一个 node 进程：
+→ 需要用户批准。这是对的：出站白名单就该有人过一眼。
 
-```
-HTTP 401          ← 通，只是没带 key
-```
+### 当时的误判（留档，别再犯）
 
-差别不在网络，在**谁在发请求**。
+先看到 `fetch failed`，又从"宿主给 App 的能力清单里没有 network 字样"推成
+"宿主根本没有这条路"——**推过头了**。实际上：
 
-## 证据
+- App 出站**不看能力清单**，看的是 manifest 里的 `network.allowedHosts`；
+- `app/runtime.network` 是另一回事（那是 `ctx.runtime.*` 那条面，
+  `comfyui-hana`、`hana-mail`、`token-tracker-app` 在用）；
+- `bilibili-intake-v2` 既没 `app/runtime.network`、也不走 `ctx.runtime`，
+  它声明 `app/process.spawn`，靠**子进程**联网。
 
-1. `tavern_embed_status` 全绿：
+一句话：**门在我自己的清单里，我一直在外面找。**
 
-   ```
-   ok:true  step:credentials
-   providerId=siliconflow  model=BAAI/bge-m3  candidates=1  foundBy=scan  scanned=13
-   note: 宿主按类型查 embedding 是 0 条（它把没写 type 的模型一律算 chat），改扫目录：13 条里认出 1 条
-   ```
+## ② 仍然值得提的一条：`models.embed`（不是"做不到"，是"更干净"）
 
-   → **授权没问题、模型没问题、凭据没问题。**（`foundBy=scan` 这条本身也值得看一眼：
-   按 `type: "embedding"` 查永远是 0 条，只有扫目录按 id 认才认得出来。）
+现在这条路（App 自己取凭据 + 自己拼端点）**能跑**，但有两个代价：
 
-2. App 侧 `fetch` → `fetch failed`，DNS/连接层就没出去。
+1. App 手里是一把**完整凭据**（`provider:credentials` 返回明文 `apiKey`）。
+   出站白名单一开，它就能把 key 带到任何被允许的域名去。
+2. 端点差异要 App 自己记。比如 `dimensions`——那是 OpenAI text-embedding-3 的东西，
+   `bge-m3` 收到直接 `400 · code 20015`（酒馆侧实测踩过）。
 
-3. 宿主给 App 的能力清单里**没有** network / fetch / egress / outbound 任何一条：
-
-   ```
-   app/tools.expose-to-model, app/ui.open-external, app/resources.read,
-   app/models.infer, app/models.read, app/provider.credentials.read
-   ```
-
-## 为什么"App 自己发请求"本来就是错的路
-
-`app-contract/models.d.ts` 头部写着：
+而契约自己写着：
 
 > Provider credentials, endpoints, headers and transport configuration are
 > **deliberately absent**: Hana keeps those in its shared model runtime.
 
-宿主的设计**就是**不让 App 碰 provider 的传输层。酒馆现在这条路
-（自己取完整凭据 + 自己拼端点）是在**绕**这个设计，而沙箱把它堵住了——堵得对。
-所以这不是"给 App 开个联网权限"的问题，是**缺一条面**。
-
-## 请求
-
-`HanaPluginModelsV2` 加一个成员：
+所以长期更贴设计的是宿主补一条：
 
 ```ts
 embed(request: {
@@ -66,22 +82,15 @@ embed(request: {
 }): Promise<{ vectors: number[][]; dimension: number }>;
 ```
 
-- 能力名建议 `app/models.embed`，与 `app/models.read` / `app/models.infer` 并列。
-  **不复用 `infer`**：这条面存在的意义就是能力收窄——只给向量，不给一把完整凭据；
-  端点差异（哪个 provider 吃 `dimensions`、哪个不吃）也由宿主抹平。
-- ⚠️ **不要**加 `dimensions` 参数：那是 OpenAI text-embedding-3 的东西，
-  `bge-m3` 收到直接 `400 · code 20015`。（酒馆侧已经实测踩过一次。）
+- 能力名建议 `app/models.embed`（与 `models.read` / `models.infer` 并列）。
+  **不复用 `infer`**：这条面存在的意义就是能力收窄——只给向量，不给一把完整钥匙。
+- ⚠️ **不要**加 `dimensions`（见上）。
+- 验收：酒馆侧 `test/regression-embed.mjs` 里两条 —— 有这条面就走它
+  （`via: "host"`，并且用 `fetchImpl` 抛错来证明它**没去取凭据**）；
+  没有这条面就退回直连（`via: "direct"`）。
+  `lib/embed/service.js` 里那个分支就在等它，两个调用点都已经把 `sdk.models` 传进去了。
 
-## 验收标准
-
-酒馆侧 `test/regression-embed.mjs` 里已经写好了两条，宿主一有这条面就会**自动**用它
-（`lib/embed/service.js` 里那个分支在等它，两个调用点都已经把 `sdk.models` 传进去了）：
-
-1. 宿主有 `models.embed` → 走它：返回 `via: "host"`，**且不去调 `provider:credentials`**
-   （用 `fetchImpl` 抛错来证明它根本没碰网络）。
-2. 宿主没有这条面 → 退回现在的直连：`via: "direct"`。
-
-## 附带一条（小，不急）
+## 附带一条（小，不急）：工具可执行性
 
 App 暴露给模型的工具（`app/tools.expose-to-model`），只在 App 的 UI 实例（窗口）
 活着时才能执行；窗口一关，工具**仍出现在工具目录里**，但调用返回：
@@ -95,11 +104,10 @@ RPC peer closed; cannot call callback.tools.execute
 从界面重载、或重启宿主之后立即调用才跑得起来。
 
 **请求**：要么让工具执行不依赖 UI 窗口，要么让 `inspect` 如实反映"此刻能不能执行"
-——现在那个 `on` 会让人以为能跑。
-（我已经用"重启宿主"绕过，故列为小项。）
+——现在那个 `on` 会让人以为能跑。（我已用"重启宿主"绕过，故列为小项。）
 
 ---
 
-记录人：奥菲莉娅（月曦夜的助手） · 2026-09-25
+记录人：奥菲莉娅（月曦夜的助手） · 2026-09-25（当日更正一版）
 来源仓库：`W:\Games\Hanako\.hanako\apps\eleckoi-tavern`
-相关文件：`lib/embed/{service,tool,routes}.js`、`docs/notes-host-embedding.md`
+相关文件：`lib/embed/{service,tool,routes}.js`、`manifest.json`、`docs/notes-host-embedding.md`

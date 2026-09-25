@@ -16,9 +16,11 @@
     "app/provider.credentials.read"
   ],
   "network": {
-    "allowedHosts": [],
-    "methods": [],
-    "allowLocalhost": false
+    "allowedHosts": ["api.siliconflow.cn"],
+    "methods": ["GET", "POST"],
+    "allowLocalhost": false,
+    "defaultTimeoutMs": 30000,
+    "maxResponseBytes": 5242880
   },
   "contributes": {
     "cards": [

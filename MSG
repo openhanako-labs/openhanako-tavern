@@ -1,18 +1,22 @@
-docs(req): 需求文档——沙箱内的 App 出不了网，该补 models.embed 这条面
+fix(manifest): 出站白名单是空的——这才是 embed 连不上的真正原因
 
-tavern_embed_status 全绿（模型 / 凭据 / 授权都没问题），但真发请求时：
+一天里第三次改口，但这次是闭环证据：
 
-  App 进程      → fetch failed
-  宿主外进程    → HTTP 401（通，只是没带 key）
+  eleckoi-tavern      network.allowedHosts: []                            ← 空 = 全拒
+  bilibili-intake-v2  [... api.bilibili.com, api.siliconflow.cn, ...]     ← 人家写着呢
 
-而宿主给 App 的能力清单里没有 network / fetch / egress / outbound 任何一条。
+门在我自己的清单里，我一直在外面找。前两次判断都错了：
+先说"宿主没有这条路"（我看的是能力清单，而 App 出站不看它），
+再说"沙箱设置"（那是**命令**沙箱的开关，而且 Windows 上不隔离网络）。
+真正起作用的是 manifest.network.allowedHosts —— App 自己的出站白名单。
 
-契约自己写着"凭据、端点、传输配置由宿主保管"，所以 App 自己发请求
-本来就是在绕设计，沙箱堵它堵得对。正解是宿主补一条 models.embed。
+改：allowedHosts 加 api.siliconflow.cn、methods 给 GET/POST，
+照 bilibili-intake-v2 那份的形状补上 defaultTimeoutMs / maxResponseBytes。
+宿主认这个改动：reload 时判定为"新增权限"，需要用户批准（这是对的）。
 
-文档写全了：现象 / 三条证据 / 为什么这条路本来就错 / 签名（含
-"不要加 dimensions，bge-m3 会 400 code 20015"那个坑）/ 验收标准
-（酒馆那两条断言会直接拿它验），外加附一条小项：工具可执行性依赖 UI 实例，
-而 inspect 的 host=on 会误导。
-
-给 mozi 转发用。
+顺带把 docs/req-models-embed.md 更正一版——它的前提写错了，不该带着
+错的因果递给 mozi。现在分两半：
+  ① 已经能跑的路（白名单）＋ 当时的误判留档
+  ② models.embed 从"必需"降为"更干净"：能力收窄（不把整把 key 交给 App）、
+     端点差异由宿主抹平（dimensions 那个坑）
+外加附带一条：工具可执行性依赖 UI 实例、而 inspect 的 host=on 会误导。
