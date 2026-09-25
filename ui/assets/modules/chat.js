@@ -23,11 +23,16 @@ function charNameOf(id) {
 
 import { participantsOf, nextSpeaker } from "./speaker-rotation.js";
 
-const AUTO_ROTATE_KEY = "eleckoi:auto-rotate";
-
-/** 自动轮换的偏好。只读 localStorage——一个偏好只该有一个真相。 */
+/**
+ * 这一场要不要自动轮换。
+ *
+ * 之前存在 localStorage 里——那是**全局**偏好，而「这一场怎么轮」是场景属性：
+ * 有的场就该轮流开口，有的场该一直由同一个人回答。
+ * 现在挂在对话上（与 presetId 同一条设计）。
+ * 读侧兜底：旧对话没有这个字段 → false。
+ */
 function autoRotateEnabled() {
-  try { return localStorage.getItem(AUTO_ROTATE_KEY) === "1"; } catch { return false; }
+  return state.currentConv?.autoRotate === true;
 }
 
 /*
@@ -99,8 +104,20 @@ export function renderSpeakerRow() {
       renderSpeakerRow();
     });
   });
-  row.querySelector("#speaker-auto")?.addEventListener("click", () => {
-    try { localStorage.setItem(AUTO_ROTATE_KEY, autoRotateEnabled() ? "0" : "1"); } catch { /* 存不了就算了，下次开还是关 */ }
+  row.querySelector("#speaker-auto")?.addEventListener("click", async () => {
+    // 先落服务端再改本地：写失败就什么都不动，
+    // 屏幕不会先翻成“开”再默默翻回来。
+    const next = !autoRotateEnabled();
+    try {
+      await apiFetch(`conversations/${state.currentConv.id}/rotation`, {
+        method: "PUT",
+        body: JSON.stringify({ autoRotate: next })
+      });
+    } catch (e) {
+      toast("改不了这一场的轮换设置: " + friendlyError(e), "error");
+      return;
+    }
+    if (state.currentConv) state.currentConv.autoRotate = next;
     renderSpeakerRow();
   });
 }

@@ -164,6 +164,8 @@ const EXPECTED = {
     // 路由表对照就是为了逼人在这里多想一秒：加路由是有后果的，
     // 它同时意味着界面得有出口、测试得有覆盖。
     "PATCH /conversations/:id/participants",
+    // 这一场的自动轮换开关（场景属性，不是全局设置）
+    "PUT /conversations/:id/rotation",
     "DELETE /conversations/:id",
     "PUT /conversations/:id/messages/:messageId",
     "DELETE /conversations/:id/messages/:messageId",

@@ -23,8 +23,9 @@ export const state = {
   isGenerating: false,
   // 群聊：这一轮由哪位参与者发言（null = 主角）。
   // 发完一条**默认不自动换人**——换谁开口是作者的判断，系统不该替他轮转。
-  // 想自动轮流的话，去发言者那行把「自动」打开
-  //（存在 localStorage eleckoi:auto-rotate，不存 state：一个偏好只该有一个真相）。
+  // 想自动轮流的话，去发言者那行把「自动」打开。
+  // 那个开关**存在对话上**（conv.autoRotate），不是全局设置：
+  // 「这一场怎么轮」是场景属性，与 presetId 同一条设计。
   speakerId: null,
   currentSetting: null,
   currentVariable: null,

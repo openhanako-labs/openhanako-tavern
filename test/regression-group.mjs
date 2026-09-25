@@ -192,6 +192,47 @@ await okAsync("改名单不动历史：已有消息的署名一条不变", async
   assert.strictEqual(r.data.messages.length, 2, "新加的人不该被补种开场白");
 });
 
+// ── ④ 自动轮换：存在**对话**上，不是全局设置 ──────────
+await okAsync("新对话默认不自动轮换", async () => {
+  const app = groupApp();
+  const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+  assert.strictEqual(made.data.autoRotate, false);
+});
+
+await okAsync("改这一场的轮换开关：存得住", async () => {
+  const app = groupApp();
+  const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+
+  const on = await request(app, "PUT", `/conversations/${made.data.id}/rotation`, { body: { autoRotate: true } });
+  assert.strictEqual(on.status, 200, `状态 ${on.status}：${on.error || ""}`);
+  assert.strictEqual(on.data.autoRotate, true);
+
+  // 真的落了盘（不是只回了一个改过的对象）
+  const back = await request(app, "GET", `/conversations/${made.data.id}`);
+  assert.strictEqual(back.data.autoRotate, true);
+
+  const off = await request(app, "PUT", `/conversations/${made.data.id}/rotation`, { body: { autoRotate: false } });
+  assert.strictEqual(off.data.autoRotate, false);
+});
+
+await okAsync("轮换开关只收布尔值（不安静地把「yes」当成开）", async () => {
+  const app = groupApp();
+  const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+  const r = await request(app, "PUT", `/conversations/${made.data.id}/rotation`, { body: { autoRotate: "yes" } });
+  assert.ok(r.status >= 400, `该报错，实际 ${r.status}`);
+  assert.ok(/必须是布尔值/.test(r.error || ""), `报错要说清：${r.error}`);
+});
+
+await okAsync("开一场不会影响另一场（这一场是场景属性）", async () => {
+  const app = groupApp();
+  const a = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+  const b = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+  await request(app, "PUT", `/conversations/${a.data.id}/rotation`, { body: { autoRotate: true } });
+
+  const backB = await request(app, "GET", `/conversations/${b.data.id}`);
+  assert.strictEqual(backB.data.autoRotate, false, "改一场把另一场也改了——那就退回了全局设置");
+});
+
 await okAsync("单人对话里同一个 id 仍然不写署名（与以前逐字节一致）", async () => {
   const app = makeApp();
   registerConversationRoutes(app, convRepo, { available: true, generate: async () => ({ content: "x" }) }, charRepo, setRepo, null, null, null);
