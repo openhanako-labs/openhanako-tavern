@@ -2244,6 +2244,34 @@ main.ctx-open .drawer:not(.hidden) {
   font-weight: 600;
 }
 
+/* 同场角色：谁在这一场里（角色面板里的名单编辑器） */
+.ctx-cast {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.ctx-cast-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+}
+
+.ctx-cast-now { font-size: 12.5px; }
+
+.ctx-cast select {
+  width: 100%;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.ctx-cast-acts { display: flex; gap: 6px; }
+
+.ctx-cast-note { font-size: 11px; line-height: 1.5; }
+
 /* 气泡上方的说话人：只在群聊里出现（单人对话不写 speakerId） */
 .msg-speaker {
   margin: 0 0 2px 2px;

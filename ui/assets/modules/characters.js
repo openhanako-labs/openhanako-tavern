@@ -438,6 +438,35 @@ export async function renderCharContext(greetIdx = 0) {
            </div>`}
     </div>`;
 
+  /*
+   * 同场角色：谁在这一场里。
+   *
+   * 过去这事只能在**建对话**时定，之后加不了也减不了——想加第三个人
+   * 只能重开一场，等于把上下文全丢了。
+   * 服务端那条路是严格的（主角不在名单里就报错，不安静换）；
+   * 界面的活是**替他把话说完**：自动把第一位当新主角带上，并说明白。
+   */
+  const castIds = Array.isArray(state.currentConv?.characterIds) && state.currentConv.characterIds.length > 0
+    ? state.currentConv.characterIds
+    : (state.currentConv?.characterId ? [state.currentConv.characterId] : []);
+  const nameOf = (id) =>
+    (state.charList || []).find((x) => String(x.id) === String(id))?.name || "（已删除）";
+  const castHtml = state.currentConv ? `
+    <div class="ctx-cast">
+      <div class="ctx-cast-head">
+        <span>同场角色</span>
+        <span class="dim">${castIds.length} 位</span>
+      </div>
+      <div class="ctx-cast-now">${castIds.map((id) => escapeHtml(nameOf(id))).join(" · ")}</div>
+      <select id="ctx-cast-select" multiple size="5">
+        ${(state.charList || []).map((ch) => `<option value="${escapeHtml(ch.id)}"${castIds.includes(ch.id) ? " selected" : ""}>${escapeHtml(ch.name)}</option>`).join("")}
+      </select>
+      <div class="ctx-cast-acts">
+        <button type="button" class="mini" id="ctx-cast-save">保存名单</button>
+      </div>
+      <div class="dim ctx-cast-note" id="ctx-cast-note">选一个=单人；多个=群聊。第一位是主角。新加的人不会补种开场白。</div>
+    </div>` : "";
+
   box.innerHTML = `
     <div class="char-ctx-head">
       <div class="char-ctx-ava">${escapeHtml(initial)}</div>
@@ -450,11 +479,51 @@ export async function renderCharContext(greetIdx = 0) {
     ${tags.length > 0 ? `<div class="char-ctx-tags">${tags.map(t => `<span>${escapeHtml(t)}</span>`).join("")}</div>` : ""}
     ${greetHtml}
     ${summaryHtml}
+    ${castHtml}
     <div class="char-ctx-actions">
       <button class="btn btn-sm" data-ctx="edit">编辑</button>
       <button class="btn btn-sm" data-ctx="export">导出</button>
       <button class="btn btn-sm danger" data-ctx="delete">删除</button>
     </div>`;
+
+  // 同场角色：保存名单。
+  box.querySelector("#ctx-cast-save")?.addEventListener("click", async () => {
+    const sel = box.querySelector("#ctx-cast-select");
+    if (!sel) return;
+    const ids = [...sel.selectedOptions].map((o) => o.value);
+    const note = box.querySelector("#ctx-cast-note");
+    if (ids.length === 0) {
+      // 本地先说，不白跑一趟服务端（那边也会报同样的话）。
+      if (note) note.textContent = "至少留一位——一场没法说话的对话没有意义。";
+      return;
+    }
+    const body = { characterIds: ids };
+    if (!ids.includes(String(state.currentConv?.characterId || ""))) {
+      // 服务端不安静换主角（它只报错）。这里替他把话说完。
+      body.characterId = ids[0];
+      if (note) note.textContent = `主角换成 ${nameOf(ids[0])} 了（原来的那位不在新名单里）。`;
+    }
+    try {
+      const res = await apiFetch(`conversations/${state.currentConv.id}/participants`, {
+        method: "PATCH",
+        body: JSON.stringify(body)
+      });
+      const data = res?.data || res || {};
+      if (state.currentConv) {
+        state.currentConv.characterIds = data.characterIds;
+        state.currentConv.characterId = data.characterId;
+        state.currentConv.characterName = data.characterName;
+      }
+      toast("同场角色已更新", "success");
+      // 名单变了，发言者那一行与气泡署名都得跟着变——
+      // 交给“打开对话”那条路重画，不自己再拼一遍。
+      // （动态 import：静态 import 会让 characters ↔ chat 形成环。）
+      const { openConversation } = await import("./chat.js");
+      await openConversation(state.currentConv.id);
+    } catch (e) {
+      toast("改名单失败: " + friendlyError(e), "error");
+    }
+  });
 
   // 前情提要的动作：保存 / 清掉。
   // 清掉是**安全操作**：折叠每轮按预算重算，原文一条不少。

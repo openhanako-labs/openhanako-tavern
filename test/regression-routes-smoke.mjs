@@ -160,6 +160,10 @@ const EXPECTED = {
   ],
   conversations: [
     "GET /conversations", "GET /conversations/:id", "POST /conversations",
+    // 改参与者（加人/减人/换主角）——2026-09-25 加。
+    // 路由表对照就是为了逼人在这里多想一秒：加路由是有后果的，
+    // 它同时意味着界面得有出口、测试得有覆盖。
+    "PATCH /conversations/:id/participants",
     "DELETE /conversations/:id",
     "PUT /conversations/:id/messages/:messageId",
     "DELETE /conversations/:id/messages/:messageId",

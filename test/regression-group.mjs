@@ -96,6 +96,102 @@ await okAsync("开场白在**落盘时**结算一次性宏（屏幕与 prompt �
   assert.ok(!content.includes("{{"), `落盘的开场白还带着宏：${content}`);
 });
 
+// ── ③ 改参与者：加人 / 减人 / 换主角 ────────────────────
+function groupApp() {
+  const app = makeApp();
+  registerConversationRoutes(app, convRepo, { available: true, generate: async () => ({ content: "x" }) }, charRepo, setRepo, null, null, null);
+  return app;
+}
+
+await okAsync("加第三个人：名单变 3，且名册真的跟着变", async () => {
+  const third = await charRepo.create({ name: "阿石", description: "塔下的石匠", first_mes: "「石头记得。」" });
+  const app = groupApp();
+  const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+
+  const r = await request(app, "PATCH", `/conversations/${made.data.id}/participants`, {
+    body: { characterIds: [vera.id, ren.id, third.id] }
+  });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  assert.deepStrictEqual(r.data.characterIds, [vera.id, ren.id, third.id]);
+  assert.strictEqual(r.data.characterId, vera.id, "没换主角就不该动他");
+  assert.deepStrictEqual(participantsOf(r.data), [vera.id, ren.id, third.id]);
+});
+
+await okAsync("减到剩一位：真的变回单人（同场名册从 prompt 里消失）", async () => {
+  const app = groupApp();
+  const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+
+  const r = await request(app, "PATCH", `/conversations/${made.data.id}/participants`, {
+    body: { characterIds: [vera.id] }
+  });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  assert.deepStrictEqual(r.data.characterIds, [vera.id]);
+
+  // 这一步才是真的：“名单里只剩一个”与“走单人路径”必须是同一件事。
+  await convRepo.addMessage(made.data.id, "user", "就你一个？");
+  const conv = await convRepo.get(made.data.id);
+  const out = await buildGenerationInput(repos, conv, vera, "嗯", OPT);
+  assert.ok(!out.systemPrompt.includes("## 同场角色"), "只剩一位了，不该还有同场名册");
+  assert.ok(!out.systemPrompt.includes("## 本轮发言者"), "只剩一位了，不该还有本轮发言者");
+});
+
+await okAsync("主角不在新名单里 → **报错说清**，不安静换人", async () => {
+  const app = groupApp();
+  const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+
+  const r = await request(app, "PATCH", `/conversations/${made.data.id}/participants`, {
+    body: { characterIds: [ren.id] }
+  });
+  assert.ok(r.status >= 400, `该报错，实际 ${r.status}`);
+  assert.ok(/主角.*不在新名单/.test(r.error || ""), `报错要说清：${r.error}`);
+  assert.ok((r.error || "").includes(ren.id), "该把可选的新主角列出来");
+});
+
+await okAsync("显式指定新主角：换了人，列表用的名字也跟着换", async () => {
+  const app = groupApp();
+  const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+
+  const r = await request(app, "PATCH", `/conversations/${made.data.id}/participants`, {
+    body: { characterIds: [ren.id, vera.id], characterId: ren.id }
+  });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  assert.strictEqual(r.data.characterId, ren.id);
+  assert.strictEqual(r.data.characterName, "任十九", "列表里显示的名字该是主角的");
+});
+
+await okAsync("名单里混进不存在的角色 → 说清是哪一个", async () => {
+  const app = groupApp();
+  const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+  const r = await request(app, "PATCH", `/conversations/${made.data.id}/participants`, {
+    body: { characterIds: [vera.id, "没有这个 id"] }
+  });
+  assert.ok(r.status >= 400, `该报错，实际 ${r.status}`);
+  assert.ok(/角色不存在/.test(r.error || ""), `报错要说清：${r.error}`);
+});
+
+await okAsync("空名单 → 报错（一场没法说话的对话没有意义）", async () => {
+  const app = groupApp();
+  const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id], greeting: false } });
+  const r = await request(app, "PATCH", `/conversations/${made.data.id}/participants`, { body: { characterIds: [] } });
+  assert.ok(r.status >= 400, `该报错，实际 ${r.status}`);
+  assert.ok(/至少留一位/.test(r.error || ""), `报错要说清：${r.error}`);
+});
+
+await okAsync("改名单不动历史：已有消息的署名一条不变", async () => {
+  const app = groupApp();
+  const made = await request(app, "POST", "/conversations", { body: { characterIds: [vera.id, ren.id] } });
+  const before = (made.data.messages || []).map(m => `${m.id}:${m.speakerId}`).join("|");
+  assert.ok(before.length > 0, "这场开场白该已经种下");
+
+  const r = await request(app, "PATCH", `/conversations/${made.data.id}/participants`, {
+    body: { characterIds: [vera.id, ren.id, solo.id] }
+  });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  const after = (r.data.messages || []).map(m => `${m.id}:${m.speakerId}`).join("|");
+  assert.strictEqual(after, before, "改参与者把历史消息改了");
+  assert.strictEqual(r.data.messages.length, 2, "新加的人不该被补种开场白");
+});
+
 await okAsync("单人对话里同一个 id 仍然不写署名（与以前逐字节一致）", async () => {
   const app = makeApp();
   registerConversationRoutes(app, convRepo, { available: true, generate: async () => ({ content: "x" }) }, charRepo, setRepo, null, null, null);
