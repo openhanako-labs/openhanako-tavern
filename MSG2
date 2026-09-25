@@ -1,24 +1,16 @@
-docs(req): 收尾版——出网要走 sdk.network.fetch，之前三版的原因都写错了
+feat(characters): 列表带上 has_book —— 补上「哪张卡带世界书」这第一眼
 
-跑通之后的定稿。前三版把原因写错了：宿主没有这条路 → 沙箱设置 →
-白名单是空的 → 实际是**用错了门**。
+用户的用法是「打开角色卡 → 对应世界书 → 以我的人设 → 开演」，
+而链子上的第一眼就缺：GET /characters 只回 id/name/时间（索引里存的是摘要，
+没有 character_book），所以列表里看不出哪张卡带书。
 
-正解在 hana-app-creator SKILL 里，那节标题就叫
-"network: the checked outbound door"：
-App 入口跑在独立的 AppHost 子进程里，原始网络被 Node 权限模型拒掉
-（getaddrinfo ERR_ACCESS_DENIED，看着像 DNS 坏了，其实是被权限层拒了）；
-出网必须走 sdk.network.fetch——它跨 IPC 让宿主按 manifest 的
-network.allowedHosts 检查后发出。v2 没有单独的 network.fetch 能力。
+（顺带纠正我自己：那个 has_book 徽章只长在**导入预览**上（import-item），
+不是主列表——我先前说"徽章从来不显示"，说错了。下结论下快了。）
 
-实测（收尾）：
-  dimension 1024 / count 3 / 落盘 65,497 字节
-  3×1024、无全零、无 NaN、范数 1.73
-  第一维 0.0127 == 直连探测那次 0.0127（逐位一致）
+改：
+· 列表返回前按 id 各读一次详情，补 has_book；代价写在注释里——
+  几十张卡可接受，几百张时应把 has_book 写进索引，现在不为想象中的规模加复杂度。
+· rail 的卡项下面带一行「带世界书」（复用已有的 .mt 样式，不新增 CSS）。
 
-给宿主只剩一条建议：被权限层拒掉时报错直说"原始网络被沙箱拒绝，
-出网请用 sdk.network.fetch"，别伪装成 fetch failed——我是挖 undici 的
-cause 才看见 ERR_ACCESS_DENIED 的。
-
-models.embed 从"阻塞项"降为"更干净"：现在 App 手里是一把完整凭据，
-出网门一开就能把 key 带出去；宿主代劳则只给向量、不给钥匙。
-酒馆侧的分支与测试都留着（via: "host" | "direct"）。
+验：chain 探针 → 第一张卡的字段从 4 个变成 5 个（多出 has_book）；
+    全套 53 个文件仍全绿。

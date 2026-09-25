@@ -96,7 +96,7 @@ function renderChars() {
   el.innerHTML = chars.map(c => `
     <div class="item" data-char="${c.id}" role="button" tabindex="0" title="${esc(c.name || "")}">
       ${avatar(c)}
-      <div class="bd"><div class="nm">${esc(c.name || "（无名称）")}</div></div>
+      <div class="bd"><div class="nm">${esc(c.name || "（无名称）")}</div>${c.has_book ? '<div class="mt">带世界书</div>' : ""}</div>
     </div>
   `).join("");
   el.querySelectorAll(".item").forEach(item => {
