@@ -142,7 +142,7 @@
           <div class="more-wrap">
             <button id="chat-more-btn" class="btn btn-ghost btn-sm more-btn hidden" title="更多">⋯</button>
             <div id="more-menu" class="more-menu" hidden>
-              <button data-act="persona"><span class="mi">◍</span>用户人设</button>
+              <button data-act="persona"><span class="mi">◍</span>本场人设</button>
               <button data-act="activation"><span class="mi">✳</span>激活预览</button>
               <button data-act="prompt"><span class="mi">⌸</span>组装预览</button>
               <div class="sep"></div>
@@ -654,11 +654,11 @@
         </select>
       </div>
       <div class="field">
-        <label>我的称呼</label>
+        <label>我的称呼 <span class="hint">留空 = 沿用这张卡上一场</span></label>
         <input type="text" id="conv-user-name" placeholder="User">
       </div>
       <div class="field">
-        <label>我的人设 <span class="hint">可选</span></label>
+        <label>我的人设 <span class="hint">留空 = 沿用这张卡上一场</span></label>
         <textarea id="conv-persona" rows="2" placeholder="你是谁、在故事里是什么身份"></textarea>
       </div>
     </div>
@@ -690,7 +690,8 @@
 <div id="persona-modal" class="modal hidden">
   <div class="modal-content">
     <div class="modal-header">
-      <h2>用户人设</h2>
+      <h2>本场人设</h2>
+  <div class="hint" style="margin:-4px 0 10px">只影响当前这一场；开新场时会从这张卡的最近一场带过来。</div>
       <button id="persona-close" class="btn btn-ghost btn-sm">✕</button>
     </div>
     <div class="modal-body">

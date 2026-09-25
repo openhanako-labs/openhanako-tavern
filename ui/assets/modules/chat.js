@@ -509,7 +509,14 @@ export async function confirmNewConversation() {
   const picked = [...(select?.selectedOptions || [])].map(o => o.value).filter(Boolean);
   if (picked.length === 0) { toast("请选择角色", "error"); return; }
   try {
+    const userName = (document.getElementById("conv-user-name")?.value || "").trim();
+    const persona = (document.getElementById("conv-persona")?.value || "").trim();
     const body = picked.length > 1 ? { characterId: picked[0], characterIds: picked } : { characterId: picked[0] };
+    // 表单里填了才带上；**留空就不带** —— 服务端会从这张卡最近一场继承
+    // （人设跟卡走，原酒馆的规矩）。把空串写死传过去会把继承关掉。
+    // 之前这两个框只存在于 HTML 里：填了、点创建、然后被丢掉。
+    if (userName) body.userName = userName;
+    if (persona) body.persona = persona;
     const res = await apiFetch("conversations", { method: "POST", body: JSON.stringify(body) });
     const conv = res.data || res;
     await loadConversations();
@@ -521,7 +528,15 @@ export async function confirmNewConversation() {
   }
 }
 
-export function closeNewConvModal() { dom.newConvModalEl.classList.add("hidden"); }
+export function closeNewConvModal() {
+  dom.newConvModalEl.classList.add("hidden");
+  // 关窗要清空：否则下一次开窗带着上一次的内容——用户以为“它记住了”，
+  // 实际是要写进新场，还会把本该继承的那份覆盖掉。
+  const un = document.getElementById("conv-user-name");
+  const pe = document.getElementById("conv-persona");
+  if (un) un.value = "";
+  if (pe) pe.value = "";
+}
 
 export async function deleteConversation() {
   if (!state.currentConv) return;
