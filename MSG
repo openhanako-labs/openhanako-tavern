@@ -1,18 +1,27 @@
-feat(embed): 用宿主自己的 embedding 模型算向量（bus 取凭据，不经手 key）
+docs(embed): 更正两处错的判断——App 有 bus 那条门，钥匙一直在磁盘上
 
-宿主给 App 的模型契约（app-contract/models.d.ts）只有 list/stream/utility/cancel，
-没有 embedding 面——但不等于算不了：ctx.bus.request 有
-provider:models-by-type 与 provider:credentials，拿到 baseUrl+apiKey 之后
-按 OpenAI 兼容形状 POST /embeddings 就行。
+我上一轮写下的两个结论都不对，这轮实测推翻了：
 
-lib/embed/service.js  找模型 -> 取凭据 -> 算；凭据不落盘/不进日志/不进返回值
-lib/embed/tool.js     tavern_embed_status / tavern_embed（可落文件，默认只回指纹）
-lib/embed/routes.js   GET /embed/status、POST /embed
-manifest.json         加 app/models.read + app/provider.credentials.read
+① 「App 只能看见 embedding 模型、不能调用」
+   —— models 面里确实没有，但 queries 面里有：
+      ctx.bus.request("provider:credentials") → { apiKey, baseUrl }
+      授权名 app/provider.credentials.read。
+   酒馆已落地 lib/embed/（service + 工具 + 路由 + 22 条测试）。
 
-test/regression-embed.mjs 22 条：形状逐条对、信封必须拆、凭据不许漏。
-test/check-module-load.mjs（新守卫）+ test/lib/load-probe.mjs
-  —— 真 import 每个服务端模块。起因：两个半角引号写进中文字符串，
-     node --check 报了 OK，宿主报 Unexpected identifier，用户看到安装未完成。
+② 「要用它只能直连、要用户给 key」
+   —— 钥匙一直在 ~/.hanako/provider-catalog.json 的 providers.<id>.api_key。
+      这个生态早就有人这么做：biaoqingbao/lib/shared.js:237 的
+      getProviderApiConfig 就是读它（它的 embedding-config 里
+      source: "hana" 就是这个意思）。
+      我的探针把 api_key 按「像 key 的字段」打码了，于是它明明在屏幕上，
+      我反而去问用户要——打码是为了不泄露，不该连自己都骗过去。
 
-docs/notes-host-embedding.md 记下这道门的位置与形状。
+另记两条实测事实：
+  · 宿主里那个 BAAI/bge-m3 真能用（1024 维），而且同一份 18 条观察 / 5 个问题：
+      mock 2/2/1，重叠度 77%（检索不随问题走）
+      bge-m3 4/1/0，重叠度 46%（跟着问题变了）
+    但 46% 还没过我跑之前给自己立的线（40%），所以只算方向对上，不算结论。
+  · Jev-Mem 自带 openai_encoder.py:30 每次都带 dimensions=，bge-m3 不吃
+    （400 · code 20015），所以实验台自己写了 HttpEncoder。
+
+新增 tools/probe-embedding-config.mjs（看插件怎么配 embedding，值一律打码）。

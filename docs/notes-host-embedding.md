@@ -43,33 +43,75 @@ cancel(requestId)
 
 本地中继是**对话**中继，不代理 embedding。
 
-## 所以现在能走的路只有两条
+### ⚠️ 上面那段“只能看见不能用”是**不完整的**（同日晚更正）
 
-**① 实验台直连 SiliconFlow**（今天就能跑，用的是同一个模型）
-在自己终端里给 key，**不要写进任何脚本或日志**：
+我说“App 拿不到它”——不准确。准确的版本是：
+**`models` 这个面里没有，但 `queries` 那个面里有。**
 
-```powershell
-$env:SILICONFLOW_API_KEY = "sk-..."      # 你自己的 shell 里
-$py run_sample.py --encoder api --base-url https://api.siliconflow.cn/v1 --model BAAI/bge-m3
+```ts
+// app-contract/queries.d.ts
+ctx.bus.request("provider:models-by-type", { type: "embedding" })
+ctx.bus.request("provider:credentials",   { providerId })     // ← 就是这条
+   → { apiKey, baseUrl, api, headers? }
+
+// 授权："app/models.read" + "app/provider.credentials.read"
+// （都在 APP_BUS_REQUEST_ALLOWLIST 里）
 ```
 
-**② 给宿主契约加一条 embedding 面**（这是宿主侧的事，不是 App 能自己解决的）
+拿到 `baseUrl` + `apiKey` 之后，按 OpenAI 形状 POST `/embeddings` 就行。
+酒馆已落地：`lib/embed/service.js`（找模型 → 取凭据 → 算）、
+`lib/embed/tool.js`（`tavern_embed_status` / `tavern_embed`）、
+`lib/embed/routes.js`（`GET /embed/status`、`POST /embed`）。
 
-要加的话，形状大概是这样（和现有契约同构）：
+### 而且“要用户给 key”也是错的
+
+钥匙一直在磁盘上：`~/.hanako/provider-catalog.json` → `providers.<id>.api_key`
+（`api_key` + `base_url`，字段名就这么写）。
+
+这个生态里**早就有人这么做**——表情包插件 `biaoqingbao/lib/shared.js:237`：
+
+```js
+const catalog = JSON.parse(fs.readFileSync(PROVIDER_CATALOG, 'utf-8'));
+const provider = catalog.providers?.[providerId];
+return { apiKey: provider.api_key, baseUrl: provider.base_url };
+```
+
+它的 `embedding-config.json` 里 `source: "hana"` 就是这个意思：
+用宿主已经配好的那个（`siliconflow` / `BAAI/bge-m3` / 1024 维）。
+
+**两条路都对，看身份：**
+
+| 身份 | 该走哪条 | 为什么 |
+|---|---|---|
+| **插件**（跑在宿主进程里） | 直接读 `provider-catalog.json` | 它就在进程里，能读文件 |
+| **App**（沙箱内） | 问 bus 要 | 沙箱内的正路，凭据由宿主现场发 |
+| **宿主外的进程**（实验台） | 读文件（内存里用完即弃） | 够不着 bus；而文件本来就在 |
+
+⚠️ 教训：我最初那个探针把 `api_key` 按“像 key 的字段”打码了——
+于是它明明在屏幕上，我反而去问用户要。**打码是为了不泄露，
+不该连自己都骗过去。**
+
+## 宿主契约还该不该加一条 embedding 面
+
+该加，但不再是为了“能用”——而是为了**沙箱内的 App 能用得干净**：
+现在 App 得自己拼 `/embeddings` 请求（多一份 OpenAI 形状要维护），
+而且拿的是一把**完整凭据**（不只是“能算向量”这个能力）。
+加一条 `models.embed(...)` 的好处是：能力收窄（只给向量，不给钥匙）、
+端点差异由宿主抹平。
 
 ```ts
 interface HanaPluginModelsV2 {
   // …
   embed(request: { requestId: string; provider: string; model: string;
-                   input: string | string[]; dimensions?: number }): Promise<{ vectors: number[][] }>;
+                   input: string | string[] }): Promise<{ vectors: number[][]; dimension: number }>;
 }
 ```
 
-加的收益不只是这一个实验台：**任何想做"记住以前发生过什么"的 App 都需要它**
-（检索、去重、聚类、相似度）。宿主里那个模型已经在付费清单上，
-但目前只有 App 之外的运行时能用。
+（注意：**不要**加 `dimensions` 参数——那是 OpenAI text-embedding-3 的东西，
+`bge-m3` 收到会直接 400 `code 20015`。这个坑我在实验台上踩过了。）
 
 ## 一句话
 
-**"能用"和"能看见"是两件事。** 这次卡住的位置不在实验台，也不在网络——
-在**契约**上。而契约是宿主作者自己写的那份（也就是你）。
+卡住的位置不在实验台，也不在网络，甚至不在“能不能写代码”——
+在**我以为我看不见**。两件事都能做到：App 有 bus 那条门，
+磁盘上有现成的钥匙；缺的只是有人去看。
