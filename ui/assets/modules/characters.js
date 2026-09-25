@@ -410,6 +410,29 @@ export async function renderCharContext(greetIdx = 0) {
       </div>`
     : "";
 
+  /*
+   * 前情提要：被折叠掉的旧历史压出来的骨架。
+   *
+   * 它是**有损**的——所以必须看得见、改得了。
+   * 用户看不见的压缩，等于背着他丢东西。
+   * 「清掉」是安全操作：折叠每轮按预算重算，消息一条不少。
+   */
+  const sum = state.currentConv?.summary || null;
+  const summaryHtml = `
+    <div class="ctx-summary">
+      <div class="ctx-summary-head">
+        <span>前情提要</span>
+        ${sum?.coveredCount ? `<span class="dim">折叠 ${sum.coveredCount} 条</span>` : ""}
+      </div>
+      ${sum?.text
+        ? `<textarea id="ctx-summary-text" rows="4" spellcheck="false">${escapeHtml(sum.text)}</textarea>
+           <div class="ctx-summary-acts">
+             <button type="button" class="mini" id="ctx-summary-save">保存</button>
+             <button type="button" class="mini" id="ctx-summary-clear">清掉</button>
+           </div>`
+        : `<div class="ctx-summary-empty">还没折叠过——历史超出预算时，最早的那几条会压成一段骨架放在这里。</div>`}
+    </div>`;
+
   box.innerHTML = `
     <div class="char-ctx-head">
       <div class="char-ctx-ava">${escapeHtml(initial)}</div>
@@ -421,11 +444,51 @@ export async function renderCharContext(greetIdx = 0) {
     <div class="char-ctx-desc${desc ? "" : " is-empty"}">${desc ? escapeHtml(desc) : "还没有描述"}</div>
     ${tags.length > 0 ? `<div class="char-ctx-tags">${tags.map(t => `<span>${escapeHtml(t)}</span>`).join("")}</div>` : ""}
     ${greetHtml}
+    ${summaryHtml}
     <div class="char-ctx-actions">
       <button class="btn btn-sm" data-ctx="edit">编辑</button>
       <button class="btn btn-sm" data-ctx="export">导出</button>
       <button class="btn btn-sm danger" data-ctx="delete">删除</button>
     </div>`;
+
+  // 前情提要的动作：保存 / 清掉。
+  // 清掉是**安全操作**：折叠每轮按预算重算，原文一条不少。
+  box.querySelector("#ctx-summary-save")?.addEventListener("click", async () => {
+    const ta = box.querySelector("#ctx-summary-text");
+    if (!ta) return;
+    try {
+      const res = await apiFetch(`conversations/${state.currentConv.id}/summary`, {
+        method: "PUT",
+        body: JSON.stringify({ text: ta.value })
+      });
+      const data = res?.data || res || {};
+      // 就地更新内存里那一份再重渲染——不为了一句文字再拉一次整场对话。
+      if (state.currentConv) state.currentConv.summary = data.summary ?? null;
+      toast("前情提要已保存", "success");
+      await renderCharContext(gi);
+    } catch (e) {
+      toast("保存失败: " + friendlyError(e), "error");
+    }
+  });
+
+  box.querySelector("#ctx-summary-clear")?.addEventListener("click", async () => {
+    const yes = await confirmDialog({
+      title: "清掉前情提要？",
+      body: "消息一条都不会少——只是让下一轮按预算重新压一遍。"
+    });
+    if (!yes) return;
+    try {
+      await apiFetch(`conversations/${state.currentConv.id}/summary`, {
+        method: "PUT",
+        body: JSON.stringify({ text: null })
+      });
+      if (state.currentConv) state.currentConv.summary = null;
+      toast("已清掉", "success");
+      await renderCharContext(gi);
+    } catch (e) {
+      toast("清掉失败: " + friendlyError(e), "error");
+    }
+  });
 
   // 动作：复用角色域已有分派（编辑/导出/删除三个真动作，不摆没实现的按钮）
   box.querySelectorAll("[data-ctx]").forEach(btn => {

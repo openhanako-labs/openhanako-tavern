@@ -2474,6 +2474,56 @@ main.ctx-open .drawer:not(.hidden) {
 .board-cell:hover { border-color: var(--accent-line); }
 .board-cell.off { opacity: .5; }
 
+/* ── 前情提要（折叠出来的那段骨架） ─────────────────────
+ *
+ * 折叠是有损的，所以它必须在界面上有个可见的家：
+ * 读得到、改得了、清得掉。
+ */
+.ctx-summary {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+
+.ctx-summary-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg-muted);
+  letter-spacing: .04em;
+}
+
+.ctx-summary-head .dim { font-weight: 400; letter-spacing: 0; }
+
+.ctx-summary textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md, 10px);
+  background: var(--surface-2);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.65;
+  resize: vertical;
+}
+
+.ctx-summary-acts {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.ctx-summary-empty {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--fg-dim, var(--fg-muted));
+}
+
 .bc-head {
   display: flex;
   align-items: center;
