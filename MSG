@@ -1,53 +1,36 @@
-fix(settings): 「导入 ST」从来没有成功过——路由要 JSON，界面发 multipart
+test(settings): 给 ST 世界书导入补常驻护栏——含一条**跨侧契约**断言
 
-继续走最后四个面板（角色编辑弹窗 / 迁移 / 导入 ST / 群聊）。
-其中导入 ST 撞出一个**一直不能用**的功能。
+上一轮修好了「导入 ST」（界面向路由发 multipart、路由读 JSON，契约从来没对上），
+而那条路是**盲区**：它弹原生文件框，自动化里没人能替它选文件。
+所以补 13 条护栏，免得它以后再默默腐烂。
 
-## ① 真 bug：契约两边从来没对上
+## 盯的三件事
 
-    路由   const { worldBook } = await c.req.json();      ← 要 JSON
-    界面   new FormData(); formData.append("files", f)    ← 发 multipart
+**① 映射**（断言照 `lib/settings/import.js` 文件头那张表写，不猜）：
+position 0..7 逐个映到 anchor（`before_char`…`outlet`）；
+`constant`→always / `use_regex`→regex / 否则 keyword；
+`key`/`keys` 都可、字符串按逗号切；`disable`→`enabled:false`；`uid`→`externalId`；
+`selectiveLogic` 数字四个值 + **未知值回退 and_any**（不发明新模式）。
+未知 position 返回 null 且**原值不丢**（落在 `extensions`）。
 
-于是服务端 `c.req.json()` 在 multipart 上拿不到东西，`worldBook` 是 undefined，
-回一句 **"Invalid world book: not an object"** ——而它看上去像"这份世界书格式不对"。
+**② 原字段一个不丢**（ST 兼容的命脉）：`extensions._raw` 与输入**逐字相等**，
+连"一个我们完全不认识的字段"也要在。这条是硬断言（`deepStrictEqual`）。
 
-怎么撞出来的：设定库的「导入 ST」弹的是**原生文件选择框**，
-自动化里没人能替它选文件，所以界面这条路**永远测不到**。
-于是写了 `tools/verify-st-import.mjs`：绕过选择框直接喂接口，用**真的世界书**。
+整批行为也钉住：`entries` 是对象时**按 uid 排序**（不是按对象键序）；
+单条坏数据跳过、不中断整批；缺 `entries` / 不是对象要**报错说清**而不是默默回空数组。
 
-改成按路由的 JSON 契约走。修完拿两份真世界书验：
+**③ 契约（跨侧）**——这一条是这次事故的形状：
+两边各自都对、接缝没人看。所以两头都断：
 
 ```
-！自用外挂分享版0.4.json   34 KB → 新增 8 条   HTTP 200
-《通用战斗系统》            72 KB → 新增 5 条   HTTP 200
-  · 面子果实能力者2.0 | anchor=at_depth（position=4） | 词=面子
-    source=sillytavern externalId=86 enabled=false order=8 原字段=保留✓
+✅ 契约：界面调 settings/import-st 时必须发 JSON（不是 multipart）
+✅ 契约（服务端）：POST /settings/import-st 收 { worldBook } 并真的写进去
 ```
 
-映射本身是完整的（`position`→`anchor`、`disable`→`enabled`、
-`selectiveLogic`/递归标志/`order`/`probability` 都有，
-`extensions._raw` 原样保留——ST 兼容的命脉是原字段不丢）。
+前端那条读 `settings.js` 源码判（不许 `FormData`、必须有 `JSON.stringify`），
+服务端那条走路由测试台真发一次请求并核对写库结果。
 
-**教训**：这条路上的验证不能只靠点界面。弹原生控件的地方
-（文件选择、系统对话框）要**绕过界面直接验接口**，否则那一段就是盲区。
+**跑过反证**：把界面改回 `FormData`，第一条立刻变红；还原即绿。
+（新护栏没反证过就是"绿得没有意义"。）
 
-## ② 角色编辑弹窗：确认没被我上一步伤到
-
-上一轮给五个编辑器补了 `showEditForm(kind)`（原先只有角色那个写了这一步）。
-这次从角色这边反过来验：打开 → 12 个可见字段（字段里 `{{char}}` 原样是**对的**，
-编辑器就该编卡里的原文）→ 改名 → 保存 → 后端确认名字变了 → 还原 ✓
-
-## ③ 群聊：一条没修的路，不是 bug
-
-界面里没有任何"群聊/多角色"入口 ✓；接口层 `POST /conversations`
-只收单个 `characterId`（传数组回 400 "characterId is required"）✓。
-两边一致：**引擎不支持，界面也没假装它有。**
-
-## ④ 我自己的探针又错了三次
-
-`cf-name` 猜错（实际是 `f-name`）/ 去看 `#import-modal`（那是**角色**导入的弹窗，
-不是"导入 ST"的）/ 打印时没印 `anchor`，于是把已经映射好的东西报成没映射。
-**每一次都差一点记成产品的毛病。** 记在这儿：探针报"没有/没反应"时，
-先怀疑探针。
-
-全量 51 通过 / 0 失败。
+全量 52 通过 / 0 失败。
