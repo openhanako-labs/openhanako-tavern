@@ -1,16 +1,13 @@
-docs(req): 更正"工具可执行性"那条——通道是宿主启动时建的，一次 reload 就断
+fix(embed): 网络失败要把 cause 吐出来——"fetch failed" 是个壳
 
-今天的观察按时间线排下来是清楚的：
+undici 把真正的原因（DNS / TLS / 连接 / 白名单拒绝）全塞在 cause 里，
+只报 e.message 的话，"网络不通"和"这个域名不许访问"长得一模一样——
+而这两件事的修法完全相反：一个去查网络，一个去改 manifest 白名单。
 
-  重启宿主          → 工具立刻可调（tavern_list_characters / tavern_embed_status 真返回）
-  之后重载一次 App  → 通道断，之后全是 RPC peer closed
-  把 App 界面打开   → 没用（窗口开着，peer 仍然 closed）
-  reload / 二次 reload / disable→enable / 刷新工具目录 → 都救不回来
+今天就在这件事上卡住了：白名单已填 `api.siliconflow.cn`、能力已加
+`app/runtime.network`、宿主已重启、权限开关全开，报回来的还是
+`连不上 embedding 端点（https://api.siliconflow.cn）：fetch failed`——
+看不出是被拒了还是压根没连上。
 
-所以上一版写的"工具只在 App 的 UI 实例活着时才能执行"是错的
-（顺着那句话推出的操作结论也错了）。真实规律是：**通道在宿主启动时建立，
-之后一次 App reload 就会把它静默掐掉，重启宿主才能恢复。**
-
-操作结论：改完 App 不要重载，直接重启宿主。
-对设计者的请求更具体了：这条通道不该被一次 reload 静默掐掉——
-要么让它重建，要么让 inspect / 工具目录如实反映"它已经断了"。
+改：报错时把 cause 的 code/name/message 一起带上（仍然只报 origin，
+不报整个 URL，避免宿主把令牌塞在查询串里时被回显）。
