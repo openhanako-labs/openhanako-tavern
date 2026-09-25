@@ -199,13 +199,37 @@ export async function handleSTImport(e) {
   const files = e?.target?.files;
   if (!files || files.length === 0) return;
 
-  const formData = new FormData();
-  for (const f of files) formData.append("files", f);
-
   try {
-    const res = await apiFetch("settings/import-st", { method: "POST", body: formData });
-    const data = res.data || res;
-    toast(`导入完成：新增 ${data.added ?? 0}、更新 ${data.updated ?? 0}`, "success");
+    /*
+     * 路由收的是 JSON：`const { worldBook } = await c.req.json()`。
+     *
+     * 这里原先发的是 multipart FormData（字段名 files）——两边从来没有对上过，
+     * 所以「导入 ST」一直是坏的：服务端 `c.req.json()` 在 multipart 上拿不到东西，
+     * worldBook 是 undefined，于是回一句
+     *“Invalid world book: not an object”。
+     * 而它看上去就像“这份世界书格式不对”。
+     *
+     * 多个文件逐个发（一次一份，数才能分得清）。
+     */
+    let added = 0;
+    let updated = 0;
+    for (const f of files) {
+      const raw = await f.text();
+      let worldBook;
+      try {
+        worldBook = JSON.parse(raw);
+      } catch (err) {
+        throw new Error(`${f.name} 不是合法 JSON：${err.message}`);
+      }
+      const res = await apiFetch("settings/import-st", {
+        method: "POST",
+        body: JSON.stringify({ worldBook })
+      });
+      const data = res.data || res;
+      added += data.added ?? 0;
+      updated += data.updated ?? 0;
+    }
+    toast(`导入完成：新增 ${added}、更新 ${updated}`, "success");
     await loadSettings();
   } catch (err) {
     toast("导入失败: " + friendlyError(err), "error");
