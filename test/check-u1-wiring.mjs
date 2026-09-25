@@ -181,8 +181,13 @@ for (const [needle, label] of gone) {
 if (errors === 0) ok("旧六 Tab 结构已清干净");
 
 // ── 7. CSS 里新布局的锚点 ──
+//
+// 2026-09-25：去掉 ".sb-foot"——它是侧栏（sb-*）留下的过期待已。
+// 侧栏已按产品决定删除（列表归宿主 rail），那批规则跟着成了死规则，
+// 一次 CSS 清理把它们删了，于是“期望存在”的锚点过期。
+// **结构变了断言跟着变**，但不把断言删空：剩下的仍是真锚点。
 const css = fs.readFileSync(path.join(root, "ui/assets/characters.css"), "utf8");
-for (const needle of [".shell {", ".ctx-tabs {", ".char-list .card", ".drawer {", ".sb-foot", ".pe-blocks", ".picker-item"]) {
+for (const needle of [".shell {", ".ctx-tabs {", ".char-list .card", ".drawer {", ".pe-blocks", ".picker-item"]) {
   if (!css.includes(needle)) fail(`CSS 缺 ${needle}`);
 }
 if (errors === 0) ok("CSS 新布局锚点齐全");
