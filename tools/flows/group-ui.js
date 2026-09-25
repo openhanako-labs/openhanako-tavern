@@ -71,6 +71,57 @@ out["⑥ 各气泡的署名"] = msgs.map((m) => {
   return `${m.classList.contains("assistant") ? "角色" : "我"}${sp ? `(${sp})` : ""}`;
 }).join(" | ");
 out["⑥ 最后一条正文"] = (msgs[msgs.length - 1]?.querySelector(".bubble")?.innerText || "").slice(0, 60);
-out["⑦ 顶栏标题"] = document.getElementById("chat-title")?.textContent || "";
+
+// ⑥.5 「发完自动轮换」开关：默认关 / 点一下开 / 存进 localStorage
+// （按钮每次重画都会换成新元素，所以要点之前重新取）
+const autoEl = () => document.getElementById("speaker-auto");
+out["⑥b 自动按钮在不在"] = !!autoEl();
+out["⑥b 默认"] = autoEl()?.classList.contains("on") ? "开" : "关";
+out["⑥b aria-pressed"] = autoEl()?.getAttribute("aria-pressed") || "(无)";
+autoEl()?.click();
+await sleep(250);
+out["⑥b 点一下"] = autoEl()?.classList.contains("on") ? "开" : "关";
+out["⑥b localStorage"] = (() => { try { return String(localStorage.getItem("eleckoi:auto-rotate")); } catch { return "(读不到)"; } })();
+out["⑥b 发完那一次没换人（默认关）"] = document.querySelector(".speaker-chip.on")?.textContent.trim() || "";
+
+// ⑦ 开着「自动」再发一条：说话人应该真的轮到下一位
+{
+  // 先直接验那个新模块能不能加载——它是本轮新加的，最可疑。
+  try {
+    const sr = await import(new URL("./assets/modules/speaker-rotation.js", location.href).href);
+    out["⑦ 新模块加载"] = `OK（nextSpeaker=${typeof sr.nextSpeaker}，participantsOf=${typeof sr.participantsOf}）`;
+  } catch (e) {
+    out["⑦ 新模块加载"] = `失败：${e.message}`;
+  }
+
+  const st = await import(new URL("./assets/modules/state.js", location.href).href);
+  // 服务端到底在发哪一份 chat.js？——切一刀，不再猜。
+  try {
+    const src = await fetch(new URL("./assets/modules/chat.js", location.href).href).then((r) => r.text());
+    out["⑦ 服务端 chat.js 字节数"] = src.length;
+    out["⑦ 里面有 rotateSpeaker() 调用"] = (src.match(/rotateSpeaker\(\)/g) || []).length;
+    out["⑦ 里面有没有那句重画注释"] = src.includes("界面撒谎比不轮换更坏") ? "有" : "没有";
+  } catch (e) {
+    out["⑦ 取 chat.js"] = e.message;
+  }
+  const before = document.querySelector(".speaker-chip.on")?.textContent.trim() || "";
+  out["⑦ 发前 state.speakerId"] = st.state.speakerId || "(空)";
+  out["⑦ 发前 localStorage"] = (() => { try { return String(localStorage.getItem("eleckoi:auto-rotate")); } catch { return "?"; } })();
+  const ta2 = document.getElementById("chat-input");
+  if (ta2) {
+    ta2.value = "那你呢？";
+    document.getElementById("send-btn")?.click();
+    await sleep(6000);
+  }
+  const after = document.querySelector(".speaker-chip.on")?.textContent.trim() || "";
+  out["⑦ 发完气泡数"] = document.querySelectorAll(".message").length;
+  out["⑦ 发后 state.speakerId"] = st.state.speakerId || "(空)";
+  out["⑦ 自动开：发前→发后"] = `${before} → ${after}`;
+  out["⑦ 轮换了吗"] = before && after && before !== after ? "换了" : "没换（这条该红了）";
+  autoEl()?.click();
+  await sleep(150);
+  out["⑦ 关回去"] = autoEl()?.classList.contains("on") ? "开" : "关";
+}
+out["⑧ 顶栏标题"] = document.getElementById("chat-title")?.textContent || "";
 
 return out;

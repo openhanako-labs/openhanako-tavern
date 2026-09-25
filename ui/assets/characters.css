@@ -2217,6 +2217,33 @@ main.ctx-open .drawer:not(.hidden) {
   font-weight: 600;
 }
 
+/* 自动轮换开关：贴在行末，默认关。
+   样式与 chip 同族但更轻（虚线 + 降透明度）——它是「设置」，
+   不该和「这一轮谁说话」抢注意力。 */
+.speaker-auto {
+  margin-left: auto;
+  padding: 3px 9px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  opacity: .75;
+  transition: border-color var(--t) var(--ease), color var(--t) var(--ease), opacity var(--t) var(--ease);
+}
+
+.speaker-auto:hover { border-color: var(--accent-line); color: var(--accent); opacity: 1; }
+
+.speaker-auto.on {
+  border-style: solid;
+  border-color: var(--accent-line);
+  color: var(--accent);
+  opacity: 1;
+  font-weight: 600;
+}
+
 /* 气泡上方的说话人：只在群聊里出现（单人对话不写 speakerId） */
 .msg-speaker {
   margin: 0 0 2px 2px;

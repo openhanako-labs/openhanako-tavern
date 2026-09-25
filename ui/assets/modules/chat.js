@@ -21,21 +21,35 @@ function charNameOf(id) {
   return hit?.name || "（角色已删除）";
 }
 
+import { participantsOf, nextSpeaker } from "./speaker-rotation.js";
+
+const AUTO_ROTATE_KEY = "eleckoi:auto-rotate";
+
+/** 自动轮换的偏好。只读 localStorage——一个偏好只该有一个真相。 */
+function autoRotateEnabled() {
+  try { return localStorage.getItem(AUTO_ROTATE_KEY) === "1"; } catch { return false; }
+}
+
+/** 轮到下一位发言者。只在开关打开且真的是群聊时才动。 */
+function rotateSpeaker() {
+  if (!autoRotateEnabled()) return;
+  const ids = participantsOf(state.currentConv);
+  if (ids.length < 2) return;
+  state.speakerId = nextSpeaker(ids, state.speakerId);
+}
+
 /**
  * 群聊的「这一轮谁说话」。
  *
  * 单人对话整行不出现——一个没分支的选择只会让人以为非选不可。
- * 换人**不自动**：谁开口是作者的判断。
+ * 换人**默认不自动**：谁开口是作者的判断。想自动轮流的人，
+ * 把右边那个「自动」打开——但默认值是关，因为轮转是他的决定（见 state.js）。
  */
 export function renderSpeakerRow() {
   const row = document.getElementById("speaker-row");
   if (!row) return;
   const conv = state.currentConv;
-  // 这条读法必须与 lib/conversations/model.js 的 participantsOf 一致：
-  // 旧对话文件里只有 characterId，读侧要能兜。
-  const ids = Array.isArray(conv?.characterIds) && conv.characterIds.length > 0
-    ? conv.characterIds
-    : (conv?.characterId ? [conv.characterId] : []);
+  const ids = participantsOf(conv);
 
   if (ids.length < 2) {
     row.classList.add("hidden");
@@ -46,15 +60,21 @@ export function renderSpeakerRow() {
 
   const current = ids.includes(state.speakerId) ? state.speakerId : ids[0];
   state.speakerId = current;
+  const auto = autoRotateEnabled();
   row.innerHTML =
     `<span class="speaker-label">这一轮谁说话</span>` +
-    ids.map(id => `<button type="button" class="speaker-chip${String(id) === String(current) ? " on" : ""}" data-speaker="${escapeHtml(id)}">${escapeHtml(charNameOf(id))}</button>`).join("");
+    ids.map(id => `<button type="button" class="speaker-chip${String(id) === String(current) ? " on" : ""}" data-speaker="${escapeHtml(id)}">${escapeHtml(charNameOf(id))}</button>`).join("") +
+    `<button type="button" class="speaker-auto${auto ? " on" : ""}" id="speaker-auto" aria-pressed="${auto ? "true" : "false"}" title="发完一条后自动轮到下一位（默认关）">自动</button>`;
   row.classList.remove("hidden");
   row.querySelectorAll("[data-speaker]").forEach(btn => {
     btn.addEventListener("click", () => {
       state.speakerId = btn.dataset.speaker;
       renderSpeakerRow();
     });
+  });
+  row.querySelector("#speaker-auto")?.addEventListener("click", () => {
+    try { localStorage.setItem(AUTO_ROTATE_KEY, autoRotateEnabled() ? "0" : "1"); } catch { /* 存不了就算了，下次开还是关 */ }
+    renderSpeakerRow();
   });
 }
 
@@ -183,10 +203,22 @@ export async function sendMessage() {
     if (streamRes && streamRes.content) {
       // 流式成功，移除 loading 并添加完整消息
       loadingEl.remove();
+      /*
+       * 正文用**流式函数自己的返回值**，不要引用 fullContent。
+       *
+       * 它曾经写成 content: fullContent——而 fullContent 声明在
+       * sendMessageStream 里面（let fullContent = ""）。跨函数引用是
+       * ReferenceError，被下面那个 catch 吞成一句 toast：
+       * 气泡照样出现（流式自己画的），但这条回复**从来没进本地消息表**，
+       * 而且它后面那几行（轮换、刷新会话列表）一行都不跑。
+       *
+       * 是 group-ui 探针抓出来的：开关全对、“发完自动轮换”却永不生效，
+       * 因为那一行压根没被执行到。
+       */
       const assistantMsg = {
         id: Date.now(),
         role: "assistant",
-        content: fullContent,
+        content: streamRes.content,
         timestamp: new Date().toISOString()
       };
       state.currentConv.messages.push(assistantMsg);
@@ -206,6 +238,13 @@ export async function sendMessage() {
         toast("生成失败", "error");
       }
     }
+    // 发成功了才轮换。抛错走不到这里——换人依赖“这一轮真的落盘了”。
+    rotateSpeaker();
+    // 轮完必须重画那一行：
+    // 否则 state 已经到下一位、屏幕上还高亮着上一位。
+    // （这条就是 group-ui 探针抓出来的：⑥b 开关全对，⑦ 发前发后都是同一个人。）
+    // 界面撒谎比不轮换更坏——下一轮真的会换人，而用户以为没换。
+    renderSpeakerRow();
     await loadConversations();
   } catch (e) {
     loadingEl.remove();

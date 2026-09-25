@@ -1,30 +1,26 @@
-fix(embed): 按类型查 embedding 是空的（宿主把没写 type 的模型一律算 chat）
+fix(chat): 流式回复从来没进本地消息表（顺带让「发完自动轮换」真生效）
 
-用户在界面重载后真调了一次，得到 candidates: 0 ——
-宿主说没有 type=embedding 的模型。但 bge-m3 明明在清单里。
+加了「发完自动轮换」开关之后，group-ui 探针说：开关全对、气泡也在，
+但发完就是不换人。
 
-去读宿主的实现（bundle/index.js:196003）：
+切开看（探针读 state，不看屏幕）：
+  state.speakerId 发前发后一模一样
+  → 不是「轮了没重画」，是那一行根本没被执行到。
 
-  // Type resolution: model entry type field → known-models.json type → default "chat"
-  const u = (a && o.type) || c?.type || "chat";
-  if (u === s) push(...)
+根因：sendMessage 的流式成功分支里写着 content: fullContent，
+而 fullContent 声明在 sendMessageStream 内部（let fullContent = ""）
+→ ReferenceError → 被外层 catch 吞成一句 toast。于是：
+  · 气泡照样出现（流式自己画的），用户看不出异常
+  · 但这条回复**从来没被 push 进 state.currentConv.messages**
+  · 它后面的 rotateSpeaker() / loadConversations() 一行都不跑
+    （所以侧边栏也不刷新）
 
-服务端自带的 default-models.json / model-catalog.v1.json 里根本没有 bge，
-模型条目也没写 type → 一律算 "chat" → 所以按类型查是 0 条。
-**这是正常现象，不是配置错。**
+修：用流式函数自己的返回值 streamRes.content。
+探针复验：⑥ 气泡数 2 → 3（回复终于进本地表）
+          ⑦ 自动开：薇拉·霜语 → 任十九（换了）
 
-修法与它的生态先例一致（biaoqingbao/lib/shared.js:getAvailableEmbeddingModels）：
-按类型查空就回退扫 model:list，按 id 认（bge|embed，排掉 rerank 与多模态 embedding）。
-
-顺带：
-  · status 会报 foundBy: by-type|scan，并把「按类型查空是正常的」写进 note
-  · 回退扫到的条目可能没有 provider 字段 → 明确说卡在 provider，不瞎猜
-  · 两条路都失败时保留「缺 app/models.read 授权？」这句提示（诊断价值）
-
-test/regression-embed.mjs 22 → 27 条（回退、排除项、provider 缺失、默认不白扫）。
-
-另记一条实测行为（写进 docs/notes-host-embedding.md）：
-工具执行要求 App 实例活着。用户从界面重载后工具能调；
-我无界面 reload / disable+enable / 刷新目录都救不回来（RPC peer closed），
-而且旧工具一样死 —— 所以是通道，不是代码。inspect 的 host=on agent=on
-不代表工具能跑。
+新增 ui/assets/modules/speaker-rotation.js（纯逻辑，可在 Node 里测）
+  + test/regression-speaker-rotation.mjs 9 条
+    （含与服务端 lib/conversations/model.js 的 participantsOf 逐例一致）
+UI：「自动」开关（默认关，localStorage eleckoi:auto-rotate）+ .speaker-auto 样式
+tools/flows/group-ui.js 扩了 ⑥b/⑦：默认态 / aria-pressed / 持久化 / 真轮换
