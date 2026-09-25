@@ -7,7 +7,7 @@ import { renderMarkdown } from "./markdown.js";
 // 早期写成 ../../../lib/... —— URL 层级多 _surface/<token> 两级，且 lib/
 // 不在 /ui/ 暴露域：整张模块图 404，页面停在"加载中"的静态初始态。
 import { createMacroProcessor, contextFromCharacter } from "../lib/macros.js";
-import { openDrawer } from "./shell.js";
+import { openDrawer, boardColumnOpen } from "./shell.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
 
@@ -766,14 +766,23 @@ export function renderHeaderMeta() {
 
   const n = conv.messages?.length || 0;
   const parts = [n > 0 ? `第 ${Math.ceil(n / 2)} 轮` : "还没开始"];
-  // 世界格子数是真数据，摆上来（卡里那一行有「世界 · N 条」）。
-  // **拉不到就不提**：写「世界 0 格」会被读成“这一场真的没有格子”，
-  // 而实际上可能只是还没拉到。
-  if (Array.isArray(state.boardChat)) {
-    parts.push(`世界 ${(state.boardWorld?.length || 0) + state.boardChat.length} 格`);
-  }
+  // 世界格子数不写在这里了——它成了标题行里那颗**按钮**
+  //（既是读数也是黑板列的开关，卡里那一格就是这个用法）。
   dom.chatMeta.textContent = parts.join(" · ");
   dom.chatMeta.classList.remove("hidden");
+
+  // 那颗按钮：拉得到就报数，拉不到就不出场
+  //（写「世界 0 格」会被读成“这一场真的没有格子”）。
+  const toggle = document.getElementById("board-toggle");
+  const countEl = document.getElementById("board-toggle-n");
+  if (toggle) {
+    const known = Array.isArray(state.boardChat);
+    const cells = (state.boardWorld?.length || 0) + (state.boardChat?.length || 0);
+    if (known && countEl) countEl.textContent = String(cells);
+    toggle.classList.toggle("hidden", !known);
+    toggle.classList.toggle("on", boardColumnOpen());
+    toggle.title = boardColumnOpen() ? "收起世界黑板" : "展开世界黑板";
+  }
 }
 
 /**

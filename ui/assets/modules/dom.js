@@ -63,7 +63,9 @@ export const dom = {
  */
 export const DRAWERS = {
   settings: document.getElementById("drawer-settings"),
-  board: document.getElementById("drawer-board"),
+  // 注：**没有 board**。世界不是抽屉，而是聊天左边一条可折叠的常驻栏
+  //（#board-col）。shell.openDrawer("board") 会转去做开关，
+  // 所以顶栏与 ⋯ 菜单里原有的入口照旧能用。
   variables: document.getElementById("drawer-variables"),
   presets: document.getElementById("drawer-presets"),
   regex: document.getElementById("drawer-regex"),

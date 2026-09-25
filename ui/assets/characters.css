@@ -83,7 +83,11 @@ body {
  */
 main {
   display: grid;
-  grid-template-columns: 1fr var(--ctx-w, 0px);
+  /*
+   * 三列：黑板（可收起）· 聊天 · 右栏面板。
+   * 卡里就是这个形状：黑板常驻在聊天左边，不是点开才看得到。
+   */
+  grid-template-columns: var(--board-w, 0px) 1fr var(--ctx-w, 0px);
   grid-template-rows: auto minmax(0, 1fr);
   position: relative;
   min-height: 0;
@@ -101,6 +105,83 @@ main {
 main.ctx-open {
   --ctx-w: 344px;
 }
+
+/* 黑板列展开（默认 0：聊天区拿到完整宽度） */
+main.board-open {
+  --board-w: 292px;
+}
+
+/**
+ * 黑板：聊天左边的一条可折叠栏。
+ *
+ * 收起时 display:none——不用 grid 列宽 0 那套，
+ * 因为那一套下元素仍在布局里（focus、读屏、右键菜单都还能摸到它），
+ * 而一个看不见却摸得到的面板比不收更坏。
+ */
+.board-col {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--sh-1);
+  overflow: hidden;
+}
+
+main.board-open .board-col { display: flex; }
+
+.board-col-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.board-col-title { font-size: 12.5px; font-weight: 700; color: var(--fg); }
+
+.board-col-acts { margin-left: auto; display: flex; gap: 4px; }
+
+/**
+ * 黑板的格子列表。
+ *
+ * `.list` 是 `display:grid`，而 grid 的 `align-content` 默认是 **stretch**：
+ * 容器有多余高度，它就摊进自动行里——在抽屉里看不出来，
+ * 搬进 292px 的列之后每格都被撑成一幅空荡荡的高框。
+ * 所以这里把行按内容排（align-content:start），余高落到底部。
+ */
+.board-col-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+  gap: 8px;
+}
+
+/* 标题行里那颗「世界 N 格」：既是读数也是开关 */
+.board-toggle {
+  flex: none;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+.board-toggle:hover { border-color: var(--accent-line); color: var(--accent); }
+main.board-open .board-toggle { border-color: var(--accent-line); color: var(--accent); }
 
 /*
  * 顶栏：九个入口一排（卡里的脊梁）。
@@ -154,7 +235,7 @@ main.ctx-open {
  * 开面板时随列宽一起滑出。
  */
 .ctx-tabs {
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr)) 26px;
@@ -227,7 +308,7 @@ main.ctx-open .ctx-tabs { display: none; visibility: hidden; }
 .ctx-close:hover { background: var(--surface-2); color: var(--fg); }
 
 #view-chat {
-  grid-column: 1;
+  grid-column: 2;
   grid-row: 1 / -1;
   min-width: 0;
 }
@@ -1825,7 +1906,7 @@ footer a:hover { color: var(--accent); }
   position: static;
   inset: auto;
   z-index: auto;
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 2;
   display: flex;
   flex-direction: column;

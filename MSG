@@ -1,36 +1,52 @@
-test(settings): 给 ST 世界书导入补常驻护栏——含一条**跨侧契约**断言
+feat(ui): 世界黑板常驻在聊天左边——卡的第三件骨架，也是最后一件
 
-上一轮修好了「导入 ST」（界面向路由发 multipart、路由读 JSON，契约从来没对上），
-而那条路是**盲区**：它弹原生文件框，自动化里没人能替它选文件。
-所以补 13 条护栏，免得它以后再默默腐烂。
+卡的签名结构落在屏幕上：**左边世界 / 中间聊天 / 右边面板**。
+世界不再是"点开才看得到"的抽屉，而是聊天左边一条可折叠的常驻栏。
 
-## 盯的三件事
+## 改动
 
-**① 映射**（断言照 `lib/settings/import.js` 文件头那张表写，不猜）：
-position 0..7 逐个映到 anchor（`before_char`…`outlet`）；
-`constant`→always / `use_regex`→regex / 否则 keyword；
-`key`/`keys` 都可、字符串按逗号切；`disable`→`enabled:false`；`uid`→`externalId`；
-`selectiveLogic` 数字四个值 + **未知值回退 and_any**（不发明新模式）。
-未知 position 返回 null 且**原值不丢**（落在 `extensions`）。
+- `main` 两列 → **三列**：`var(--board-w) 1fr var(--ctx-w)`；
+  `#view-chat` 列 1 → 列 2，`.ctx-tabs` 与 `.drawer` 列 2 → 列 3
+- `#drawer-board` → **`#board-col`**（`<aside>`）。**容器换了，id 一个没改**
+  （`board-list`/`board-note`/`board-count`/`create-board-cell-btn`/`refresh-board-btn`）
+  ——board.js 挂的就是这些 id，搬家不该惊动它
+- 默认收起（`main.board-open` 时 `--board-w: 292px`）；收起用 `display:none`，
+  **不用 grid 列宽 0 那套**：那一套下元素仍在布局里（focus、读屏、右键菜单还摸得到），
+  一个看不见却摸得到的面板比不收更坏
+- 三个入口都成开关：标题行那颗「**世界 N 格**」（新加的按钮，卡里这一格就是这个用法）、
+  顶栏「世界」、⋯ 菜单那一条。`DRAWERS` 里去掉 `board`，
+  由 `openDrawer` 开头的提前返回转去做开关 —— **保留 'board' 这个 key，老入口照旧能用**
+- 顺手清掉懒加载链里那句 `else if (name === "board")`：它现在永远到不了（死分支），
+  拉数据搬到 `toggleBoardColumn` 展开时
 
-**② 原字段一个不丢**（ST 兼容的命脉）：`extensions._raw` 与输入**逐字相等**，
-连"一个我们完全不认识的字段"也要在。这条是硬断言（`deepStrictEqual`）。
+## 两个 CSS 教训
 
-整批行为也钉住：`entries` 是对象时**按 uid 排序**（不是按对象键序）；
-单条坏数据跳过、不中断整批；缺 `entries` / 不是对象要**报错说清**而不是默默回空数组。
+**① `.list` 是 `display:grid`，而 grid 的 `align-content` 默认是 stretch**：
+容器有多余高度就摊进自动行——在抽屉里看不出来，搬进 292px 的列之后每格被撑成空高框。
+`.board-col-body` 加 `align-content:start` + `gap:8px`。
 
-**③ 契约（跨侧）**——这一条是这次事故的形状：
-两边各自都对、接缝没人看。所以两头都断：
+**② 高亮不能想当然**：初版让「世界」在"右栏没开面板"时才高亮，
+可开一场对话会自动站出角色面板——黑板列与右栏是**两列，可以同时开着**。
+`syncTabs` 里两者互不影响。
 
-```
-✅ 契约：界面调 settings/import-st 时必须发 JSON（不是 multipart）
-✅ 契约（服务端）：POST /settings/import-st 收 { worldBook } 并真的写进去
-```
+## 一条断言过期 + 一条断言没牙（都当场处理了）
 
-前端那条读 `settings.js` 源码判（不许 `FormData`、必须有 `JSON.stringify`），
-服务端那条走路由测试台真发一次请求并核对写库结果。
+`check-u1-wiring` 第 4 节原来说"世界也是抽屉，`#drawer-board` 必须在"——
+按设计过期了，但它的**本意是对的**（入口必须落到真容器上）。改成新真相：
+七个真抽屉 + `#board-col` 存在且 `#drawer-board` 不回来 +
+**`openDrawer` 开头那个提前返回还在**（删了的话 `DRAWERS["board"]` 是 undefined，
+`openDrawer` 静默 return —— 按钮还在、点了没反应 = **静默死入口**）。
+反证跑过：删掉提前返回，这条立刻变红，报的正是那句"入口会静默失效"。
 
-**跑过反证**：把界面改回 `FormData`，第一条立刻变红；还原即绿。
-（新护栏没反证过就是"绿得没有意义"。）
+**它第一版是没有牙的**：断言写成"源码里提过 board 就算"，
+而懒加载链里还有一句 `name === "board"`，于是把特例删掉它**照样是绿的**。
+反证把它揭穿了，收紧成"只看 `openDrawer` 函数体内、必须 `toggleBoardColumn()` + `return`"。
 
-全量 52 通过 / 0 失败。
+## 我自己犯的一个错，写在这儿
+
+反证脚本里我用了 `git checkout -- ui/assets/modules/shell.js` 来还原 ——
+**工作区里有未提交的 WIP 时，它把那一份改动一起抹掉了**（真抹掉了，重写了一遍）。
+正解：原内容读进内存、写完写回、全程不碰 git。
+另一个坑：这个仓库的文件是 **CRLF**，反证的正则里 `\n` 匹配不到，得写 `\r?\n`。
+
+全量 52 通过 / 0 失败。真点过，截图在 `Work\_refs\board-col2.png`。

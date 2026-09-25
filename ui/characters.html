@@ -62,6 +62,31 @@
       <button class="drawer-close ctx-close" title="收起右栏" aria-label="收起右栏">✕</button>
     </nav>
 
+    <!--
+      ── 世界（黑板）：常驻在聊天左边的一条可折叠栏 ──
+
+      卡里它是签名元素：一眼看全此刻的世界，而不是点开抽屉才看得到。
+      默认收起（保持聊天区干净），顶栏的「世界 N 格」与顶栏入口都是它的开关。
+
+      **容器换了，id 一个没改**（board-list / board-note / board-count /
+      create-board-cell-btn / refresh-board-btn）——board.js 挂的就是这些 id，
+      搬家不该惊动它。
+    -->
+    <aside id="board-col" class="board-col" aria-label="世界">
+      <div class="board-col-head">
+        <span class="board-col-title">世界</span>
+        <span id="board-count" class="count"></span>
+        <span class="board-col-acts">
+          <button id="create-board-cell-btn" class="mini" title="新建一格">+ 新建</button>
+          <button id="refresh-board-btn" class="mini" title="重新拉一次">刷新</button>
+        </span>
+      </div>
+      <div id="board-note" class="board-note"></div>
+      <div id="board-list" class="list board-col-body">
+        <div class="empty">加载中…</div>
+      </div>
+    </aside>
+
     <!-- 聊天 -->
     <section id="view-chat" class="chat-view">
       <!--
@@ -76,6 +101,13 @@
         <h1 class="brand">ElecKoi<span class="tag">m8</span></h1>
         <h3 id="chat-title">选择对话开始</h3>
         <span id="chat-meta" class="hdr-meta hidden"></span>
+        <!--
+          黑板列的开关。卡里这一格就是「世界 · 4 条」——
+          它既是读数也是入口，所以做成按钮，不只是一行字。
+        -->
+        <button type="button" id="board-toggle" class="board-toggle hidden" title="展开/收起世界黑板">
+          世界 <span id="board-toggle-n">0</span> 格
+        </button>
         <!--
           观测面（本轮 token / 缓存命中）搬进标题行右侧。
           卡里它就在这里；而且它是“读数”，不是输入区的一部分——
@@ -169,24 +201,6 @@
       黑板是会变的状态（谁在哪、身上有什么、瞒着什么）。两者不在同一个
       引擎里，所以也不共用界面——混着放，用户会分不清改哪个才有用。
     -->
-    <div id="drawer-board" class="drawer hidden">
-      <div class="drawer-head">
-        <h2>世界</h2>
-        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
-      </div>
-      <div class="drawer-toolbar">
-        <button id="create-board-cell-btn" class="btn btn-primary btn-sm">+ 新建</button>
-        <button id="refresh-board-btn" class="btn btn-ghost btn-sm">刷新</button>
-        <span id="board-count" class="count"></span>
-      </div>
-      <div class="drawer-body">
-        <div id="board-note" class="board-note"></div>
-        <div id="board-list" class="list">
-          <div class="empty">加载中…</div>
-        </div>
-      </div>
-    </div>
-
     <div id="drawer-variables" class="drawer hidden">
       <div class="drawer-head">
         <h2>变量</h2>

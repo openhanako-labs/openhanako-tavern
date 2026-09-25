@@ -16,14 +16,45 @@ import { onNavigation, askRailRefresh, setActiveConv, railAlive } from "./nav-bu
 /** 当前打开的抽屉名；null = 都关着。 */
 let openDrawerName = null;
 
+/**
+ * 黑板列开着吗。
+ *
+ * 世界不是抽屉了：它常驻在聊天左边（卡里的形状），
+ * 默认收起、由顶栏入口与「世界 N 格」那颗按钮开关。
+ */
+export function boardColumnOpen() {
+  return !!document.querySelector("main")?.classList.contains("board-open");
+}
+
+export function toggleBoardColumn(force) {
+  const main = document.querySelector("main");
+  if (!main) return false;
+  const open = typeof force === "boolean" ? force : !main.classList.contains("board-open");
+  main.classList.toggle("board-open", open);
+  try {
+    if (open) localStorage.setItem("eleckoi:board-open", "1");
+    else localStorage.removeItem("eleckoi:board-open");
+  } catch { /* 隐私模式下写不了，不影响这一屏 */ }
+  syncTabs();
+  // 展开时顺手拉一次：格子数据本来就在开局与每轮生成后重拉，
+  // 这里是“刚点开就看见旧值”那一瞬的兜底。
+  if (open) import("./board.js").then((m) => m.loadBoard()).catch(() => {});
+  return open;
+}
+
 /** 高亮跟着当前面板走——面板可以来自顶栏、⋯ 菜单或开聊时自动站出。 */
 function syncTabs() {
+  const boardOn = boardColumnOpen();
   document.querySelectorAll("#ctx-tabs .ctx-tab, #topnav .topnav-item").forEach((btn) => {
-    const isChat = btn.id === "topnav-chat";
-    btn.classList.toggle(
-      "on",
-      isChat ? !openDrawerName : (!!openDrawerName && btn.dataset.drawer === openDrawerName)
-    );
+    const key = btn.dataset.drawer || (btn.id === "topnav-chat" ? "chat" : null);
+    let on = false;
+    // 「对话」= 右栏没开面板。黑板列开不开不影响它——聊天区一直在。
+    if (key === "chat") on = !openDrawerName;
+    // 「世界」也不看 openDrawerName：黑板列与右栏是**两列**，可以同时开着
+    //（开一场对话会自动站出角色面板，那时世界列常常还开着）。
+    else if (key === "board") on = boardOn;
+    else on = !!openDrawerName && key === openDrawerName;
+    btn.classList.toggle("on", on);
   });
 }
 
@@ -67,6 +98,13 @@ function restoreSidebar() {
  * @param {{ reload?: boolean }} [opts]
  */
 export async function openDrawer(name, opts = {}) {
+  // 世界不是抽屉了：它常驻在聊天左边（卡里的形状）。
+  // 保留 'board' 这个 key，是为了让顶栏与 ⋯ 菜单里原有的入口照旧能用。
+  if (name === "board") {
+    toggleBoardColumn();
+    return;
+  }
+
   const el = DRAWERS[name];
   if (!el) return;
 
@@ -92,9 +130,6 @@ export async function openDrawer(name, opts = {}) {
     if (name === "settings") {
       const { loadSettings } = await import("./settings.js");
       await loadSettings();
-    } else if (name === "board") {
-      const { loadBoard } = await import("./board.js");
-      await loadBoard();
     } else if (name === "variables") {
       const { loadVariables } = await import("./variables.js");
       await loadVariables();
@@ -278,6 +313,9 @@ export function bindShell() {
   });
   document.getElementById("topnav-chat")?.addEventListener("click", () => closeDrawer());
 
+  // 标题行那颗「世界 N 格」：既是读数也是开关
+  document.getElementById("board-toggle")?.addEventListener("click", () => toggleBoardColumn());
+
   // 右栏标签条：点标签切面板。点当前标签不做事——
   // “同名再点=收起”是给 ⋯ 菜单的，放在标签条上算误触。
   document.querySelectorAll("#ctx-tabs .ctx-tab").forEach(btn => {
@@ -306,6 +344,8 @@ export function bindShell() {
 
   // 恢复上次打开的右栏面板：刷新后接着上次的位置继续改
   try {
+    // 黑板列是独立开关（它不在右栏里）
+    if (localStorage.getItem("eleckoi:board-open") === "1") toggleBoardColumn(true);
     const saved = localStorage.getItem("eleckoi:ctx-open");
     if (saved && DRAWERS[saved]) {
       openDrawer(saved, { reload: true }).catch((e) => {

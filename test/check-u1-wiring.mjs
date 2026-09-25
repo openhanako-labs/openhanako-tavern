@@ -51,14 +51,37 @@ const domMissing = [...domRefs.filter(id => !htmlIds.has(id)), ...domClassRefs.f
 if (domMissing.length === 0) ok(`dom.js 的 ${domRefs.length + domClassRefs.length} 个引用全部有对应`);
 else for (const m of domMissing) fail(`dom.js 引用了不存在的东西: ${m}`);
 
-// ── 4. 抽屉 id 与 shell.js 的 DRAWERS 键 ──
-// （2026-09-24 加上 board 与 regex：面板涨到八个）
+// ── 4. 面板入口 → 容器：**每个入口都要落到一个真容器上** ──
+//
+// 2026-09-24：世界从抽屉改成"常驻在聊天左边的可折叠栏"（#board-col，卡里的形状）。
+// 所以这一节改成两半：
+//   · 七个真抽屉：id 必须存在
+//   · 「世界」：不再是抽屉，但**它必须仍然是个活入口**——
+//     shell.openDrawer 里那个特例（name === "board" → 开列）被删掉的话，
+//     `DRAWERS["board"]` 是 undefined，openDrawer 会**静默 return**：
+//     按钮还在、点了没反应。这种“静默死入口”正是这一节真正要拦的东西。
 const shellSrc = fs.readFileSync(path.join(modDir, "shell.js"), "utf8");
-const DRAWER_NAMES = ["character", "settings", "board", "variables", "presets", "regex", "tools", "migration"];
-for (const name of DRAWER_NAMES) {
+const REAL_DRAWERS = ["character", "settings", "variables", "presets", "regex", "tools", "migration"];
+for (const name of REAL_DRAWERS) {
   if (!htmlIds.has(`drawer-${name}`)) fail(`缺抽屉 #drawer-${name}`);
 }
-ok(`${DRAWER_NAMES.length} 个抽屉容器 id 齐全`);
+ok(`${REAL_DRAWERS.length} 个抽屉容器 id 齐全`);
+
+if (!htmlIds.has("board-col")) fail("缺黑板列 #board-col（世界已经不是抽屉了，它该在这儿）");
+else if (htmlIds.has("drawer-board")) fail("#drawer-board 又回来了？世界现在是 #board-col，两套会让入口分不清打哪个");
+else {
+  // 只看 openDrawer 这个函数体——上一版写成“源码里提过 board 就算”，
+  // 而懒加载链里还有一句 `else if (name === "board")`，
+  // 于是把特例删掉它照样是绿的（**没有牙的断言**，反证当场揭穿了）。
+  const start = shellSrc.indexOf("export async function openDrawer");
+  const nextExport = shellSrc.indexOf("\nexport ", start + 1);
+  const body = start < 0 ? "" : shellSrc.slice(start, nextExport > start ? nextExport : undefined);
+  const guard = /if \(name === "board"\)\s*\{[^}]*toggleBoardColumn\(\)\s*;[^}]*return\s*;/.test(body);
+  if (!guard) fail('openDrawer 开头没有 "board" 的提前返回：入口会静默失效（按钮在、点了没反应）');
+  else if (!/export function toggleBoardColumn/.test(shellSrc)) fail("shell.js 没有 toggleBoardColumn：入口无处可去");
+  else ok("世界的入口是活的（→ #board-col，经 openDrawer 提前返回）");
+}
+
 if (!shellSrc.includes('data-drawer')) fail("topbar 菜单没绑 data-drawer");
 else ok("顶栏菜单 → 抽屉的事件源存在");
 
@@ -118,9 +141,11 @@ else {
   if (!menu) fail("找不到 ⋯ 菜单 #app-more-menu");
   else {
     const entries = [...menu.matchAll(/data-drawer="([^"]+)"/g)].map(m => m[1]);
-    const missing = DRAWER_NAMES.filter(n => !entries.includes(n));
+    // ⋯ 菜单要装下**全部**面板入口：七个真抽屉 + 「世界」（它现在是列，但入口不变）
+    const ALL_ENTRIES = [...REAL_DRAWERS, "board"];
+    const missing = ALL_ENTRIES.filter(n => !entries.includes(n));
     if (missing.length) fail(`⋯ 菜单缺面板入口: ${missing.join(", ")}（有面板没门）`);
-    else ok(`⋯ 菜单装下全部 ${DRAWER_NAMES.length} 个面板入口`);
+    else ok(`⋯ 菜单装下全部 ${ALL_ENTRIES.length} 个面板入口`);
   }
 }
 
