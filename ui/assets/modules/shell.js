@@ -398,6 +398,10 @@ export function bindShell() {
       // 它以前落到分支链末尾——点了没反应，还一声不吭。
       const { openCharacterEditor } = await import("./characters.js");
       await openCharacterEditor();
+    } else if (msg.t === "gen-open") {
+      // 左栏的「✧ AI 生成」：生成台在主视图，弹窗由那边开
+      const { openGen } = await import("./gen.js");
+      openGen();
     } else if (msg.t === "rail-refresh") {
       // 左栏要求刷新它自己的列表，主区不动（主区有自己的 loadCharacters）
     } else {

@@ -2562,3 +2562,112 @@ main.ctx-open .drawer:not(.hidden) {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* ── AI 生成台（gen.js）────────────────────────────────
+   三段式：需求 / 过程 / 结果。观感对齐 .import-item——
+   同一类东西（逐条看一眼再决定）不该长两个样。 */
+
+.gen-content { max-width: 720px; }
+
+.gen-sec {
+  border-top: 1px solid var(--border);
+  padding: 12px 0 4px;
+}
+.gen-sec:first-child { border-top: none; padding-top: 0; }
+.gen-sec > h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-dim);
+  margin: 0 0 8px;
+}
+.gen-sec .hint { font-weight: 400; color: var(--fg-muted); }
+
+.gen-sources { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.gen-src {
+  font-size: 12px;
+  color: var(--fg-dim);
+  background: var(--bg-warm);
+  border-radius: var(--r-sm);
+  padding: 3px 8px;
+}
+.gen-src.ok { color: var(--success); }
+.gen-src.bad { color: var(--fg-muted); }
+.gen-src-loading { font-size: 12px; color: var(--fg-muted); }
+.gen-src-note {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+
+.gen-progress { font-size: 13px; color: var(--fg-dim); }
+
+.gen-notes { margin-top: 8px; }
+.gen-note { font-size: 12px; color: var(--fg-dim); padding: 2px 0; }
+.gen-note.bad { color: var(--danger); }
+
+.gen-result { margin-top: 4px; }
+
+.gen-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  background: var(--surface);
+}
+.gen-card-name { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.gen-card-desc { font-size: 13px; color: var(--fg-dim); line-height: 1.7; }
+.gen-card-line { font-size: 13px; color: var(--fg-dim); margin-top: 6px; line-height: 1.7; }
+.gen-card-line b { color: var(--fg); font-weight: 600; margin-right: 6px; }
+.gen-card-tags { margin-top: 8px; }
+.gen-card-tags i,
+.gen-keys i {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--fg-dim);
+  background: var(--accent-soft);
+  border-radius: var(--r-sm);
+  padding: 2px 7px;
+  margin-right: 5px;
+}
+
+.gen-sub {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin: 14px 0 6px;
+}
+
+.gen-entry {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  transition: border-color var(--t) var(--ease);
+}
+.gen-entry:hover { border-color: var(--border-strong); }
+.gen-entry-b { display: block; flex: 1; min-width: 0; }
+.gen-keys { display: block; margin-bottom: 4px; }
+.gen-entry-c {
+  display: block;
+  font-size: 13px;
+  color: var(--fg-dim);
+  line-height: 1.7;
+  outline: none;
+}
+.gen-entry-c:focus { color: var(--fg); }
+
+.gen-fact {
+  border-left: 2px solid var(--accent-line);
+  padding: 4px 0 4px 10px;
+  margin-bottom: 8px;
+}
+.gen-fact-t { font-size: 13px; color: var(--fg-dim); line-height: 1.7; }
+.gen-src-link {
+  font-size: 11px;
+  color: var(--fg-muted);
+  text-decoration: none;
+  word-break: break-all;
+}
+.gen-src-link:hover { color: var(--accent); }

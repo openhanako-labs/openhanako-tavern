@@ -608,6 +608,60 @@
   </div>
 </div>
 
+<!-- ── AI 生成：连网检索资料，生成卡 + 世界书 ──────── -->
+<!--
+  三段式：需求 / 过程 / 结果。第三段是审查台：
+  逐条看一眼再决定进不进卡库。没出处的内容**不会出现在这里**——
+  它们在核对那一步就被删掉了，只在过程区留一个数字。
+-->
+<div id="gen-modal" class="modal hidden">
+  <div class="modal-content gen-content">
+    <div class="modal-header">
+      <h2>AI 生成 · 角色卡与世界书</h2>
+      <button id="gen-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <section class="gen-sec">
+        <h3>要一个什么样的角色</h3>
+        <div class="field">
+          <input type="text" id="gen-query" placeholder="例：初音未来 / 蒸汽朋克世界的钟表匠">
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>每个来源取几份材料</label>
+            <input type="number" id="gen-docs" value="3" min="1" max="5">
+          </div>
+          <div class="field">
+            <label class="checkbox-label">
+              <input type="checkbox" id="gen-book" checked>
+              同时生成世界书
+            </label>
+          </div>
+        </div>
+        <div id="gen-sources" class="gen-sources">还没体检</div>
+      </section>
+
+      <section class="gen-sec">
+        <h3>过程</h3>
+        <div id="gen-progress" class="gen-progress">还没开始</div>
+        <div id="gen-notes" class="gen-notes"></div>
+      </section>
+
+      <section class="gen-sec">
+        <h3>结果 <span class="hint" id="gen-hint"></span></h3>
+        <div id="gen-result" class="gen-result"></div>
+      </section>
+
+    </div>
+    <div class="modal-footer">
+      <button id="gen-submit" class="btn btn-primary">开始生成</button>
+      <button id="gen-save" class="btn btn-primary hidden">写进卡库</button>
+      <button id="gen-discard" class="btn">丢掉</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── 新对话 ─────────────────────────────────────── -->
 <div id="new-conv-modal" class="modal hidden">
   <div class="modal-content">

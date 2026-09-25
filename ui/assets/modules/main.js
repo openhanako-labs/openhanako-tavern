@@ -18,6 +18,7 @@ import { loadVariables, renderVariables, openVariableEditor, saveVariable, delet
 import { loadTools, renderToolGroups, renderTools } from "./tools.js";
 import { importFile, handleMigrationFile, loadExports, renderExports, downloadExport, downloadExportFile, deleteExportFile, copyExport, formatFileSize, exportAll } from "./migration.js";
 import { saveBoardCell, deleteBoardCell, bindBoard } from "./board.js";
+import { bindGen } from "./gen.js";
 import { saveRegexRule, deleteRegexRule, bindRegex } from "./regex.js";
 
 
@@ -118,6 +119,9 @@ dom.stImportInput?.addEventListener("change", handleSTImport);
 // 备份导入。以前这里没有这行：handleMigrationFile 写好了、却从没被绑过，
 // 而按钮借的是 #file-input —— 选备份会被角色卡导入器接手。
 dom.migrationFileInput?.addEventListener("change", handleMigrationFile);
+
+// AI 生成台的按钮（弹窗由左栏的 ✧ 生成 → nav → shell.js 打开）
+bindGen();
 
 // 聊天输入：Enter 发送，Shift+Enter 换行
 dom.chatInput?.addEventListener("keydown", (e) => {

@@ -213,6 +213,8 @@ function bind() {
   // 消费 import-char → 点隐藏的 file-input → change → handleImport（那条链一直活着，
   // 只是过去三个人抢着当入口却一个都没绑）。
   $("rail-import")?.addEventListener("click", () => nav({ t: "import-char" }));
+  // AI 生成：左栏只管发意图，生成台在主视图（跨 iframe 走后巷消息总线）
+  $("gen-open")?.addEventListener("click", () => nav({ t: "gen-open" }));
 
   // card 页新建/删除对话后，可能通知左栏刷新
   window.addEventListener("storage", (e) => {
