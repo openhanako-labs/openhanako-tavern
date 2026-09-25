@@ -143,6 +143,37 @@ App tool "tavern_embed_status" failed: RPC peer closed; cannot call callback.too
 我立刻调 → 真的执行了，返回了 `宿主说没有 type=embedding 的模型`。
 那句报错本身倒是真的——它直接帮我把类型解析的坑挖出来了。）
 
+## 落地清单：宿主那条 `models.embed` 面（2026-09-25 拍板要做）
+
+来源仓库已就位：`liliMozi/openhanako`（main）。要动的就四处：
+
+1. **契约** `app-contract/models.d.ts` 的 `HanaPluginModelsV2`（现在只有
+   `list / stream / utility / cancel`）：
+
+   ```ts
+   embed(request: {
+     requestId: string;
+     provider: string;
+     model: string;
+     input: string | string[];
+   }): Promise<{ vectors: number[][]; dimension: number }>;
+   ```
+
+   ⚠️ **不要**加 `dimensions` 参数——那是 OpenAI text-embedding-3 的东西，
+   `bge-m3` 收到直接 400 `code 20015`。这个坑在实验台上踩过了。
+
+2. **能力**：`app/models.embed`，与 `app/models.read` / `app/models.infer` 并列。
+   新开一个而不是复用 `infer`：能力收窄是这条面存在的理由——
+   只给向量，不给一把完整凭据。
+
+3. **实现**：宿主里按 provider 的 `baseUrl` / `api` 拼 `/embeddings`，
+   凭据复用宿主已有的解析（App 今天就只能自己干这件事）。
+   返回 `{ vectors, dimension }`；`dimension` 由向量长度得出，不猜。
+
+4. **验收**：酒馆侧 `test/regression-embed.mjs` 里那两条就是验收标准——
+   `via: "host"` 且**不去取凭据**。宿主一长出这条面，那两条断言会直接拿它验；
+   没这条面时退回直连的那条路已经绿了（`via: "direct"`）。
+
 ## 一句话
 
 卡住的位置不在实验台，也不在网络，甚至不在“能不能写代码”——
