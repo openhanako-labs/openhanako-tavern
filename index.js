@@ -37,6 +37,7 @@ import { registerBoardRoutes } from "./lib/board/routes.js";
 import { registerToolRoutes } from "./lib/tools/routes.js";
 import { createEmbedTools } from "./lib/embed/tool.js";
 import { createGenTools } from "./lib/gen/tool.js";
+import { createMediaTools } from "./lib/media/tool.js";
 import { registerEmbedRoutes } from "./lib/embed/routes.js";
 import { loadGroupState, isGroupEnabled } from "./lib/tools/group.js";
 
@@ -199,6 +200,10 @@ export default defineApp(async (sdk) => {
   // 它不联网——查资料那一步由 Agent 做，工具只负责抽取/组装/核对。
   for (const t of createGenTools({ llm: llmService })) await registerTool(t, "gen");
 
+  // 出图：把**已经在本地画好的图**写回角色卡。
+  // 它不自己出图——“用哪个引擎画”是调用方（Agent）的事，这个工具只管落盘。
+  for (const t of createMediaTools({ characterRepo, transfer: characterTransfer })) await registerTool(t, "media");
+
   s.tools = {
     registered: receipts.length,
     groups: [
@@ -208,6 +213,7 @@ export default defineApp(async (sdk) => {
       { id: "settings", name: "设定库" },
       { id: "embed", name: "向量" },
       { id: "gen", name: "生成" },
+      { id: "media", name: "出图" },
       { id: "system", name: "系统" }
     ].map(g => ({ ...g, enabled: isGroupEnabled(g.id) }))
   };
