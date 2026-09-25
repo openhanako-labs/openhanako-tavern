@@ -21,6 +21,14 @@ const snap = () => ({
 });
 
 const out = {};
+out["顶栏条目"] = [...document.querySelectorAll("#topnav .topnav-item")].map((b) => b.textContent.trim());
+(() => {
+  // 旧右栏标签条到底藏住没有——**问计算样式**，不靠读 CSS 猜
+  const t = document.getElementById("ctx-tabs");
+  out["旧标签条"] = t
+    ? { display: getComputedStyle(t).display, visibility: getComputedStyle(t).visibility, 可见: !!t.offsetParent }
+    : "(不存在)";
+})();
 out["打开对话前"] = snap();
 
 const brand = document.querySelector(".brand");

@@ -14,6 +14,26 @@
 -->
 <div class="shell">
 
+  <!--
+    顶栏：九个入口一排。
+
+    卡里这一排是整页的脊梁——它一眼说明「这是个有几段的 App」，
+    不是「一个聊天框加一根侧栏」。我们先前的做法是把入口全塞进右栏顶上
+ （只放四个），那是为了“一级要干净”；但屏幕上少掉的不是“复杂度”，
+    是**入口本身**。现在回到一排，靠 --ctx-w 那个开关控制面板。
+  -->
+  <nav class="topnav" id="topnav" aria-label="主导航">
+    <button type="button" class="topnav-item" id="topnav-chat">对话</button>
+    <button type="button" class="topnav-item" data-drawer="character">角色</button>
+    <button type="button" class="topnav-item" data-drawer="settings">设定库</button>
+    <button type="button" class="topnav-item" data-drawer="board">世界</button>
+    <button type="button" class="topnav-item" data-drawer="variables">变量</button>
+    <button type="button" class="topnav-item" data-drawer="presets">预设</button>
+    <button type="button" class="topnav-item" data-drawer="regex">正则</button>
+    <button type="button" class="topnav-item" data-drawer="tools">工具</button>
+    <button type="button" class="topnav-item" data-drawer="migration">迁移</button>
+  </nav>
+
   <!-- ── 左栏 ─────────────────────────────────────── -->
   <!--
     品牌与 ⋯ 收在左栏顶部，不再单独占一行。
@@ -56,6 +76,19 @@
         <h1 class="brand">ElecKoi<span class="tag">m8</span></h1>
         <h3 id="chat-title">选择对话开始</h3>
         <span id="chat-meta" class="hdr-meta hidden"></span>
+        <!--
+          观测面（本轮 token / 缓存命中）搬进标题行右侧。
+          卡里它就在这里；而且它是“读数”，不是输入区的一部分——
+          放在输入框上方会让每次输入都从一堆数字开始。
+          × 照旧手动关（用户原话：需要显示，可以让用户手动关闭）。
+        -->
+        <div id="gen-meta" class="gen-meta hidden">
+          <span class="gen-readings">
+            <span id="gen-tokens"></span>
+            <span id="gen-cache"></span>
+          </span>
+          <button id="gen-meta-close" class="gen-close" title="隐藏读数" aria-label="隐藏读数">×</button>
+        </div>
         <div id="chat-actions" class="chat-actions">
           <!-- 抽屉入口（从已删的页内侧栏搬来：它本就叫顶栏菜单） -->
           <div class="more-wrap">
@@ -95,17 +128,8 @@
         </div>
       </div>
 
-      <!-- 生成状态条：本轮 token / 缓存命中（观测面） -->
-      <div id="gen-meta" class="gen-meta hidden">
-        <span class="gen-readings">
-          <span id="gen-tokens"></span>
-          <span id="gen-cache"></span>
-        </span>
-        <button id="gen-meta-close" class="gen-close" title="隐藏读数" aria-label="隐藏读数">×</button>
-      </div>
+      <!-- 生成状态条已搬到标题行（见 #chat-header） -->
 
-      <!-- 行动候选项：正文之后的岔路。
-           它不属于「正文」，所以不进 prompt，只在这里出现（点一下填进输入框）。 -->
       <div id="suggest-row" class="suggest-row hidden"></div>
 
       <div id="chat-input-area" class="chat-input-area hidden">

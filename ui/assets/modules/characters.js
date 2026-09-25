@@ -380,7 +380,19 @@ export async function renderCharContext(greetIdx = 0) {
 
   const initial = String(c.name || "?").trim().slice(0, 1) || "?";
   const tags = (Array.isArray(c.tags) ? c.tags : []).slice(0, 8);
-  const desc = String(c.description || "").trim();
+  const descRaw = String(c.description || "").trim();
+  /*
+   * 预览文本也过一遍宏。
+   *
+   * 卡里的字段本身存的就是 `{{char}}没有回头`这种写法，
+   * 宏在发送前才展开。面板上原样摆着，读起来像坏掉了——
+   * 而聊天区那个「开场」块是展开过的，两个地方一个口径才对。
+   */
+  const preview = (t) => {
+    const raw = String(t ?? "");
+    return state.macro ? state.macro.process(raw) : raw;
+  };
+  const desc = descRaw ? preview(descRaw) : "";
   const ver = String(c.character_version || "1.0");
   const creator = String(c.creator || "ophelia");
 
@@ -394,7 +406,7 @@ export async function renderCharContext(greetIdx = 0) {
             <button id="greet-next" title="下一条">›</button>
           </span>
         </div>
-        <div class="greet-text" id="greet-text">${escapeHtml(greets[gi])}</div>
+        <div class="greet-text" id="greet-text">${escapeHtml(preview(greets[gi]))}</div>
       </div>`
     : "";
 

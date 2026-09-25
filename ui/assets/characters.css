@@ -103,6 +103,50 @@ main.ctx-open {
 }
 
 /*
+ * 顶栏：九个入口一排（卡里的脊梁）。
+ * 溢出不换行而是横滚——入口数量不应该决定聊天区能剩多少高。
+ */
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 10px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.topnav::-webkit-scrollbar { display: none; }
+
+.topnav-item {
+  flex: none;
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease), border-color var(--t) var(--ease);
+}
+
+.topnav-item:hover { background: var(--surface-2); color: var(--fg); }
+
+.topnav-item.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/*
+ * 右栏旧的四个标签条退了：入口已在顶栏。
+ * 保留它们在 DOM 里（id/结构不变），只是不再显示。
+ */
+
+/*
  * ── 右栏标签条 ─────────────────────────────────────
  * 六个面板的常驻入口，与抽屉同住 grid 第二列：
  * 标签条占第 1 行（3 列挤 6 个标签 + 右上角关闭），
@@ -122,6 +166,18 @@ main.ctx-open {
 }
 
 main.ctx-open .ctx-tabs { visibility: visible; }
+
+/*
+ * 旧的右栏标签条退场。
+ *
+ * 位置必须在它自己那条规则**后面**：那个块里写着 display: grid，
+ * 同优先级下后写的胜——我第一次把这条写在前面，于是屏幕上它们还在
+ *（而我还读了一遍那个块，偏偏没看见里面那行 display: grid）。
+ *
+ * 收起右栏改由顶栏同名入口再点一次（openDrawer 本来就是这个行为）。
+ */
+.ctx-tabs,
+main.ctx-open .ctx-tabs { display: none; visibility: hidden; }
 
 .ctx-tab {
   display: inline-flex;
@@ -1232,10 +1288,10 @@ h1 {
 
 /* ── 生成状态条（token / 缓存命中） ───────────────── */
 .gen-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 5px 19px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
   font-size: 11px;
   color: var(--fg-muted);
   font-variant-numeric: tabular-nums;
@@ -1590,15 +1646,16 @@ footer a:hover { color: var(--accent); }
    新版外壳：shell + 侧栏 + drawer（取代旧六 Tab 的 .tab/.view）
    ════════════════════════════════════════════════════ */
 
-/* 外壳：左侧栏 + 右侧主区，撑满视口 */
+/* 外壳：顶栏 + 主区，撑满视口 */
 .shell {
   display: grid;
   /* 页内侧栏已删：单列，主区铺满（rail 是宿主层，不占这里） */
   grid-template-columns: 1fr;
-  /* 行必须钉满容器：行高 auto 会塌回内容高——
+  /* 两行：顶栏（auto）+ 主区（吃掉剩下的高）
+     行必须钉满容器：行高 auto 会塌回内容高——
      chat-view 的 height:100% 就成了循环依赖，
      表现为输入区悬在中部、下面坠着几百像素空白 */
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -2006,6 +2063,13 @@ main.ctx-open .drawer:not(.hidden) {
   background: var(--surface-2);
   text-align: left;
 }
+
+/*
+ * 开场块贴底，像它将来会变成的那第一条消息。
+ *（.messages > .empty 那条把它居中，这里要把它压下去；
+ *  选择器得写到同层级才盖得住。）
+ */
+.messages > .scene-empty { margin: auto auto 0; }
 
 .scene-kicker {
   margin-bottom: 8px;

@@ -16,10 +16,14 @@ import { onNavigation, askRailRefresh, setActiveConv, railAlive } from "./nav-bu
 /** 当前打开的抽屉名；null = 都关着。 */
 let openDrawerName = null;
 
-/** 标签条高亮跟着当前面板走——面板可以来自标签、⋯ 菜单或开聊时自动站出。 */
+/** 高亮跟着当前面板走——面板可以来自顶栏、⋯ 菜单或开聊时自动站出。 */
 function syncTabs() {
-  document.querySelectorAll("#ctx-tabs .ctx-tab").forEach((btn) => {
-    btn.classList.toggle("on", !!openDrawerName && btn.dataset.drawer === openDrawerName);
+  document.querySelectorAll("#ctx-tabs .ctx-tab, #topnav .topnav-item").forEach((btn) => {
+    const isChat = btn.id === "topnav-chat";
+    btn.classList.toggle(
+      "on",
+      isChat ? !openDrawerName : (!!openDrawerName && btn.dataset.drawer === openDrawerName)
+    );
   });
 }
 
@@ -266,6 +270,13 @@ export function bindShell() {
       openDrawer(btn.dataset.drawer);
     });
   });
+
+  // 顶栏入口：点当前那个 = 收起（与 ⋯ 菜单一致）。
+  // 卡里那一排就是这个手感——再点一次回到“只有对话”。
+  document.querySelectorAll("#topnav button[data-drawer]").forEach(btn => {
+    btn.addEventListener("click", () => openDrawer(btn.dataset.drawer));
+  });
+  document.getElementById("topnav-chat")?.addEventListener("click", () => closeDrawer());
 
   // 右栏标签条：点标签切面板。点当前标签不做事——
   // “同名再点=收起”是给 ⋯ 菜单的，放在标签条上算误触。
