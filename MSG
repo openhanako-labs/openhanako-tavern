@@ -1,25 +1,24 @@
-fix(embed): 出网改走宿主的门 sdk.network.fetch（原始 fetch 被 AppHost 拒掉）
+docs(spec): 自动创建角色卡与世界书 · 设计（过三节审查 + 自检）
 
-一天里第三次改口，这次是 SKILL 里明写的答案（hana-app-creator）：
+用户的新需求：从零生成角色卡和世界书，内容来自**可信的网络信息**，
+且必须符合原酒馆格式。
 
-  "The default App entry runs in a separate AppHost child with raw networking
-   denied by Node Permission Model; sdk.network.fetch crosses IPC to the host
-   for these checks."
+设计过了三节审查（流程 / 生成端 / 审查界面），三条关键决定已获批准：
+  ① 出处跟着内容走（挂不上来源的事实直接丢，fail closed）
+  ② 来源标类型（百科 / 官方 / 社区 wiki 分开标，让人自己判断）
+  ③ 审查不可省（生成的不直接进库）
 
-所以 getaddrinfo ERR_ACCESS_DENIED 不是故障，是设计：App 入口跑在独立的
-AppHost 子进程里，原始网络被 Node 权限模型拒掉。正门是 sdk.network.fetch
-——它跨 IPC 让宿主代为检查（白名单 → 私网/HTTPS → 方法 → 超时 → 字节上限）
-并发出，用的就是 manifest 里那个 network.allowedHosts。
+流程：检索 → 抽取事实清单（带出处）→ 按 ST 格式组装（喂清单不喂原文，
+这道墙就是防幻觉用的）→ 人审查 → 落盘。
+第三道护栏是**出处核对**：生成结果里找不到出处的断言直接删，并在报告里
+写"删了 N 条越界内容"——把幻觉变成一个看得见的数字。
 
-改：
-· embed() 多接一个 net（= sdk.network）；有它就用自己的门，没有才退回
-  fetchImpl（fetchImpl 现在只给测试注入用）。
-· 两个调用点（工具 / 路由）都传 sdk.network。
-· 测试 +1：给了 network.fetch 就用它，且绝不碰原始 fetch。
+自检阶段把"未决"三条落地成结论（skill 的规格自检要求修掉占位符）：
+· 来源实测：萌娘百科 ✓200、arXiv ✓200；灰机 403（换完整浏览器头复测仍 403）、
+  维基 / Fandom 连接超时
+· 代理：环境变量无、宿主设置里也没搜到 → 按直连处理
+· 因此白名单路 v1 = **两个源**（萌娘 + arXiv）；历史/地理/真实人物这类
+  只能走 Agent 兜底——这不是降级，是这台机的网络现实
+· 检索实现 v1 只做这两个站；其余站留名，靠"来源可用性检查"标出不通
 
-顺带撤掉 app/runtime.network：SKILL 写着 "v2 has no separate network.fetch
-capability"，那条能力是给受管运行时 / 外部命令用的；酒馆不出进程，
-不需要它，留着只会多一次权限复核。
-
-教训（今天第四次栽在同一件事上）：契约和 SKILL 里写着的东西，
-我不该靠推理去找——先读文档，再动脑。
+非目标（YAGNI）也写死了：不做从对话/文档反推、不自动入库、不做多轮打磨。
