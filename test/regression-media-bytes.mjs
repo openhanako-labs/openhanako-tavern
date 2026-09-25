@@ -108,6 +108,34 @@ await okAsync("⑤ 没有 taskId 也不装死：说清是“产物里没有 task
   );
 });
 
+await okAsync("⑥ 只有 batchId 也能走通（app 域出图就只给这个）", async () => {
+  const want = Buffer.from("from-batch");
+  const asked = [];
+  const sdk = {
+    media: {
+      listTasks: async (opts) => {
+        asked.push(opts);
+        assert.equal(opts.batchId, "batch-9", "该拿 batchId 去问");
+        return { tasks: [
+          { taskId: "older", completedAt: "2026-09-25T10:00:00Z" },
+          { taskId: "newer", completedAt: "2026-09-25T11:00:00Z" }
+        ] };
+      },
+      getTaskResources: async (taskId) => {
+        assert.equal(taskId, "newer", "该取最新的那个 task");
+        return { resources: [{ name: "p.png", resource: { kind: "session-file", fileId: "f9", sessionId: "s9" } }] };
+      }
+    },
+    resources: { read: async () => want }
+  };
+  // 真返回的形状：没有 files / sessionFiles / taskId
+  const r = await readProductBytes(sdk, { ok: true, kind: "image", batchId: "batch-9", prompt: "..." });
+  assert.equal(r.ok, true, "该成功");
+  assert.equal(r.via, "session-file");
+  assert.deepEqual(r.buf, want);
+  assert.equal(asked.length, 1, "listTasks 只该问一次");
+});
+
 await fs.rm(tmp, { recursive: true, force: true });
 
 console.log("");
