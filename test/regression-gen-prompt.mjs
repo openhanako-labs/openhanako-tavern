@@ -81,8 +81,8 @@ const DOCS = [
 ];
 
 await okAsync("⑦ 抽取提示词：带需求、带每条的出处、写明丢弃规则", async () => {
-  const msgs = extractPrompt({ query: "我要一个未来歌姬", docs: DOCS });
-  const flat = msgs.map(m => m.content).join("\n");
+  const { systemPrompt, messages } = extractPrompt({ query: "我要一个未来歌姬", docs: DOCS });
+  const flat = [systemPrompt, ...messages.map(m => m.content)].join("\n");
   assert.ok(flat.includes("我要一个未来歌姬"), "需求没进去");
   assert.ok(flat.includes(DOCS[0].url), "第一条的出处没进去");
   assert.ok(flat.includes(DOCS[1].url), "第二条的出处没进去");
@@ -98,8 +98,8 @@ await okAsync("⑧ 组装提示词只带清单——原文里独有的句子不�
     { fact: "初音未来是 Crypton Future Media 开发的歌声合成软件。",
       source: { url: DOCS[0].url, title: "初音未来", tier: "community" } }
   ];
-  const msgs = composePrompt({ query: "我要一个未来歌姬", facts });
-  const flat = msgs.map(m => m.content).join("\n");
+  const { systemPrompt, messages } = composePrompt({ query: "我要一个未来歌姬", facts });
+  const flat = [systemPrompt, ...messages.map(m => m.content)].join("\n");
   assert.ok(flat.includes("Crypton Future Media"), "清单内容该在");
   assert.ok(!flat.includes("她的生日是 8 月 31 日"), "原文里独有的句子漏进组装提示词了");
   assert.ok(!flat.includes(DOCS[1].text), "另一篇原文漏进来了");
