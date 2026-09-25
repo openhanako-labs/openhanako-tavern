@@ -69,7 +69,7 @@ export async function makePortrait(opts = {}) {
     if (el) el.textContent = text || "";
   };
 
-  if (!card || !card.id) { toast("先打开一张角色卡", "error"); return; }
+  if (!card || !card.id) { toast("先打开一张角色卡（在左边列表里点一下，或者开一场对话）", "error"); return; }
 
   const btn = $(btnId);
   busy = true;
@@ -115,6 +115,19 @@ export async function makePortrait(opts = {}) {
       });
       if (!yes) {
         setNote("已取消——这张卡里没有可画的东西。");
+        return;
+      }
+    }
+
+    // 已经有头像时再确认一次：出图要花几十秒，而这一步是**覆盖**。
+    // 上一版只判“卡里空不空”，不判“卡里已经有图了”。
+    if (card.has_avatar) {
+      const yes = await confirmDialog({
+        title: `要换掉「${card.name || "这张卡"}」现在的立绘吗？`,
+        body: "会生成一张新的并直接替换掉旧的那张。"
+      });
+      if (!yes) {
+        setNote("已取消——现在的立绘没动。");
         return;
       }
     }

@@ -289,8 +289,9 @@ export function bindShell() {
 
   restoreSidebar();
 
-  dom.sidebarCollapseBtn?.addEventListener("click", () => toggleSidebar());
-  dom.sidebarExpandBtn?.addEventListener("click", () => toggleSidebar(false));
+  // 早先这里绑过#sidebar-collapse / #sidebar-expand 两个按钮——
+  // 页内侧栏删了之后它们就不存在了，只剩下 dom.js 里两个 null 与这里两行死引用。
+  // Ctrl/Cmd+B 快捷键还在（见 main.js），那是现在唯一的收/展方式。
 
   // 顶栏 ⋯ → 抽屉
   document.getElementById("app-more-btn")?.addEventListener("click", (e) => {

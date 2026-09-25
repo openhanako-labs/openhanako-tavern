@@ -382,7 +382,9 @@ export async function sendMessage() {
         renderMessages();
       } else {
         loadingEl.remove();
-        toast("生成失败", "error");
+        // 这里**没有异常对象**：请求是成功的，只是返回里没有回复。
+        // （上一版写成了 `e ? ...` —— 那个 `e` 在这个作用域里根本不存在。）
+        toast("这次没拿到回复——服务端返回里没有内容，可以重试一次", "error");
       }
     }
     // 发成功了才轮换。抛错走不到这里——换人依赖“这一轮真的落盘了”。
@@ -525,7 +527,7 @@ export async function createConversation() {
     if (characters.length === 0) { toast("请先创建角色卡", "error"); return; }
     dom.newConvModalEl.classList.remove("hidden");
   } catch (e) {
-    toast("加载角色失败", "error");
+    toast("加载角色失败：" + friendlyError(e), "error");
   }
 }
 
@@ -551,7 +553,7 @@ export async function confirmNewConversation() {
     closeNewConvModal();
     toast(picked.length > 1 ? `群聊已创建（${picked.length} 位）` : "对话已创建", "success");
   } catch (e) {
-    toast(`创建失败: ${e.message}`, "error");
+    toast(`创建对话失败: ${friendlyError(e)}`, "error");
   }
 }
 
@@ -567,7 +569,13 @@ export function closeNewConvModal() {
 
 export async function deleteConversation() {
   if (!state.currentConv) return;
-  if (!(await confirmDialog("确定删除此对话？"))) return;
+  // 说清删的是哪一场、会少什么。
+  const title = state.currentConv.title || "这场对话";
+  const n = (state.currentConv.messages || []).length;
+  if (!(await confirmDialog({
+    title: `删掉「${title}」？`,
+    body: `里面的 ${n} 条消息、前情提要和这一场记下的变量都会一起删掉。`
+  }))) return;
   try {
     await apiFetch(`conversations/${state.currentConv.id}`, { method: "DELETE" });
     toast("已删除", "success");
@@ -575,11 +583,9 @@ export async function deleteConversation() {
     await loadConversations();
     dom.messagesContainer.innerHTML = '<div class="empty">选择或创建对话开始聊天</div>';
     dom.chatInputArea.classList.add("hidden");
-    dom.chatActions.querySelector("#export-chat-btn")?.classList.add("hidden");
-    dom.chatActions.querySelector("#delete-conv-btn")?.classList.add("hidden");
     dom.chatTitle.textContent = "选择对话";
   } catch (e) {
-    toast(`删除失败: ${e.message}`, "error");
+    toast(`删除失败: ${friendlyError(e)}`, "error");
   }
 }
 
@@ -609,7 +615,10 @@ export function findMessage(id) {
 export async function deleteMessage(id) {
   const msg = findMessage(id);
   if (!msg) return;
-  const ok = await confirmDialog("删除这条消息？");
+  const ok = await confirmDialog({
+    title: "删掉这条消息？",
+    body: "删了之后前情提要会按剩下的内容重算一遍。"
+  });
   if (!ok) return;
   try {
     state.currentConv.messages = state.currentConv.messages.filter(m => m !== msg);
@@ -635,6 +644,21 @@ export function startEditMessage(id) {
   dom.chatInput.focus();
   const btn = document.getElementById("send-btn");
   if (btn) btn.textContent = "保存修改";
+  // 告诉用户怎么退出去。之前这个状态**没有出口**：
+  // 改到一半想放弃，只能把输入框清空再点“保存修改”，
+  // 而空内容会被静默丢掉，用户根本不知道发生了什么。
+  dom.chatInput.placeholder = "编辑中——Esc 取消";
+}
+
+/** 退出编辑，不保存。返回是否真的退出了（没在编辑就是 false）。 */
+export function cancelEditMessage() {
+  if (state.editingMessageId == null) return false;
+  state.editingMessageId = null;
+  dom.chatInput.value = "";
+  const btn = document.getElementById("send-btn");
+  if (btn) btn.textContent = "发送";
+  dom.chatInput.placeholder = "输入消息…（Enter 发送，Shift+Enter 换行）";
+  return true;
 }
 
 /** 复制消息文本。 */
@@ -686,7 +710,7 @@ export async function regenerateFrom(id) {
   if (!msg || state.isGenerating) return;
   const idx = state.currentConv.messages.indexOf(msg);
   const prevUser = [...state.currentConv.messages.slice(0, idx)].reverse().find(m => m.role === "user");
-  if (!prevUser) { toast("找不到对应的用户消息", "error"); return; }
+  if (!prevUser) { toast("这条不是回复，没法重生——它前面还没有你的话", "error"); return; }
 
   state.isGenerating = true;
   try {

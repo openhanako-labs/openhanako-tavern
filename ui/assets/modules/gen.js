@@ -10,7 +10,7 @@
 //
 // 长任务走提交 + 轮询，不新增宿主能力。
 
-import { apiFetch, toast, escapeHtml, friendlyError } from "./core.js";
+import { apiFetch, toast, escapeHtml, friendlyError, confirmDialog } from "./core.js";
 
 const POLL_MS = 1000;
 const MAX_POLLS = 240;          // 最多等 4 分钟
@@ -261,7 +261,7 @@ export async function saveGen() {
       });
     }
 
-    toast(`已写入卡库：${saved.name || card.name}${entries.length ? `（世界书 ${entries.length} 条）` : ""}`, "success");
+    toast(`已写入角色卡：${saved.name || card.name}${entries.length ? `（世界书 ${entries.length} 条）` : ""}`, "success");
     closeGen();
     const { loadCharacters } = await import("./characters.js");
     await loadCharacters();
@@ -284,12 +284,23 @@ export function discardGen() {
   if (submit) submit.disabled = false;
 }
 
+/** 丢掉之前先问一句：误触一次的成本是再等几分钟重新生成。 */
+export async function discardGenConfirmed() {
+  const yes = await confirmDialog({
+    title: "丢掉这次生成的结果？",
+    body: "没写进卡库的部分会没，下次得重新跑一遍。"
+  });
+  if (!yes) return false;
+  discardGen();
+  return true;
+}
+
 /** 主视图收到左栏的 gen-open 时调用。 */
 export function bindGen() {
   $("gen-close")?.addEventListener("click", closeGen);
   $("gen-submit")?.addEventListener("click", () => void submitGen());
   $("gen-save")?.addEventListener("click", () => void saveGen());
-  $("gen-discard")?.addEventListener("click", discardGen);
+  $("gen-discard")?.addEventListener("click", () => { void discardGenConfirmed(); });
   $("gen-modal")?.addEventListener("click", (e) => {
     if (e.target === $("gen-modal")) closeGen();
   });

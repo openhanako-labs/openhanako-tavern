@@ -9,7 +9,7 @@ import { state } from "./state.js";
 import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, formatDate, formatTime } from "./core.js";
 
 import { loadCharacters, renderCharacters, openCharacterEditor, saveCharacter, deleteCharacter, exportCharacter, handleCharacterAction, handleImport, commitImport, closeImportModal, renderImportPreview } from "./characters.js";
-import { loadConversations, renderConversations, openConversation, renderMessages, sendMessage, stopGeneration, bindScrollFollow, bindComposer, createConversation, confirmNewConversation, closeNewConvModal, deleteMessage, startEditMessage, copyMessage, swipeVariant, regenerateFrom, findMessage, hideUsageBar } from "./chat.js";
+import { loadConversations, renderConversations, openConversation, renderMessages, sendMessage, stopGeneration, bindScrollFollow, bindComposer, createConversation, confirmNewConversation, closeNewConvModal, deleteMessage, startEditMessage, cancelEditMessage, copyMessage, swipeVariant, regenerateFrom, findMessage, hideUsageBar } from "./chat.js";
 import { bindChatMore, syncChatMore } from "./chat-more.js";
 import { bindShell, toggleSidebar } from "./shell.js";
 import { bindPresets } from "./presets.js";
@@ -131,8 +131,31 @@ bindTts();
 // 出图设置（同样在 ⋯ 菜单里）：宿主供应商 / 本机 ComfyUI 两条路
 bindImage();
 
+/*
+ * 工具抽屉里的两个设置入口。
+ *
+ * 为什么要有第二份：⋯ 菜单那颗按钮只在**开了对话**时才显示，
+ * 而“先配好语音/引擎再开始玩”是很自然的一条路——没对话就进不去设置，那是死路。
+ * 工具抽屉不需要对话，所以这里各给一个入口。
+ */
+document.getElementById("open-tts-settings")?.addEventListener("click", async () => {
+  const m = await import("./tts.js");
+  m.openTts();
+});
+document.getElementById("open-image-settings")?.addEventListener("click", async () => {
+  const m = await import("./image.js");
+  m.openImage();
+});
+
 // 聊天输入：Enter 发送，Shift+Enter 换行
 dom.chatInput?.addEventListener("keydown", (e) => {
+  // Esc 退出编辑。这是编辑状态**唯一的出口**：
+  // 不绑它的话，用户点开“编辑”就出不来（清空再保存会静默丢掉内容）。
+  if (e.key === "Escape" && state.editingMessageId != null) {
+    e.preventDefault();
+    cancelEditMessage();
+    return;
+  }
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     sendMessage();

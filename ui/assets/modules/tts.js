@@ -138,7 +138,7 @@ export async function speakText(text, opts = {}) {
   if (playingKey === key) { stopSpeak(); return { stopped: true }; }
 
   const say = stripForSpeech(text);
-  if (!say) { toast("这条没什么可读的", "error"); return { ok: false }; }
+  if (!say) { toast("这条消息里没有可读的文字（宏展开后是空的）", "error"); return { ok: false }; }
 
   let r;
   try {
@@ -176,7 +176,7 @@ export function isPlayingAll() {
  */
 export async function playQueue({ items, onProgress, onFinish } = {}) {
   const list = Array.isArray(items) ? items : [];
-  if (list.length === 0) { toast("这场没有可读的台词", "error"); return { ok: false }; }
+  if (list.length === 0) { toast("这场里没有角色的台词可读（空对话、或只有你自己的话）", "error"); return { ok: false }; }
   if (queue) stopPlayback();
 
   queue = { stop: false };
@@ -253,7 +253,7 @@ export async function playConversation() {
     });
   } catch (e) {
     bar?.classList.add("hidden");
-    toast("连播出错：" + friendlyError(e), "error");
+    toast("连播出错：" + friendlyError(e) + "（可以再点一次「连播这场」重试）", "error");
   }
   return { ok: true };
 }

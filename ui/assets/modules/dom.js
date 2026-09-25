@@ -82,8 +82,6 @@ export const DRAWERS = {
  */
 
 dom.shellEl = document.querySelector(".shell");
-dom.sidebarCollapseBtn = null;   // 页内侧栏已删，收/展无对象（键保留防 shell.js 引用断裂）
-dom.sidebarExpandBtn = null;
 dom.convPickerEl = document.getElementById("conv-picker-modal");
 dom.convPickerListEl = document.getElementById("conv-picker-list");
 dom.suggestRowEl = document.getElementById("suggest-row");

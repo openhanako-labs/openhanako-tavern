@@ -59,7 +59,7 @@ export async function openCharacterEditor(id) {
     try {
       const res = await apiFetch(`characters/${id}`);
       card = res.data || res;
-    } catch (e) { toast("加载失败", "error"); return; }
+    } catch (e) { toast("加载角色失败：" + friendlyError(e), "error"); return; }
   }
   state.currentCharacter = card;
   state.currentForm = 'character';
@@ -98,10 +98,12 @@ export async function openCharacterEditor(id) {
     document.getElementById("modal-title").textContent = "新建角色";
     document.getElementById("modal-delete").classList.add("hidden");
     document.getElementById("modal-export-st").classList.add("hidden");
-    // 新卡还没 id：出完图没地方放，所以这个入口不显示
+    // 新卡还没 id：出完图没地方放，所以这个入口不显示。
+    // 但**得说出来**——不写一个字的话，用户写完一张卡找不到“生成立绘”，
+    // 会以为是自己漏了步骤。（复核点出来的：这里原本只是把 note 清空。）
     document.getElementById("modal-portrait").classList.add("hidden");
     const pnote = document.getElementById("modal-portrait-note");
-    if (pnote) pnote.textContent = "";
+    if (pnote) pnote.textContent = "保存之后就能生成立绘了（先有卡，才有地方放图）";
   }
   
   dom.modalEl.classList.remove("hidden");
@@ -124,7 +126,12 @@ export async function saveCharacter() {
   };
 
   if (!card.name || !card.description || !card.first_mes) {
-    toast("请填写必填字段", "error");
+    // 说缺哪一项。只说“请填写必填字段”，用户得自己去猜是三个里的哪一个。
+    const miss = [];
+    if (!card.name) miss.push("名称");
+    if (!card.description) miss.push("描述");
+    if (!card.first_mes) miss.push("开场白");
+    toast(`还缺：${miss.join("、")}`, "error");
     return;
   }
 
@@ -144,13 +151,21 @@ export async function saveCharacter() {
 }
 
 export async function deleteCharacter(id) {
-  if (!(await confirmDialog("确定删除？"))) return;
+  // 全 App 里**最贵**的一次删除：后端把整个角色目录递归删掉（连头像）。
+  // 所以确认话必须写清“删的是谁”与“会少什么”——四个字的“确定删除？”配不上这个代价。
+  const card = (state.charList || []).find((c) => String(c.id) === String(id));
+  const name = card?.name || "这张卡";
+  const convs = (state.convList || []).filter((c) => String(c.characterId) === String(id)).length;
+  if (!(await confirmDialog({
+    title: `删掉「${name}」？`,
+    body: `头像${convs ? `、${convs} 场对话` : ""}、前情提要、给她的声音分配都会一起删掉。`
+  }))) return;
   try {
     await apiFetch(`characters/${id}`, { method: "DELETE" });
     toast("已删除", "success");
     loadCharacters();
   } catch (e) {
-    toast(`失败: ${e.message}`, "error");
+    toast("删除失败：" + friendlyError(e), "error");
   }
 }
 
@@ -200,7 +215,7 @@ export async function handleImport(files) {
     
     // 检查错误响应
     if (!res || Object.keys(res).length === 0) {
-      toast("解析失败：后端返回空响应", "error");
+      toast("这个文件里没读到内容——是不是选错文件了？", "error");
       return;
     }
     
@@ -223,7 +238,7 @@ export async function handleImport(files) {
     
     if (results.length === 0) {
       console.error("[Import] No results extracted. Response:", res);
-      toast("解析失败：没有可导入的文件", "error");
+      toast("这个文件里没有识别到角色卡（要 .json）", "error");
       return;
     }
     
@@ -350,7 +365,11 @@ export async function commitImport() {
     const bad = list.filter(r => r.success === false);
 
     if (ok.length > 0) toast("已导入 " + ok.length + " 张卡片", "success");
-    if (bad.length > 0) toast(bad.length + " 张失败: " + friendlyError(bad[0]), "error");
+    if (bad.length > 0) {
+      // 带上第一张的名字：只说“N 张失败”，用户连是哪张都不知道。
+      const first = bad[0]?.name || bad[0]?.file || "第一张";
+      toast(`${bad.length} 张没导进来（先从「${first}」看起）：${friendlyError(bad[0]?.error || bad[0])}`, "error");
+    }
 
     closeImportModal();
     await loadCharacters();
@@ -474,7 +493,7 @@ export async function renderCharContext(greetIdx = 0) {
       <div class="ctx-cast-acts">
         <button type="button" class="mini" id="ctx-cast-save">保存名单</button>
       </div>
-      <div class="dim ctx-cast-note" id="ctx-cast-note">选一个=单人；多个=群聊。第一位是主角。新加的人不会补种开场白。</div>
+      <div class="dim ctx-cast-note" id="ctx-cast-note">选一个=单人；多个=群聊。第一位是主角。新加进来的人没有开场白。</div>
     </div>` : "";
 
   // 有头像就画头像，没有才退回首字母。
@@ -585,7 +604,7 @@ export async function renderCharContext(greetIdx = 0) {
       const data = res?.data || res || {};
       if (data.ok === false) {
         // 没得可压不是错误，是一句实话
-        toast(data.reason || "现在没什么可摘要的", "info");
+        toast(data.reason || "现在还没有历史可压", "info");
         btn.disabled = false;
         btn.textContent = sum?.text ? "让模型重写" : "让模型写一份";
         return;

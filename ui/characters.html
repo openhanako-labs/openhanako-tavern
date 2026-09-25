@@ -143,8 +143,8 @@
             <button id="chat-more-btn" class="btn btn-ghost btn-sm more-btn hidden" title="更多">⋯</button>
             <div id="more-menu" class="more-menu" hidden>
               <button data-act="persona"><span class="mi">◍</span>本场人设</button>
-              <button data-act="activation"><span class="mi">✳</span>激活预览</button>
-              <button data-act="prompt"><span class="mi">⌸</span>组装预览</button>
+              <button data-act="activation"><span class="mi">✳</span>世界书会激活哪些</button>
+              <button data-act="prompt"><span class="mi">⌸</span>发给模型的整段文本</button>
               <button data-act="tts"><span class="mi">◔</span>语音朗读</button>
               <button data-act="image"><span class="mi">◨</span>出图设置</button>
               <div class="sep"></div>
@@ -323,6 +323,19 @@
       <div class="drawer-head">
         <h2>工具</h2>
         <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+
+      <!--
+        App 自己的设置放这里：语音朗读与出图引擎都是“配一次就不动”的东西，
+        而它们原来的入口在聊天头的 ⋯ 菜单里——**没开对话就进不去**。
+        工具抽屉不需要对话就能打开，所以它们得在这儿也有一份。
+      -->
+      <div class="panel">
+        <h3>App 设置</h3>
+        <div style="display:flex;gap:6px">
+          <button type="button" id="open-tts-settings" class="btn btn-sm">语音朗读</button>
+          <button type="button" id="open-image-settings" class="btn btn-sm">出图引擎</button>
+        </div>
       </div>
       <div class="drawer-toolbar">
         <button id="refresh-tools-btn" class="btn btn-ghost btn-sm">刷新</button>
@@ -817,7 +830,7 @@
     </div>
     <div class="modal-footer">
       <button id="gen-submit" class="btn btn-primary">开始生成</button>
-      <button id="gen-save" class="btn btn-primary hidden">写进卡库</button>
+      <button id="gen-save" class="btn btn-primary hidden">写进角色卡</button>
       <button id="gen-discard" class="btn">丢掉</button>
     </div>
   </div>

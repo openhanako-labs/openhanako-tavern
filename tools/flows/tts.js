@@ -198,4 +198,20 @@ out["预期内的 400（未配置时那次朗读）"] = performance
   .filter((r) => r.responseStatus === 400 && /tts\/speak/.test(r.name)).length;
 out["页面报错"] = errs.length ? errs : "无";
 
+// ── 没开对话也得能进设置（工具抽屉里的那份入口）──
+// 复核指出的最大一处：“先配好再玩”这条自然路原来走不通，
+// 因为 ⋯ 按钮只在开了对话时才显示。
+document.querySelector('[data-drawer="tools"]')?.click();
+await sleep(500);
+const ttsEntry = document.getElementById("open-tts-settings");
+out["工具抽屉里有语音入口"] = ttsEntry ? "有" : "没有";
+out["工具抽屉里有出图入口"] = document.getElementById("open-image-settings") ? "有" : "没有";
+if (ttsEntry) {
+  ttsEntry.click();
+  await sleep(1200);
+  out["从抽屉点开语音面板"] = document.getElementById("tts-modal") && !document.getElementById("tts-modal").classList.contains("hidden") ? "开了（对）" : "没开（错）";
+  document.getElementById("tts-cancel")?.click();
+  await sleep(200);
+}
+
 return out;

@@ -139,7 +139,7 @@ export function openPreview(kind) {
   if (!conv) return;
   previewKind = kind;
   document.getElementById("preview-title").textContent =
-    kind === "activation" ? "世界书激活预览" : "Prompt 组装预览";
+    kind === "activation" ? "世界书会激活哪些" : "发给模型的整段文本";
   document.getElementById("preview-modal").classList.remove("hidden");
   renderPreviewLoading();
   loadPreview();
