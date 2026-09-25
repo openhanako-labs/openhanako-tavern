@@ -255,7 +255,14 @@ export async function saveRegexRule() {
 
 export async function deleteRegexRule(id) {
   const rule = findRule(id);
-  const ok = await confirmDialog(`删掉规则「${rule?.name || "这一条"}」？`);
+  // 同 deleteBoardCell：找不到就别先问一句「删掉『这一条』？」
+  //——名字本来就是从找不到的对象上取的，只会拿出兜底词。
+  if (!rule) {
+    toast("这条规则已经不在了，已经帮你刷新", "error");
+    await loadRegexRules();
+    return;
+  }
+  const ok = await confirmDialog(`删掉规则「${rule.name || "这一条"}」？`);
   if (!ok) return;
   try {
     await apiFetch(`regex-rules/${encodeURIComponent(id)}`, { method: "DELETE" });

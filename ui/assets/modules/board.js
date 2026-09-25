@@ -144,7 +144,13 @@ function findCell(id) {
 
 export async function toggleBoardCell(id) {
   const cell = findCell(id);
-  if (!cell) return;
+  // 静默 return 的毛病与删除那边同源：什么都没发生，而用户不知道为什么。
+  // 开关不比删除，不需要确认，但**需要说一句**。
+  if (!cell) {
+    toast("这一格已经不在了，已经帮你刷新", "error");
+    await loadBoard();
+    return;
+  }
   try {
     await apiFetch(`board/cells/${encodeURIComponent(id)}/toggle`, {
       method: "PUT",
@@ -280,7 +286,22 @@ export async function saveBoardCell() {
 
 export async function deleteBoardCell(id) {
   const cell = findCell(id);
-  const ok = await confirmDialog(`删掉「${cell?.title || "这一格"}」？`);
+  /*
+   * 找不到就**别问**。
+   *
+   * 这里原先没有这道守卫：一个已经不存在的 id 会先弹出一句
+   *「删掉『这一格』？」——标题是从找不到的对象上取的，所以只能用兜底词；
+   * 点了确认才回一句"删除失败"。等于让用户替一次内部状态不一致买单，
+   * 还多按一下。
+   *
+   * 顺手把列表和后端对齐：能走到这里，就说明两边已经不同步了。
+   */
+  if (!cell) {
+    toast("这一格已经不在了，已经帮你刷新", "error");
+    await loadBoard();
+    return;
+  }
+  const ok = await confirmDialog(`删掉「${cell.title || "这一格"}」？`);
   if (!ok) return;
 
   try {
