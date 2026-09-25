@@ -16,7 +16,7 @@
     "app/provider.credentials.read"
   ],
   "network": {
-    "allowedHosts": ["api.siliconflow.cn"],
+    "allowedHosts": ["api.siliconflow.cn", "zh.moegirl.org.cn", "export.arxiv.org"],
     "methods": ["GET", "POST"],
     "allowLocalhost": false,
     "defaultTimeoutMs": 30000,

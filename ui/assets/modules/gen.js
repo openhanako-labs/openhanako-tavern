@@ -228,7 +228,8 @@ export async function saveGen() {
     .map((e, i) => {
       if (!checked.has(i)) return null;
       const edited = document.querySelector(`.gen-entry-c[data-i="${i}"]`)?.textContent;
-      return { keys: e.keys, content: (edited ?? e.content).trim(), position: e.position || "before_char" };
+      // name 必须带上：设定库按 name::characterId 去重，没名字的条目会在那儿被吞掉
+      return { name: e.name || e.keys?.[0] || "", keys: e.keys, content: (edited ?? e.content).trim(), position: e.position || "before_char" };
     })
     .filter((e) => e && e.content);
 

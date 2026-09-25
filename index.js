@@ -36,6 +36,7 @@ import { registerBoardRoutes } from "./lib/board/routes.js";
 
 import { registerToolRoutes } from "./lib/tools/routes.js";
 import { createEmbedTools } from "./lib/embed/tool.js";
+import { createGenTools } from "./lib/gen/tool.js";
 import { registerEmbedRoutes } from "./lib/embed/routes.js";
 import { loadGroupState, isGroupEnabled } from "./lib/tools/group.js";
 
@@ -193,6 +194,10 @@ export default defineApp(async (sdk) => {
     for (const t of createEmbedTools({ sdk, dataDir })) await registerTool(t, "embed");
   }
 
+  // 生成器：把**已检索好的材料**变成卡 + 世界书（给白名单覆盖不到的题材用）。
+  // 它不联网——查资料那一步由 Agent 做，工具只负责抽取/组装/核对。
+  for (const t of createGenTools({ llm: llmService })) await registerTool(t, "gen");
+
   s.tools = {
     registered: receipts.length,
     groups: [
@@ -201,6 +206,7 @@ export default defineApp(async (sdk) => {
       { id: "variables", name: "变量" },
       { id: "settings", name: "设定库" },
       { id: "embed", name: "向量" },
+      { id: "gen", name: "生成" },
       { id: "system", name: "系统" }
     ].map(g => ({ ...g, enabled: isGroupEnabled(g.id) }))
   };
