@@ -13,8 +13,37 @@ import { state } from "./state.js";
 
 
 export function renderMessages() {
-  if (!state.currentConv || !state.currentConv.messages?.length) {
-    dom.messagesContainer.innerHTML = '<div class="empty">暂无消息</div>';
+  /*
+   * 空的时候分两种，而且两种都不该只说「暂无消息」。
+   *
+   * 之前这里一句 innerHTML = 暂无消息 把两种情况搎成了一句，
+   * 还顺手把 HTML 里那句更有用的「从左边挑一个角色开始」也盖掉了。
+   * 而一个开着的对话空着时，真正该在中间的是**开场**——
+   * 它就是开场白，也是发第一条时真正会发出去的那句。
+   */
+  if (!state.currentConv) {
+    dom.messagesContainer.innerHTML =
+      '<div class="empty"><div class="empty-title">从左边挑一个角色开始</div>' +
+      '<div class="hint">点头像直接开聊</div></div>';
+    renderSuggestions();
+    renderHeaderMeta();
+    return;
+  }
+
+  if (!state.currentConv.messages?.length) {
+    const macro = state.macro || null;
+    const first = state.currentCharacter?.first_mes || "";
+    const opening = first ? (macro ? macro.process(first) : first) : "";
+    dom.messagesContainer.innerHTML = opening
+      ? `<div class="empty scene-empty">
+           <div class="scene-kicker">开场</div>
+           <div class="scene-body">${escapeHtml(opening)}</div>
+           <div class="hint">发一条消息就开场；这一条会作为第一句发给模型</div>
+         </div>`
+      : '<div class="empty"><div class="empty-title">这一场还没有消息</div>' +
+        '<div class="hint">在下面说点什么</div></div>';
+    renderSuggestions();
+    renderHeaderMeta();
     return;
   }
 
@@ -66,6 +95,8 @@ export function renderMessages() {
   // 候选项跟着消息走：最后一条 assistant 换了（发新消息、重生、删），
   // 这里就自动跟着换或消失。
   renderSuggestions();
+  // 顶栏那一行的「第 N 轮」也要跟着走——否则发完一轮还停在上一轮的读数
+  renderHeaderMeta();
 }
 
 
@@ -685,11 +716,7 @@ export async function openConversation(id) {
       dom.chatTitle.textContent =
         state.currentCharacter?.name || state.currentConv.characterName || state.currentConv.title || "（无标题）";
     }
-    if (dom.chatMeta) {
-      const n = state.currentConv.messages?.length || 0;
-      dom.chatMeta.textContent = n > 0 ? `第 ${Math.ceil(n / 2)} 轮` : "还没开始";
-      dom.chatMeta.classList.remove("hidden");
-    }
+    renderHeaderMeta();
     dom.chatInputArea?.classList.remove("hidden");
     dom.chatActions?.querySelector("#export-chat-btn")?.classList.remove("hidden");
     dom.chatActions?.querySelector("#delete-conv-btn")?.classList.remove("hidden");
@@ -699,11 +726,15 @@ export async function openConversation(id) {
     state.lastUsage = null;
     renderUsageBar();
 
-    // 换了对话，本场的黑板格也换了。面板开着就重拉，
-    // 否则显示的是上一场的格子——私密格尤其不能快照错对象。
-    if (!document.getElementById("drawer-board")?.classList.contains("hidden")) {
+    // 换了对话，本场的黑板格也换了。
+    // 面板开着要重拉（否则显示的是上一场的格子，私密格尤其不能快照错对象）；
+    // **关着也要拉**——顶栏那一行要报「世界 N 格」。
+    {
       const { loadBoard } = await import("./board.js");
       await loadBoard();
+      // 格子数拉回来了，顶栏那一行才是真的。
+      //（上面那次调用发生在拉回来之前，所以这里是必需的，不是重复。）
+      renderHeaderMeta();
     }
 
     // 预设也是跟对话走的：换一场就得重画「这一场在用」那个标。
@@ -719,6 +750,30 @@ export async function openConversation(id) {
     console.error("[Conversations] open failed:", e);
     toast("打开对话失败: " + friendlyError(e), "error");
   }
+}
+
+/**
+ * 顶栏那一行：品牌之外，这一场的实况。
+ *
+ * 单独抽出来是因为它有三个时机：开对话时、每轮生成完后、
+ * 以及**黑板格拉回来之后**——格子数在那之前还是空的，
+ * 先写就会在屏幕上留下一句「世界 0 格」的假读数。
+ */
+export function renderHeaderMeta() {
+  if (!dom.chatMeta) return;
+  const conv = state.currentConv;
+  if (!conv) { dom.chatMeta.classList.add("hidden"); return; }
+
+  const n = conv.messages?.length || 0;
+  const parts = [n > 0 ? `第 ${Math.ceil(n / 2)} 轮` : "还没开始"];
+  // 世界格子数是真数据，摆上来（卡里那一行有「世界 · N 条」）。
+  // **拉不到就不提**：写「世界 0 格」会被读成“这一场真的没有格子”，
+  // 而实际上可能只是还没拉到。
+  if (Array.isArray(state.boardChat)) {
+    parts.push(`世界 ${(state.boardWorld?.length || 0) + state.boardChat.length} 格`);
+  }
+  dom.chatMeta.textContent = parts.join(" · ");
+  dom.chatMeta.classList.remove("hidden");
 }
 
 /**

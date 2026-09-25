@@ -5,6 +5,9 @@
 const { createMacroProcessor, contextFromCharacter } = await import("../lib/macros/index.js");
 
 const cases = [
+  "{{char}}",
+  "{{user}}",
+  "{{persona}}",
   "{{setvar::好感::7}}",
   "{{setvar 好感=7}}",
   "{{setvar::好感=7}}",

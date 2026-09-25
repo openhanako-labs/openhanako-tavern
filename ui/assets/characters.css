@@ -746,6 +746,34 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * 品牌：从“单独占一整行的大标题”改成标题行里的一个小牌。
+ * 它在宿主里与窗口标题上的 App 名重复，所以不需要抢眼——
+ * 只需回答“这是哪个 App”。
+ */
+.brand {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
+  margin: 0;
+  padding-right: 10px;
+  border-right: 1px solid var(--border);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: var(--fg-muted);
+}
+
+.brand .tag {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
 .chat-header h3 { flex: 1; min-width: 0; }
 
 .chat-header {
@@ -1962,6 +1990,43 @@ main.ctx-open .drawer:not(.hidden) {
 
 .var-chip[data-change="add"] { border-color: var(--accent-line); color: var(--accent); }
 .var-chip[data-change="remove"] { text-decoration: line-through; }
+
+/*
+ * 空对话的「开场」块。
+ *
+ * 它是真数据（角色卡的开场白，宏已展开）——不是占位图。
+ * 空着的一大片白不是设计，是没设计；而卡里每一屏都有人用过的痕迹。
+ */
+.scene-empty {
+  max-width: 520px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  text-align: left;
+}
+
+.scene-kicker {
+  margin-bottom: 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--accent);
+}
+
+.scene-body {
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: var(--fg);
+  white-space: pre-wrap;
+}
+
+.scene-empty .hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
 
 /* ── 变量抽屉：定义卡片 + 「这一场」的值 ───────────────────
    这些类名由 variables.js 的模板字符串生成，不在 HTML 里——

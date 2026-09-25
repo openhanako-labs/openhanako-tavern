@@ -44,9 +44,16 @@
 
     <!-- 聊天 -->
     <section id="view-chat" class="chat-view">
-      <!-- App 标题行：原本在侧栏品牌区，侧栏删后归主区顶部（m8 徽章随行） -->
-      <h1 class="brand">ElecKoi Tavern<span class="tag">m8</span></h1>
+      <!--
+        标题行：品牌 · 这一场 · 读数，并成一行。
+
+        原先品牌（h1.brand）单独占一整行——而它**一条样式都没有**
+（裸类，按浏览器默认的大标题渲染），且在宿主里与窗口标题上的 App 名重复。
+        卡里那一行是「标题 · 地点 · 在场 · 读数 · 人设」：
+        地点与在场引擎里没字段（不编），有数据的就摆上来。
+      -->
       <div id="chat-header" class="chat-header">
+        <h1 class="brand">ElecKoi<span class="tag">m8</span></h1>
         <h3 id="chat-title">选择对话开始</h3>
         <span id="chat-meta" class="hdr-meta hidden"></span>
         <div id="chat-actions" class="chat-actions">
