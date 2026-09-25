@@ -154,7 +154,7 @@ registerMigrationRoutes(apps.migration, tmp);
 registerGenRoutes(apps.gen, { llm: fakeLlm, net: null });
 // 出图：这里只验「路由注册与可达」，真调用形状在 regression-media-portrait。
 // sdk 给 null —— status 会诚实地报「没提供 sdk.media」。
-registerMediaRoutes(apps.media, { sdk: null, characterRepo: charRepo, transfer });
+registerMediaRoutes(apps.media, { sdk: null, characterRepo: charRepo, transfer, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "eleckoi-smoke-")) });
 // 语音合成：sdk 与 dataDir 都给 null → 两条服务路由会诚实地报“未就绪”，
 // 而 /tts/providers 不依赖它们，照样能答。
 registerTtsRoutes(apps.tts, { sdk: null, dataDir: null });
@@ -239,7 +239,8 @@ const EXPECTED = {
     "GET /gen/sources", "POST /gen/jobs", "GET /gen/jobs/:id"
   ],
   media: [
-    "GET /media/status", "POST /media/portrait"
+    "GET /media/status", "POST /media/portrait",
+    "GET /media/engines", "GET /media/config", "PUT /media/config", "GET /media/workflows"
   ],
   tts: [
     "GET /tts/providers", "GET /tts/config", "PUT /tts/config",

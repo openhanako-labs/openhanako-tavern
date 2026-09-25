@@ -44,6 +44,7 @@ export function bindChatMore() {
       else if (act === "activation") openPreview("activation");
       else if (act === "prompt") openPreview("prompt");
       else if (act === "tts") import("./tts.js").then(m => m.openTts());
+      else if (act === "image") import("./image.js").then(m => m.openImage());
       else if (act === "export") exportChatFromMenu();
       else if (act === "delete") deleteChatFromMenu();
     });

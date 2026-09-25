@@ -16,6 +16,13 @@
 import { apiFetch, toast, escapeHtml, friendlyError, confirmDialog } from "./core.js";
 import { state } from "./state.js";
 
+/** 拆信封：这个 App 的 apiFetch 在 4xx 时不抛，会把 {ok:false,error} 整个返回。 */
+function readEnvelope(res, what) {
+  const env = res && typeof res === "object" ? res : {};
+  if (env.ok === false) throw new Error(env.error || `${what}被拒绝了`);
+  return env.data !== undefined ? env.data : env;
+}
+
 let busy = false;
 
 const $ = (id) => document.getElementById(id);
@@ -70,23 +77,33 @@ export async function makePortrait(opts = {}) {
   setNote("正在出图…（这一步要几十秒，可以先去做别的）");
 
   try {
-    // 先体检：不通就现在说，别让人白等。
-    // 注意“体检本身失败”与“体检说不通”是两回事：
-    // 前者是这里拿不到答案（路由不在 / 网络断），别报成“未知原因”——
-    // 那句话对排查零帮助。
-    let s = null;
+    // 先体检：把“哪条路能用”和“选中的那条配全了没”分开问。
+    // 之前这里只问宿主那条（/media/status）——一旦用户把引擎切成
+    // 本机 ComfyUI，按钮就会一直说“宿主没提供 sdk.media”，而它说的根本不是
+    // 选中的那条路。体检要问对对象，否则它比不检还坏。
+    let engines = null;
+    let cfg = null;
     try {
-      const st = await apiFetch("media/status");
-      s = st.data || st;
+      engines = readEnvelope(await apiFetch("media/engines"), "读引擎状态");
+      cfg = readEnvelope(await apiFetch("media/config"), "读出图配置");
     } catch (e) {
       const why = friendlyError(e);
       setNote("出图不可用：拿不到媒体状态（" + why + "）");
       toast("出图不可用: " + why, "error");
       return;
     }
-    if (!s?.available) {
-      setNote(`出图不可用：${s?.reason || "宿主没给出原因"}`);
-      toast("出图不可用：" + (s?.reason || "宿主没给出原因"), "error");
+
+    const backend = cfg?.backend || "host";
+    const laneOk = backend === "comfyui" ? engines?.comfyui?.available : engines?.host?.available;
+    const laneWhy = backend === "comfyui" ? engines?.comfyui?.reason : engines?.host?.reason;
+    if (!laneOk) {
+      setNote(`出图不可用：${laneWhy || "这条路的引擎不可用"}`);
+      toast("出图不可用：" + (laneWhy || "这条路的引擎不可用"), "error");
+      return;
+    }
+    if (cfg?.ready === false) {
+      setNote(`出图还没配好：${cfg.reason || ""}（⋯ 菜单里有「出图设置」）`);
+      toast("出图还没配好：" + (cfg.reason || ""), "error");
       return;
     }
 

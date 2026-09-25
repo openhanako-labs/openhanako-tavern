@@ -146,6 +146,7 @@
               <button data-act="activation"><span class="mi">✳</span>激活预览</button>
               <button data-act="prompt"><span class="mi">⌸</span>组装预览</button>
               <button data-act="tts"><span class="mi">◔</span>语音朗读</button>
+              <button data-act="image"><span class="mi">◨</span>出图设置</button>
               <div class="sep"></div>
               <button data-act="export"><span class="mi">↓</span>导出</button>
               <button data-act="delete" class="danger"><span class="mi">✕</span>删除</button>
@@ -591,6 +592,52 @@
       <button id="modal-delete" class="btn btn-sm danger hidden">删除</button>
     </div>
     <div class="char-ctx-note" id="modal-portrait-note"></div>
+  </div>
+</div>
+
+<!-- ── 出图设置 ────────────────────────────────────── -->
+<!--
+  用户要的那个开关：图可以走宿主供应商，也可以走本机 ComfyUI。
+  两条路的代价不一样（本机那条要把工作流与提示词节点填对），
+  所以面板要把“各自缺什么”分开展示——而不是一个笼统的“不可用”。
+-->
+<div id="image-modal" class="modal hidden">
+  <div class="modal-content tts-content">
+    <div class="modal-header">
+      <h2>出图设置</h2>
+      <button id="image-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <section class="tts-sec">
+        <h3>用哪条路出图</h3>
+        <div id="image-backends" class="tts-providers"></div>
+        <div id="image-hint" class="hint"></div>
+        <div id="image-engines" class="tts-status">还没体检</div>
+      </section>
+
+      <section class="tts-sec" id="image-comfy-box">
+        <h3>本机 ComfyUI</h3>
+        <div class="field">
+          <label>用哪个工作流（ComfyUI 里保存的名字）</label>
+          <div class="field-row">
+            <input type="text" id="image-workflow" placeholder="例：我的立绘.json">
+            <button type="button" id="image-list-workflows" class="btn btn-sm">列出有哪些</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>提示词写进哪个节点（节点号.输入名，例 6.text）</label>
+          <input type="text" id="image-prompt-target" placeholder="6.text">
+        </div>
+        <div id="image-workflow-out" class="hint"></div>
+      </section>
+
+      <div id="image-status" class="tts-status"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="image-save" class="btn btn-primary">保存</button>
+      <button id="image-cancel" class="btn">关闭</button>
+    </div>
   </div>
 </div>
 

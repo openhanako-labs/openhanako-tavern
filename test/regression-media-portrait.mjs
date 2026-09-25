@@ -77,7 +77,7 @@ function makeSdk(files = [path.basename(fakeImg)], ok = true) {
 
 const app = makeApp();
 const sdk = makeSdk();
-registerMediaRoutes(app, { sdk, characterRepo: charRepo, transfer });
+registerMediaRoutes(app, { sdk, characterRepo: charRepo, transfer, dataDir: tmp });
 
 // ── 提示词（纯函数）─────────────────────────────────────
 
@@ -200,7 +200,7 @@ await okAsync("⑤ GET /media/status", async () => {
 
   // 契约对不上的那条分支也要走过（策略是 fail closed，不是“没有就当能用”）：
   const halfApp = makeApp();
-  registerMediaRoutes(halfApp, { sdk: { media: {} }, characterRepo: charRepo, transfer });
+  registerMediaRoutes(halfApp, { sdk: { media: {} }, characterRepo: charRepo, transfer, dataDir: tmp });
   const half = await request(halfApp, "GET", "/media/status");
   assert.strictEqual(half.status, 200);
   assert.strictEqual(half.data.available, false, "宿主给了 media 但没 generateImage，不该判可用");
@@ -243,7 +243,7 @@ await okAsync("⑦b 换扩展名清旧文件；认不得的扩展名一律当 pn
   fs.writeFileSync(webp, Buffer.from([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4]));
   const appW = makeApp();
   const sdkW = { media: { async generateImage() { return { ok: true, files: [], sessionFiles: [{ filePath: webp }] }; } } };
-  registerMediaRoutes(appW, { sdk: sdkW, characterRepo: charRepo, transfer });
+  registerMediaRoutes(appW, { sdk: sdkW, characterRepo: charRepo, transfer, dataDir: tmp });
   const r = await request(appW, "POST", "/media/portrait", { body: { characterId: card.id } });
   assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
   assert.strictEqual(r.data.avatarExt, "webp");
@@ -257,7 +257,7 @@ await okAsync("⑦b 换扩展名清旧文件；认不得的扩展名一律当 pn
   fs.writeFileSync(evil, Buffer.from([1, 2, 3, 4]));
   const appE = makeApp();
   const sdkE = { media: { async generateImage() { return { ok: true, files: [], sessionFiles: [{ filePath: evil }] }; } } };
-  registerMediaRoutes(appE, { sdk: sdkE, characterRepo: charRepo, transfer });
+  registerMediaRoutes(appE, { sdk: sdkE, characterRepo: charRepo, transfer, dataDir: tmp });
   const rE = await request(appE, "POST", "/media/portrait", { body: { characterId: card.id } });
   assert.strictEqual(rE.status, 200, `状态 ${rE.status}：${rE.error || ""}`);
   assert.strictEqual(rE.data.avatarExt, "png", "怪扩展名该被换成 png");
@@ -273,14 +273,14 @@ await okAsync("⑦c 卡里没角色信息 → 返回里带 warning", async () =>
     name: "未命名的某人", description: " ", first_mes: " ", personality: "", scenario: "", tags: []
   });
   const appH = makeApp();
-  registerMediaRoutes(appH, { sdk: makeSdk(), characterRepo: charRepo, transfer });
+  registerMediaRoutes(appH, { sdk: makeSdk(), characterRepo: charRepo, transfer, dataDir: tmp });
   const r = await request(appH, "POST", "/media/portrait", { body: { characterId: hollow.id } });
   assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
   assert.ok(/不会像这个角色/.test(r.data.warning || ""), "该提醒“图不会像她”：" + r.data.warning);
 
   // 有角色信息的卡就不该报这句
   const appOk = makeApp();
-  registerMediaRoutes(appOk, { sdk: makeSdk(), characterRepo: charRepo, transfer });
+  registerMediaRoutes(appOk, { sdk: makeSdk(), characterRepo: charRepo, transfer, dataDir: tmp });
   const rOk = await request(appOk, "POST", "/media/portrait", { body: { characterId: card.id } });
   assert.strictEqual(rOk.status, 200);
   assert.strictEqual(rOk.data.warning, undefined, "有内容的卡不该报警：" + rOk.data.warning);
@@ -289,7 +289,7 @@ await okAsync("⑦c 卡里没角色信息 → 返回里带 warning", async () =>
 await okAsync("⑧ 宿主返回空文件列表 → 报错，不当成功", async () => {
   const app3 = makeApp();
   const emptySdk = makeSdk([]);
-  registerMediaRoutes(app3, { sdk: emptySdk, characterRepo: charRepo, transfer });
+  registerMediaRoutes(app3, { sdk: emptySdk, characterRepo: charRepo, transfer, dataDir: tmp });
   const r = await request(app3, "POST", "/media/portrait", { body: { characterId: card.id } });
   assert.strictEqual(r.status, 400, `状态该是 400，实为 ${r.status}`);
   assert.ok(/没拿到文件/.test(r.error || ""), "错误话不对：" + r.error);
@@ -298,7 +298,7 @@ await okAsync("⑧ 宿主返回空文件列表 → 报错，不当成功", async
 await okAsync("⑨ 宿主报失败 → 把原因带出来", async () => {
   const app4 = makeApp();
   const badSdk = makeSdk([fakeImg], false);
-  registerMediaRoutes(app4, { sdk: badSdk, characterRepo: charRepo, transfer });
+  registerMediaRoutes(app4, { sdk: badSdk, characterRepo: charRepo, transfer, dataDir: tmp });
   const r = await request(app4, "POST", "/media/portrait", { body: { characterId: card.id } });
   assert.strictEqual(r.status, 400);
   assert.ok(/上游 429/.test(r.error || ""), "原因被吞了：" + r.error);
@@ -321,7 +321,7 @@ await okAsync("⑪ 只有裸文件名 → 报错要说清拿到了什么", async
       async generateImage() { return { ok: true, files: ["bare-name.png"] }; }
     }
   };
-  registerMediaRoutes(app5, { sdk: bareSdk, characterRepo: charRepo, transfer });
+  registerMediaRoutes(app5, { sdk: bareSdk, characterRepo: charRepo, transfer, dataDir: tmp });
   const r = await request(app5, "POST", "/media/portrait", { body: { characterId: card.id } });
   assert.strictEqual(r.status, 400, `状态该是 400，实为 ${r.status}`);
   assert.ok(/可读的路径/.test(r.error || ""), "错误话没把拿到的东西写出来：" + r.error);

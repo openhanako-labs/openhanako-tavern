@@ -168,7 +168,7 @@ registerGenRoutes(apps.gen, {
  * 于是 /media/status 会诚实地报「宿主没提供 sdk.media」，
  * 而不是一个 404——前者看得出来缺什么，后者只让人怀疑路由没注册。
  */
-registerMediaRoutes(apps.media, { sdk: null, characterRepo: charRepo, transfer });
+registerMediaRoutes(apps.media, { sdk: null, characterRepo: charRepo, transfer, dataDir: DATA });
 
 /*
  * 语音合成。dataDir 用 dev 自己的那份（DATA 每次启动重建）——
