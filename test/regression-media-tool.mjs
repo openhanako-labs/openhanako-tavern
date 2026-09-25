@@ -1,4 +1,4 @@
-// test/regression-media-tool.mjs — tavern_set_avatar：把本地图片写回角色卡
+// test/regression-media-tool.mjs — tavern_apply_avatar：把本地图片写回角色卡
 //
 // 这条链的由来：出图有两条腿。宿主媒体面那条由 App 自己走（已通）；
 // "用别的 App 出图"（本机 ComfyUI / media_generate-image）那条，产物是 Agent 手上的
@@ -32,7 +32,7 @@ const card = await charRepo.create({
 });
 
 const tools = createMediaTools({ characterRepo: charRepo, transfer });
-const tool = tools.find((t) => t.name === "tavern_set_avatar");
+const tool = tools.find((t) => t.name === "tavern_apply_avatar");
 const call = (args) => tool.handler(args);
 const body = (r) => r.content[0].text;
 
@@ -44,7 +44,7 @@ function makeFile(name, bytes = 64) {
 }
 
 await okAsync("① 工具名与形状", () => {
-  assert.ok(tool, "没找到 tavern_set_avatar");
+  assert.ok(tool, "没找到 tavern_apply_avatar");
   assert.deepStrictEqual(tool.inputSchema.required, ["characterId", "path"]);
 });
 
