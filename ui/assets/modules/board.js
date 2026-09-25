@@ -16,7 +16,7 @@
 // 后端：lib/board/routes.js。
 
 import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, friendlyError } from "./core.js";
-import { dom } from "./dom.js";
+import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
 
 const LIFESPAN_LABEL = { world: "世界级", chat: "这场" };
@@ -167,6 +167,7 @@ export async function openBoardCellEditor(id) {
     };
     state.currentForm = "board";
     await fillBoardForm(state.currentBoardCell);
+    showEditForm("board");   // 不显示自己那张表单，弹窗就是个空壳
     dom.modalEl?.classList.remove("hidden");
   } catch (e) {
     toast("打开失败: " + friendlyError(e), "error");

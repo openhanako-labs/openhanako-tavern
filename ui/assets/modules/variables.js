@@ -6,7 +6,7 @@
 // 后端：lib/variables/routes.js。
 
 import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, friendlyError } from "./core.js";
-import { dom } from "./dom.js";
+import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
 
 const TYPES = ["string", "number", "boolean", "object", "array"];
@@ -138,6 +138,7 @@ export async function openVariableEditor(id) {
     }
     state.currentForm = "variable";
     fillVariableForm(state.currentVariable);
+    showEditForm("variable");   // 不显示自己那张表单，弹窗就是个空壳
     dom.modalEl?.classList.remove("hidden");
   } catch (e) {
     toast("打开失败: " + friendlyError(e), "error");

@@ -20,7 +20,9 @@
 // 前置：先起宿主 `node tools/ui-host.mjs`（默认 8791）。
 
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
@@ -61,6 +63,40 @@ if (!exe) {
   console.error("找不到本机 Chrome/Edge");
   process.exit(2);
 }
+
+// ── 宿主：没起就自己起，用完收走 ────────────────────────
+//
+// 不给人工起停留步骤。前几轮这事的教训很具体：后台跑着的宿主
+// 会随上一个命令结束被一起收掉，然后下一条命令就撞 ERR_CONNECTION_REFUSED——
+// 而那个报错看上去像"界面坏了"。自己起自己收，这类问题一次性消失。
+const portOpen = () => new Promise((resolve) => {
+  const s = net.connect({ host: "127.0.0.1", port: Number(PORT) }, () => { s.destroy(); resolve(true); });
+  s.on("error", () => resolve(false));
+  s.setTimeout(400, () => { s.destroy(); resolve(false); });
+});
+
+let hostProc = null;
+if (!argv.includes("--no-host") && !(await portOpen())) {
+  hostProc = spawn(process.execPath, [path.join(ROOT, "tools", "ui-host.mjs")], {
+    stdio: "ignore",
+    env: process.env,
+    detached: false
+  });
+  let ready = false;
+  for (let i = 0; i < 40; i++) {
+    if (await portOpen()) { ready = true; break; }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  if (!ready) {
+    console.error(`宿主起不来（端口 ${PORT}）`);
+    hostProc.kill();
+    process.exit(3);
+  }
+}
+
+const say = (obj) => console.log(JSON.stringify(obj, null, 1));
+
+try {
 
 const browser = await playwright.chromium.launch({
   executablePath: exe,
@@ -119,4 +155,7 @@ payload.console = consoleLines.slice(0, 8);
 payload.pageErrors = pageErrors.slice(0, 8);
 
 await browser.close();
-console.log(JSON.stringify(payload, null, 1));
+say(payload);
+} finally {
+  try { hostProc?.kill(); } catch { /* 已经退了 */ }
+}

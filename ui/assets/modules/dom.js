@@ -86,3 +86,30 @@ dom.convPickerEl = document.getElementById("conv-picker-modal");
 dom.convPickerListEl = document.getElementById("conv-picker-list");
 dom.suggestRowEl = document.getElementById("suggest-row");
 dom.suggestBtn = document.getElementById("suggest-btn");
+
+/**
+ * 只显示 `kind` 对应的那张编辑表单。
+ *
+ * 为什么必须有这一步：编辑弹窗里住着五张表单（角色/设定/变量/世界/正则），
+ * 各自带着 `hidden`。
+ * 而先前只有角色编辑器自己做了「隐藏所有、显示自己那张」——
+ * 其余四个都只把弹窗显示出来，于是点「新建」弹出一个
+ * 有「保存 / 导出 / ✕」、**却一个输入框都没有**的空壳对话框。
+ *
+ * kind → 表单 id 的对应只写在这一处；调用方只说自己是谁。
+ */
+export function showEditForm(kind) {
+  const byKind = {
+    character: "character-form",
+    setting: "setting-form",
+    variable: "variable-form",
+    board: "board-form",
+    regex: "regex-form"
+  };
+  for (const id of Object.values(byKind)) {
+    document.getElementById(id)?.classList.add("hidden");
+  }
+  const target = byKind[kind] ? document.getElementById(byKind[kind]) : null;
+  target?.classList.remove("hidden");
+  return !!target;
+}

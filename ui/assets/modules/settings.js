@@ -7,7 +7,7 @@
 // 后端：lib/settings/routes.js，端点见该文件。
 
 import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, friendlyError } from "./core.js";
-import { dom } from "./dom.js";
+import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
 
 /** 拉列表并渲染。 */
@@ -97,6 +97,7 @@ export async function openSettingEditor(id) {
     }
     state.currentForm = "setting";
     fillSettingForm(state.currentSetting);
+    showEditForm("setting");   // 不显示自己那张表单，弹窗就是个空壳
     dom.modalEl?.classList.remove("hidden");
   } catch (e) {
     toast("打开失败: " + friendlyError(e), "error");

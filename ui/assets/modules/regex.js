@@ -13,7 +13,7 @@
 // 后端：lib/regex/routes.js（CRUD + 批量导入 + 试跑）。
 
 import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, friendlyError } from "./core.js";
-import { dom } from "./dom.js";
+import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
 
 const SCOPE_LABEL = { global: "所有角色", character: "某角色", preset: "某预设" };
@@ -147,6 +147,7 @@ export async function openRegexEditor(id) {
     };
     state.currentForm = "regex";
     await fillRegexForm(state.currentRegexRule);
+    showEditForm("regex");   // 不显示自己那张表单，弹窗就是个空壳
     dom.modalEl?.classList.remove("hidden");
   } catch (e) {
     toast("打开失败: " + friendlyError(e), "error");

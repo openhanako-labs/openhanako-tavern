@@ -1,7 +1,7 @@
 // characters.js — 由 characters.js 按功能拆分（B5）
 
 import { apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatDate, friendlyError, toast } from "./core.js";
-import { dom } from "./dom.js";
+import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
 
 
@@ -67,8 +67,9 @@ export async function openCharacterEditor(id) {
   const form = document.getElementById("character-form");
   form.reset();
   
-  document.querySelectorAll(".form").forEach(f => f.classList.add("hidden"));
-  form.classList.remove("hidden");
+  // 隐藏所有表单、只显示角色那张（这一步以前只写在这里，
+  // 其余四个编辑器都缺——见 dom.js 的 showEditForm）
+  showEditForm("character");
   
   if (card) {
     document.getElementById("modal-title").textContent = "编辑角色";
