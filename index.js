@@ -203,7 +203,7 @@ export default defineApp(async (sdk) => {
 
   // 出图：把**已经在本地画好的图**写回角色卡。
   // 它不自己出图——“用哪个引擎画”是调用方（Agent）的事，这个工具只管落盘。
-  for (const t of createMediaTools({ characterRepo, transfer: characterTransfer })) await registerTool(t, "media");
+  for (const t of createMediaTools({ characterRepo, transfer: characterTransfer, sdk })) await registerTool(t, "media");
 
   s.tools = {
     registered: receipts.length,

@@ -53,7 +53,7 @@ const groups = [
   ["settings", () => createSettingTools({ settingRepo: stub(), conversationRepo: stub() })],
   ["embed", () => createEmbedTools({ sdk: stub(), dataDir: process.cwd() })],
   ["gen", () => createGenTools({ llm: stub() })],
-  ["media", () => createMediaTools({ characterRepo: stub(), transfer: stub() })]
+  ["media", () => createMediaTools({ characterRepo: stub(), transfer: stub(), sdk: stub() })]
 ];
 
 const fail = [];
@@ -110,9 +110,9 @@ for (const [label, build] of groups) {
   counts.push(`${label}=${tools.length}`);
 }
 
-// 与 index.js 的注册清单对得上：14 个（含 lib/probe/state.js 里那个探针工具）
-if (checked + 1 !== 14) {
-  fail.push(`工具总数对不上：这里查到 ${checked} 个 + 探针 1 个 = ${checked + 1}，实际常态是 14 个——查少了说明有工厂没被覆盖到`);
+// 与 index.js 的注册清单对得上：15 个（含 lib/probe/state.js 里那个探针工具）
+if (checked + 1 !== 15) {
+  fail.push(`工具总数对不上：这里查到 ${checked} 个 + 探针 1 个 = ${checked + 1}，实际常态是 15 个——查少了说明有工厂没被覆盖到`);
 }
 
 // ── 反证：正确对象故意改坏，检查器必须报出来 ──
