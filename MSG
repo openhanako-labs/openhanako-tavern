@@ -1,22 +1,16 @@
-fix(manifest): 出站白名单是空的——这才是 embed 连不上的真正原因
+docs(req): 更正"工具可执行性"那条——通道是宿主启动时建的，一次 reload 就断
 
-一天里第三次改口，但这次是闭环证据：
+今天的观察按时间线排下来是清楚的：
 
-  eleckoi-tavern      network.allowedHosts: []                            ← 空 = 全拒
-  bilibili-intake-v2  [... api.bilibili.com, api.siliconflow.cn, ...]     ← 人家写着呢
+  重启宿主          → 工具立刻可调（tavern_list_characters / tavern_embed_status 真返回）
+  之后重载一次 App  → 通道断，之后全是 RPC peer closed
+  把 App 界面打开   → 没用（窗口开着，peer 仍然 closed）
+  reload / 二次 reload / disable→enable / 刷新工具目录 → 都救不回来
 
-门在我自己的清单里，我一直在外面找。前两次判断都错了：
-先说"宿主没有这条路"（我看的是能力清单，而 App 出站不看它），
-再说"沙箱设置"（那是**命令**沙箱的开关，而且 Windows 上不隔离网络）。
-真正起作用的是 manifest.network.allowedHosts —— App 自己的出站白名单。
+所以上一版写的"工具只在 App 的 UI 实例活着时才能执行"是错的
+（顺着那句话推出的操作结论也错了）。真实规律是：**通道在宿主启动时建立，
+之后一次 App reload 就会把它静默掐掉，重启宿主才能恢复。**
 
-改：allowedHosts 加 api.siliconflow.cn、methods 给 GET/POST，
-照 bilibili-intake-v2 那份的形状补上 defaultTimeoutMs / maxResponseBytes。
-宿主认这个改动：reload 时判定为"新增权限"，需要用户批准（这是对的）。
-
-顺带把 docs/req-models-embed.md 更正一版——它的前提写错了，不该带着
-错的因果递给 mozi。现在分两半：
-  ① 已经能跑的路（白名单）＋ 当时的误判留档
-  ② models.embed 从"必需"降为"更干净"：能力收窄（不把整把 key 交给 App）、
-     端点差异由宿主抹平（dimensions 那个坑）
-外加附带一条：工具可执行性依赖 UI 实例、而 inspect 的 host=on 会误导。
+操作结论：改完 App 不要重载，直接重启宿主。
+对设计者的请求更具体了：这条通道不该被一次 reload 静默掐掉——
+要么让它重建，要么让 inspect / 工具目录如实反映"它已经断了"。

@@ -100,8 +100,21 @@ RPC peer closed; cannot call callback.tools.execute
 ```
 
 同一时刻 `extension_manager inspect` 报 `host=on agent=on`（不代表工具能跑）。
-自己 `reload`、二次 `reload`、`disable → enable`、先刷新工具目录都不管用；
-从界面重载、或重启宿主之后立即调用才跑得起来。
+自己 `reload`、二次 `reload`、`disable → enable`、先刷新工具目录都不管用。
+
+**2026-09-25 当天更正（观察更准了，前面那版说成“窗口活着就能跑”是错的）**：
+
+- 重启宿主 → 工具立刻可调。实测：重启后 `tavern_list_characters`、
+  `tavern_embed_status` 都真返回了，而 `tavern_embed` 已经能一路走到
+  “拿凭据、算请求”那一步。
+- 此后**只要重载一次 App**（从界面重载也好、用扩展管理工具重载也好）→ 通道断掉，
+  之后调用全是 `RPC peer closed`；而且**把 App 的界面打开也没用**（窗口开着，peer 仍然 closed）。
+- 界面开着/关着都不影响这个判断：窗口列表可以一直是 0 个而工具照旧能用（刚重启那阵），
+  也可以是窗口开着而工具全死（重载之后）。
+
+→ 操作结论：**改完 App 不要重载，直接重启宿主。**
+→ 对设计者的请求不变，只是更具体：**这条通道不应该被一次 reload 静默掐掉**，
+要么让它重建，要么让 `inspect` / 工具目录如实反映它已经断了。
 
 **请求**：要么让工具执行不依赖 UI 窗口，要么让 `inspect` 如实反映"此刻能不能执行"
 ——现在那个 `on` 会让人以为能跑。（我已用"重启宿主"绕过，故列为小项。）
