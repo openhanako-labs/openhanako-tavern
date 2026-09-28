@@ -21,6 +21,10 @@ let convs = [];
 let activeConv = null;
 let query = "";
 
+// 头像 blob 缓存。avatar.json 一次回一张 base64——重画列表再拉一遍就把
+// 内存一路抬起来，也白跑一次请求。key 统一字符串化，避免 1 vs "1"。
+const avatarCache = new Map();
+
 const $ = (id) => document.getElementById(id);
 
 async function apiJson(p, init) {
@@ -83,7 +87,7 @@ async function loadConvs() {
   } catch { convs = []; }
   renderConvs();
   // 卡列表也要重画：卡项那行「N 场 · 最近 …」依赖 convs。
-  // 只画对话列表的话，卡片会一直停在“还没开过”——比不显示更糟。
+  // 只画对话列表的话，卡片会一直停在"还没开过"——比不显示更糟。
   renderChars();
 }
 
@@ -114,6 +118,7 @@ function renderChars() {
     </div>
   `;
   }).join("");
+  hydrateAvatars(el);
   el.querySelectorAll(".item").forEach(item => {
     item.addEventListener("click", () => openChar(item.dataset.char));
     // 键盘与无障碍：role=button 必须可 Tab 可回车。
@@ -156,11 +161,73 @@ function renderConvs() {
 }
 
 function avatar(c) {
-  // 宿主给资源路径；拿不到头像就用占位块，不显示碎图
-  const url = hana?.api?.url ? hana.api.url(`characters/${c.id}/avatar`) : "";
-  return url
-    ? `<img src="${esc(url)}" alt="" onerror="this.outerHTML='<div class=ph></div>'">`
-    : `<div class="ph"></div>`;
+  // 先画首字母——图没回来就它站着，图回来了再换掉。
+  // <img> 直接拿裸 App URL 会 403（rail 与 card 两个 iframe 都一样）：
+  // 请求 URL 里没有 /_surface/<票据>/ 那一段，<img> 又不会自己带鉴权。
+  // 所以走 hana.api.fetch 取 JSON 的 base64、自己拼 Blob，
+  // 与 card 页那条已验证的路径同一个方向。
+  //
+  // 用 .ph 而不是 .ava：这一版是**占位**（首字母），拉到了图才升为 .ava。
+  // 类名跟着"现在能看见什么"走，而不是"最终会长成什么"。
+  const id = String(c?.id || "");
+  const initial = esc((String(c?.name || "?").trim().slice(0, 1) || "?"));
+  const cached = avatarCache.get(id);
+  if (cached) return `<img class="ava" src="${cached}" alt="" data-ava-id="${esc(id)}">`;
+  // 首次渲染：先挂占位，然后 hydrateAvatars 会把它换成 img。
+  return `<div class="ph" data-ava-id="${esc(id)}">${initial}</div>`;
+}
+
+/**
+ * 把首字母占位换成真图。失败就保持字母——
+ * rail 里一行一失败弹一次 toast 会把屏幕堆满。
+ *
+ * 为什么把 img 元素先建出来再 hydrate：一次 fetch 期间列表可能被重新渲染
+ *（比如 storage 事件触发），旧 img 已经被移除——所以只按 data-ava-id 找
+ * 到当前还活着的元素，找不到就什么都不做，不留回调尾巴。
+ */
+function hydrateAvatars(root) {
+  root.querySelectorAll("[data-ava-id]").forEach((el) => {
+    const id = el.getAttribute("data-ava-id");
+    el.removeAttribute("data-ava-id");
+    hydrateAvatar(el, id);
+  });
+}
+
+function hydrateAvatar(el, id) {
+  const useUrl = (url) => {
+    // el 可能已经不在文档里（列表被重画）
+    if (!el.isConnected) return;
+    const img = document.createElement("img");
+    img.className = "ava";
+    img.alt = "";
+    img.src = url;
+    el.replaceWith(img);
+  };
+
+  if (avatarCache.has(id)) {
+    useUrl(avatarCache.get(id));
+    return;
+  }
+
+  void (async () => {
+    try {
+      const env = await API(`characters/${encodeURIComponent(id)}/avatar.json`);
+      const r = (typeof env?.json === "function") ? await env.json() : env;
+      // 后端统一是 {ok, data}，也可能直接回裸对象；两边都接。
+      const data = (r && typeof r === "object" && r.ok === true && "data" in r) ? r.data : r;
+      const b64 = data?.base64;
+      if (typeof b64 !== "string" || !b64) throw new Error("没拿到 base64");
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: data?.mime || "image/png" }));
+      avatarCache.set(id, url);
+      useUrl(url);
+    } catch {
+      // 保持首字母。这一层不做错误上报：rail 是常驻面板，
+      // 报错会污染 console 但没有对应的用户动作——用户看到的就是一个字母。
+    }
+  })();
 }
 
 // ── 动作 ──────────────────────────────────────────────
@@ -206,7 +273,16 @@ function bind() {
     clearTimeout(timer);
     timer = setTimeout(() => { query = $("q").value.trim(); loadChars(); loadConvs(); }, 200);
   });
-  $("conv-refresh").addEventListener("click", () => { loadChars(); loadConvs(); });
+  // 「⋯」切换：把低频项收进这个菜单（见 rail.html 的注释）。
+  // 不开时菜单默认 hidden，开了就展开；关掉后不自动收，用户可以点外层关。
+  const moreBtn = $("rail-more");
+  const moreMenu = $("rail-more-menu");
+  if (moreBtn && moreMenu) {
+    moreBtn.addEventListener("click", () => {
+      moreMenu.classList.toggle("hidden");
+      moreBtn.setAttribute("aria-expanded", moreMenu.classList.contains("hidden") ? "false" : "true");
+    });
+  }
   $("new-conv")?.addEventListener("click", () => nav({ t: "new-conv" }));
   $("new-char")?.addEventListener("click", () => nav({ t: "new-char" }));
   // 页内侧栏删了，"导入"从此只能从 rail 进——链路：nav → card 页 shell

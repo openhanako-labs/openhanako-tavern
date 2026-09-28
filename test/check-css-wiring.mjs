@@ -43,8 +43,22 @@ const CSS = join(UI, "assets", "characters.css");
  * 也就是气泡的角色类。无脑“清理死规则”会把它删掉。
  *
  * 登错了的代价只是**死规则少报**（更保守），不会误删。
+ *
+ * 2026-09-28 补 4 条 —— 都是「模板字符串里插值内部」的类：
+ *   `.builtin`  ← presets.js:123 `class="preset-card-v2 ${p.builtin ? "builtin" : ""}..."`
+ *   `.mine`     ← settings.js:388 `class="owner${isOwn() ? " mine" : ""}..."`
+ *   `.is-disabled` ← regex.js:185 `class="regex-row${off ? " is-disabled" : ""}..."`
+ *   `.private`  ← board.js:76 `{ text: "只有你", cls: "private" }`（字段传参，非 class 属性）
+ *   以上四类的**反向守门**见下文 assertExemptionRegistered：
+ *   如果哪一天 JS 里不再引用它们，脚本会报错——说明豁免过期了。
  */
-const DYNAMIC_CLASSES = ["user", "assistant", "system"];
+const DYNAMIC_CLASSES = [
+  "user", "assistant", "system",                    // chat.js 消息气泡角色
+  "builtin",        // presets.js 预设卡「内置」标记
+  "mine",           // settings.js 设置卡「本人」标记
+  "is-disabled",    // regex.js 规则行「停用」状态
+  "private",        // board.js 黑板「仅本人」标签
+];
 
 let pass = 0;
 let fail = 0;
@@ -120,9 +134,14 @@ for (const m of cssNoComment.matchAll(/\.([a-zA-Z][\w-]*)/g)) cssClasses.add(m[1
 
 // ── ① 死规则：CSS 有、源码里没人用 ─────────────────────
 // 白名单：宿主注入的、第三方给的、以及明确按状态写的
+// 白名单：宿主注入的、第三方给的、以及明确按状态写的
+// 2026-09-28 补 2 条状态类：
+//   `.success` — toast() 的第二参数 `"success"` 会 add 成类（大量 toast(..., "success") 调用）
+//   `.ok`      — 已并入 .gen-src 一起删，但保留在这里作为通用状态类以防未来出现独立 `.ok { }`
 const STATE_OK = new Set([
   "hidden", "on", "open", "active", "loading", "streaming", "error", "danger",
-  "dragging", "selected", "disabled", "empty", "collapsed", "toast", "info"
+  "dragging", "selected", "disabled", "empty", "collapsed", "toast", "info",
+  "success"
 ]);
 const dead = [...cssClasses].filter((c) => !used.has(c) && !STATE_OK.has(c)).sort();
 // 注意：只在 HTML 里出现才算落点——但 JS 里拼出来的也算，所以这里对 used 判
@@ -136,7 +155,22 @@ const naked = [...htmlClasses].filter((c) => !cssClasses.has(c) && !FUNCTIONAL_O
 // 一次扫出 50 条死规则 / 13 个裸类——都是被删掉或改名过的 UI 留下的余数。
 // 不假装它们是 0（那得现在清完，风险与收益不成比例），但不允许**变多**：
 // 每多一点，就是又多一处「写了没接线」等着下一个人肉眼去发现。
-const BUDGET = { dead: 50, naked: 13 };
+// 存量欠账：**只挡新增**。
+//
+// 数字不是拍的，是 2026-09-28 逐条核查后的真实基线：
+//   · 死规则 5 → 已删掉 71 条真死（gen 系列 / 旧外壳 topnav / 旧 tab 结构 /
+//                旧 regex/tool-group / pe 系列 / 单点死选择器 / 组合选择器子）
+//     剩下 5 条是**动态类**豁免：builtin / mine / is-disabled / private（模板字符串插值内部）
+//     + 1 条 STATE_OK 的 success（toast() 第二参数会 add 成类）
+//   · 裸类 13 → 已补 26 条真缺样式的 CSS（背景图控件 / 命令面板 / 抽屉头 /
+//                空状态 / 主区布局 / 面板头 / 弹性占位 / 设置控件）
+//     剩下的 13 条是**功能性类**豁免（FUNCTIONAL_OK：hidden/on/message/toast/…），
+//     它们本来就不需要样式，给 JS 找元素或当状态开关用的。
+//
+// 反向守门（下一节 assertExemptionRegistered）：
+//   豁免清单里的每个名字必须真的在仓库源码里被引用过——
+//   否则说明豁免过期了（比如代码改过，类名不再拼出来），预算就虚高了。
+const BUDGET = { dead: 5, naked: 0 };
 
 if (dead.length > BUDGET.dead) {
   bad(`死规则变多：${BUDGET.dead} → ${dead.length}`, dead.map((c) => `    .${c}`).join("\n"));
@@ -156,6 +190,21 @@ if (process.argv.includes("--list")) {
   console.log("\n【裸类】");
   console.log("  " + naked.join(", "));
 }
+
+// ── 反向守门：豁免清单不能写错 ─────────────────────────────
+// 豁免里的名字必须在源码里真被引用过（作为字符串字面量出现），
+// 否则说明代码改过、类名不再拼出来，预算就虚高了。
+// 例外：`user` / `assistant` / `system` 是 chat.js 的 DYNAMIC_CLASSES 原意，
+//   它们的字符串出现在模板里，扫描器已扫到（used.has），但为了对称也一起守。
+function assertExemptionRegistered(name) {
+  // 在每个源码文件里搜字面量；用词边界避免 sub-str 命中
+  const re = new RegExp("[\"'`]\\s*" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![\\w-])", "m");
+  for (const f of files) {
+    if (re.test(readFileSync(f, "utf8"))) return;
+  }
+  bad(`豁免失效：.${name} 已不再在源码里被引用`);
+}
+for (const c of DYNAMIC_CLASSES) assertExemptionRegistered(c);
 
 // ── ② 裸类已在上面算完（naked） ─────────────
 if (naked.length === 0) {

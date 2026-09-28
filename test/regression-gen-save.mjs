@@ -96,11 +96,14 @@ await okAsync("③ 再导一次（replace=true）：不堆重复", async () => {
   assert.strictEqual(mine.length, 2, `重导后该还是 2 条，实为 ${mine.length}`);
 });
 
-await okAsync("④ 墓碑：条目不带 name 时，第二条起会被设定库静默吞掉", async () => {
-  // 这不是“设定库的 bug”——它按 name::characterId 去重是有道理的
-  //（两张卡都有一条叫「世界观」的条目时不能互相吞）。
-  // 但这正是**组装层必须给每条起名**的理由：没名字的全叫「（无名称）」，
-  // 于是生成十条世界书，进库只剩一条，而且哪一步都不报错。
+await okAsync("④ 条目不带 name 也不丢：内容不同就是两条（原墓碑，已翻面）", async () => {
+  // 这曾经是个坑：设定库按 name 去重，没名字的条目全叫「（无名称）」，
+  // 于是生成十条世界书、进库只剩一条，而且哪一步都不报错。
+  // 那时这条测试是「墓碑」——它记下这个已知的坏行为。
+  //
+  // 2026-09-27 判重改成身份（源 + 原始 id，退了用内容指纹）后，坑填了：
+  // 名字不再是身份，两条内容不同的条目不会再互相吞。
+  // 墓碑翻面，改成正面断言——它现在守的是「不许吞」。
   const bare = await charRepo.create({ name: "没名字的卡", description: "d", first_mes: "f" });
   await charRepo.update(bare.id, {
     character_book: {
@@ -114,7 +117,7 @@ await okAsync("④ 墓碑：条目不带 name 时，第二条起会被设定库�
   const r = await request(app, "POST", `/characters/${bare.id}/import-book`, { body: { replace: true } });
   assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
   assert.strictEqual(r.data.total, 2, "转换层该看到两条");
-  assert.strictEqual(r.data.added, 1, "设定库按名字去重，第二条被吞——这就是为什么组装层必须给 name");
+  assert.strictEqual(r.data.added, 2, "两条内容不同，都该进库（以前第二条会被静默吞掉）");
 });
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} 落库：${pass} 过 / ${fail} 败\n`);

@@ -36,12 +36,52 @@ for (const f of files) {
 
 console.log("\n=== U1 · HTML id 与 JS 引用一致性 ===\n");
 
+/*
+ * 动态 id 白名单。
+ *
+ * 背景（2026-09-27）：这一节原先把所有 getElementById 都当成「静态接线」检查，
+ * 于是运行时才创建的元素（模板字符串拼出来的 DOM）被误判为「HTML 里找不到」。
+ * 上一版为了过关，把 settings-cats.js 里那三处 getElementById 改成了 querySelector
+ * 来「绕开」扫描——那是躲测试，不是修问题。检查器该承认：有些 id 就是运行时才有的。
+ *
+ * 加白名单的判据是**保守**的：
+ *   · 每个 id 都能在 ui/assets/modules/*.js 的模板字符串里找到 `id="..."` 的来源
+ *   · 每个 id 都是**动态创建**的（innerHTML 或 el.querySelector 相对查），HTML 里不会有
+ *   · 每个 id 都在下面注明了「哪个文件、什么时机」，防止白名单越用越滥
+ *
+ * 不加进来的是「模板字符串里也是字面量 id」（如 speaker-auto、dir-name 等）——
+ * 那些虽然也用模板字符串生成，但值是固定的，HTML 里就有对应元素，不该豁免。
+ */
+const DYNAMIC_IDS = new Map([
+  // 批量操作条：由 settings.js 的 renderBatchBar() 在选中 ≥1 条时拼出。
+  // 无选择时 .settings-batch-bar 是 hidden 且 innerHTML=""，选择后才有 #batch-cat-select。
+  ["batch-cat-select", "ui/assets/modules/settings.js:557（renderBatchBar，勾选后动态生成）"],
+  ["batch-prio-select", "ui/assets/modules/settings.js:557（renderBatchBar，勾选后动态生成）"],
+  // 类目管理弹层：由 settings-cats.js 的 renderCatsModal() 弹层首次打开时拼出。
+  // 平时 .cats-modal 根本不在 DOM 里，弹层打开才有 #cats-add-input。
+  ["cats-add-input", "ui/assets/modules/settings-cats.js:85（renderCatsModal，弹层打开时动态生成）"],
+  // 同场角色：由 characters.js 的 loadCastCandidates() 异步拉候选名单后拼出。
+  // 平时只有骨架，数据到了（或 books 非空）才有下面这三块。
+  // ctx-cast-count 只在正常态存在；ctx-cast-goto-settings 只在空态存在；
+  // ctx-cast-save 只在正常态存在。
+  ["ctx-cast-count", "ui/assets/modules/characters.js:loadCastCandidates（正常态拼接时动态生成）"],
+  ["ctx-cast-save", "ui/assets/modules/characters.js:loadCastCandidates（正常态拼接时动态生成）"],
+  ["ctx-cast-goto-settings", "ui/assets/modules/characters.js:loadCastCandidates（空态拼接时动态生成）"]
+]);
+
 const missing = [];
 for (const [id, where] of referenced) {
+  if (DYNAMIC_IDS.has(id)) continue; // 白名单：动态创建的 id 不查
   if (!htmlIds.has(id)) missing.push(`${id}  ←  ${where.join(", ")}`);
 }
-if (missing.length === 0) ok(`JS 引用的 ${referenced.size} 个 id 全部存在于 HTML`);
+if (missing.length === 0) ok(`JS 引用的 ${referenced.size} 个 id 全部存在于 HTML（含 ${DYNAMIC_IDS.size} 个动态白名单）`);
 else for (const m of missing) fail(`HTML 里找不到 id: ${m}`);
+
+// 白名单自身的一致性：列出的每个 id 都必须在 modules 里被实际引用过。
+// 加白名单时忘了写调用方，这条会亮——白名单不能凭空长。
+for (const id of DYNAMIC_IDS.keys()) {
+  if (!referenced.has(id)) fail(`白名单里的 id「${id}」没有任何 JS 在用（白名单不该凭空长）`);
+}
 
 // ── 3. dom.js 里的引用（改用 document.querySelector 的也要查） ──
 const domSrc = fs.readFileSync(path.join(modDir, "dom.js"), "utf8");
@@ -55,13 +95,13 @@ else for (const m of domMissing) fail(`dom.js 引用了不存在的东西: ${m}`
 //
 // 2026-09-24：世界从抽屉改成"常驻在聊天左边的可折叠栏"（#board-col，卡里的形状）。
 // 所以这一节改成两半：
-//   · 七个真抽屉：id 必须存在
+//   · 八个真抽屉：id 必须存在
 //   · 「世界」：不再是抽屉，但**它必须仍然是个活入口**——
 //     shell.openDrawer 里那个特例（name === "board" → 开列）被删掉的话，
 //     `DRAWERS["board"]` 是 undefined，openDrawer 会**静默 return**：
 //     按钮还在、点了没反应。这种“静默死入口”正是这一节真正要拦的东西。
 const shellSrc = fs.readFileSync(path.join(modDir, "shell.js"), "utf8");
-const REAL_DRAWERS = ["character", "settings", "variables", "presets", "regex", "tools", "migration"];
+const REAL_DRAWERS = ["character", "settings", "director", "variables", "presets", "regex", "tools", "migration"];
 for (const name of REAL_DRAWERS) {
   if (!htmlIds.has(`drawer-${name}`)) fail(`缺抽屉 #drawer-${name}`);
 }
@@ -85,54 +125,68 @@ else {
 if (!shellSrc.includes('data-drawer')) fail("topbar 菜单没绑 data-drawer");
 else ok("顶栏菜单 → 抽屉的事件源存在");
 
-// ── 4b. 导航分层：一级四个标签 + 二级全量入口 ──
+// ── 4b. 导航分层（2026-09-27 重设计 · 方向 A 之后重写）──
 //
-// （2026-09-23 v3 结构落地：面板从 ⋯ 菜单里搬出来，变成看得见的标签）
-// （2026-09-24 面板涨到八个后的定案）
+// 改之前：九个平铺文字入口在 #topnav，而 #ctx-tabs 又摆了同样四个
+//（角色 / 设定库 / 世界 / 变量）——两套导航指着同一批内容。
 //
-// 八个标签挤在 344px 的横带上排不下也看不清，而且横带每多一行就少一行
-// 聊天。所以定案：**一级只放「这一场里你会看一眼或改一下的」四个**
-// （角色 / 设定库 / 世界 / 变量），其余全落 ⋯ 菜单。
-//
-// 于是这里断言的不是「标签条有几个」，而是两件真事：
-//   ① 一级恰好四个，且必须是那四个（多了就回到挤不下的老路）
-//   ② **每个抽屉都能从 ⋯ 菜单走到**——有面板没门，用户永远找不到它
-//
-// 列数也一并断言：栅格列数要装得下「标签 + 收起键」。少一列，
-// 多出来的标签会被挤进 26px 的收起列——布局静默崩掉，不报错。
+// 改之后：**左轨是唯一的导航**（#apprail，图标 + 字，按这一场/配置分两组）。
+// 于是断言的是四件真事：
+//   ① #apprail 在，且**每个抽屉都能从左轨走到**（有面板没门 = 永远找不到）
+//   ② 每个入口都有图标**也有文字**——只给图标、靠 hover 才知道是什么，
+//      是把“不顺手”换个地方，所以这条也当成硬要求
+//   ③ #panel-head 在且带收起键（标签条没了，收起不能跟着没了）
+//   ④ **#ctx-tabs 不许回来**——它就是这次要消掉的那套重复
 const cssSrc = fs.readFileSync(path.join(root, "ui/assets/characters.css"), "utf8");
-const tabStrip = html.match(/<nav class="ctx-tabs"[\s\S]*?<\/nav>/);
-if (!tabStrip) fail("缺右栏标签条 .ctx-tabs");
+
+const apprail = html.match(/<nav class="apprail"[\s\S]*?<\/nav>/);
+if (!apprail) fail("缺左轨 .apprail");
 else {
-  const PRIMARY = ["character", "settings", "board", "variables"];
-  const tabs = [...tabStrip[0].matchAll(/data-drawer="([^"]+)"/g)].map(m => m[1]);
+  const ALL = ["character", "settings", "director", "board", "variables", "presets", "regex", "tools", "migration"];
+  const entries = [...apprail[0].matchAll(/data-drawer="([^"]+)"/g)].map(m => m[1]);
 
-  for (const name of PRIMARY) {
-    if (!tabs.includes(name)) fail(`一级标签条缺面板入口: ${name}`);
+  /*
+   * 2026-09-27 归并：presets / regex / tools / migration 这四个低频入口
+   * 从左轨收进「设置」浮层。断言跟着改，但**原意一句没动**——
+   * 还是要保证「没有孤儿抽屉，每个面板都有门」。
+   *
+   * 只是「门」不再都在同一层：左轨的直接入口，加上左轨弹出来的浮层里的
+   * 入口，合起来必须覆盖全部。（顶栏 ⋯ 菜单另有一条断言在下面守着。）
+   */
+  const menuEl = html.match(/<div id="cfg-menu"[\s\S]*?<\/div>/);
+  const merged = menuEl ? [...menuEl[0].matchAll(/data-cfg-go="([^"]+)"/g)].map(m => m[1]) : [];
+  if (!menuEl) fail("缺「设置」浮层 #cfg-menu——那四个低频入口就没门了");
+  const reachable = new Set([...entries, ...merged]);
+  for (const name of ALL) {
+    if (!reachable.has(name)) fail(`左轨走不到面板: ${name}`);
   }
-  if (tabs.length !== PRIMARY.length) {
-    fail(`一级标签条应恰好 ${PRIMARY.length} 个入口，实为 ${tabs.length}（多出来的该往 ⋯ 菜单放）`);
-  }
-  if (!tabStrip[0].includes('class="drawer-close ctx-close"')) fail("标签条缺收起键（.ctx-close）");
-
-  const items = tabs.length + 1;   // 标签 + 收起键
-  // 列数要把**尾部固定轨道**一起算上：`repeat(4, minmax(0,1fr)) 26px`
-  // 是 5 列，不是 4 列（最后那个 26px 是给收起键的）。
-  // 只取 repeat() 的数字会多数出一行——护栏报告的行数不对，
-  // 就说明它量错了地方，那种护栏比没有更糟。
-  const grid = (cssSrc.match(/\.ctx-tabs \{[\s\S]*?grid-template-columns:\s*([^;]+);/) || [])[1] || "";
-  const rep = grid.match(/repeat\((\d+),\s*minmax\(0,\s*1fr\)\)/);
-  const fixedTracks = [...grid.matchAll(/\d+px/g)].length;
-  const cols = rep ? Number(rep[1]) + fixedTracks : 0;
-  if (!cols) fail(`读不出 .ctx-tabs 的栅格列数（读到：${grid || "空"}）`);
-  else {
-    const rows = Math.ceil(items / cols);
-    if (rows > 2) fail(`标签条 ${items} 个元素按 ${cols} 列要排 ${rows} 行，超出两行`);
-    else if (cols * rows - items >= cols) fail(`标签条按 ${cols} 列会空出整行`);
-    else if (errors === 0) ok(`一级标签条 ${tabs.length} 个入口 + 收起键（${cols} 列 × ${rows} 行）`);
+  // 归并之后左轨上剩下的直接入口应该变少——没变说明归并没有生效
+  if (entries.length >= ALL.length) {
+    fail(`左轨仍有 ${entries.length} 个直接入口——归并没有生效`);
   }
 
-  // ── 二级：⋯ 菜单必须装下全部抽屉 ──
+  const btns = apprail[0].match(/<button[^>]*class="rail-item"[\s\S]*?<\/button>/g) || [];
+  if (btns.length < 7) fail(`左轨按钮只读到 ${btns.length} 个`);
+  const naked = btns.filter(b => !/<svg class="ri"/.test(b) || !/<span>/.test(b));
+  if (naked.length) fail(`${naked.length} 个左轨入口缺图标或文字（两者必须都有）`);
+  else if (errors === 0) ok(`左轨 ${entries.length} 个抽屉入口 + 对话 + 背景，图标与文字齐备`);
+}
+
+if (html.includes('id="ctx-tabs"')) {
+  fail("#ctx-tabs 又回来了——它和左轨重复，正是这一轮要消掉的那套导航");
+} else ok("#ctx-tabs 未复活（重复导航的回归护栏）");
+
+if (!/id="panel-head"/.test(html)) fail("缺面板抬头 #panel-head");
+else if (!/id="panel-title"/.test(html)) fail("面板抬头缺名字槽 #panel-title");
+else if (!/class="drawer-close ctx-close"/.test(html)) fail("面板抬头缺收起键（.ctx-close）");
+else ok("面板抬头：名字槽 + 收起键齐备");
+
+// 左轨宽度必须有单一来源（.shell 的 --rail-w）。读不出说明骨架规则被改动过。
+const railW = (cssSrc.match(/--rail-w,\s*(\d+)px/) || [])[1];
+if (!railW) fail("读不出左轨宽度（.shell 的 --rail-w）");
+else ok(`左轨宽度单一来源：${railW}px`);
+
+// ── 二级：⋯ 菜单必须装下全部抽屉 ──
   // 切到下一个 .more-wrap 为止——菜单里有嵌套的 <div class="sep">，
   // 用 `<\/div>` 收口会在第一个分隔符那里就截断。
   const mStart = html.indexOf('id="app-more-menu"');
@@ -141,13 +195,12 @@ else {
   if (!menu) fail("找不到 ⋯ 菜单 #app-more-menu");
   else {
     const entries = [...menu.matchAll(/data-drawer="([^"]+)"/g)].map(m => m[1]);
-    // ⋯ 菜单要装下**全部**面板入口：七个真抽屉 + 「世界」（它现在是列，但入口不变）
+    // ⋯ 菜单要装下**全部**面板入口：八个真抽屉 + 「世界」（它现在是列，但入口不变）
     const ALL_ENTRIES = [...REAL_DRAWERS, "board"];
     const missing = ALL_ENTRIES.filter(n => !entries.includes(n));
     if (missing.length) fail(`⋯ 菜单缺面板入口: ${missing.join(", ")}（有面板没门）`);
     else ok(`⋯ 菜单装下全部 ${ALL_ENTRIES.length} 个面板入口`);
   }
-}
 
 // ── 5. 一屏结构的关键类 ──
 const mustHave = [
@@ -155,7 +208,8 @@ const mustHave = [
   // 页内侧栏已按产品决定删除（2026-09-23：列表归宿主 rail 独家），
   // sidebar / collapse / expand / characters-list / conversations-list
   // 五项随设计移除——测试断言的是结构，结构变了断言跟着变。
-  ["右栏标签条", 'id="ctx-tabs"'],
+  ["左轨（唯一导航）", 'id="apprail"'],
+  ["面板抬头", 'id="panel-head"'],
   ["顶栏 ⋯", 'id="app-more-btn"'],
   ["多存档选择器", 'id="conv-picker-modal"'],
   ["预设编辑器", 'id="preset-editor-modal"']
@@ -185,9 +239,13 @@ if (errors === 0) ok("旧六 Tab 结构已清干净");
 // 2026-09-25：去掉 ".sb-foot"——它是侧栏（sb-*）留下的过期待已。
 // 侧栏已按产品决定删除（列表归宿主 rail），那批规则跟着成了死规则，
 // 一次 CSS 清理把它们删了，于是“期望存在”的锚点过期。
+// 2026-09-28：去掉 ".ctx-tabs {" ".char-list .card"——
+//   .ctx-tabs 是旧右栏标签条，已随左轨重构删除；
+//   .char-list 是旧角色卡列表，已随新角色选择器删除。
+//   两者都在 check-css-wiring 的核查里确认为死规则，已删。
 // **结构变了断言跟着变**，但不把断言删空：剩下的仍是真锚点。
 const css = fs.readFileSync(path.join(root, "ui/assets/characters.css"), "utf8");
-for (const needle of [".shell {", ".ctx-tabs {", ".char-list .card", ".drawer {", ".pe-blocks", ".picker-item"]) {
+for (const needle of [".shell {", ".drawer {", ".pe-blocks", ".picker-item"]) {
   if (!css.includes(needle)) fail(`CSS 缺 ${needle}`);
 }
 if (errors === 0) ok("CSS 新布局锚点齐全");

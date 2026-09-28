@@ -106,7 +106,7 @@ await t("两张卡同名条目不互吞", async () => {
   assert.equal(r2.added, 1, "同名但不同归属的条目不该被跳过");
 });
 
-await t("同角色同名仍然去重", async () => {
+await t("同角色同名同内容：认作同一条，不堆重复", async () => {
   const dir = path.join(tmp, "dedup-same");
   const repo = new SettingRepo(dir);
   await repo.init();
@@ -119,8 +119,11 @@ await t("同角色同名仍然去重", async () => {
   const r1 = await repo.importSettings(mk());
   const r2 = await repo.importSettings(mk());
   assert.equal(r1.added, 1);
-  assert.equal(r2.added, 0);
-  assert.equal(r2.skipped.length, 1);
+  assert.equal(r2.added, 0, "同样的内容不该再新增一条");
+  // 2026-09-27：判重从「名字」改成「身份」。同样内容的第二次导入
+  // 是「认出来并刷新」（updated），不是「跳过」（skipped）。
+  assert.equal(r2.updated, 1);
+  assert.equal((await repo.list()).length, 1, "终究只有一条");
 });
 
 await t("listForCharacter 返回本角色 + 全局", async () => {

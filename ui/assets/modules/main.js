@@ -13,14 +13,20 @@ import { loadConversations, renderConversations, openConversation, renderMessage
 import { bindChatMore, syncChatMore } from "./chat-more.js";
 import { bindShell, toggleSidebar } from "./shell.js";
 import { bindPresets } from "./presets.js";
-import { loadSettings, renderSettings, openSettingEditor, saveSetting, deleteSetting, toggleSetting, handleSettingAction, importSTWorldBook, handleSTImport, updateTriggerFields } from "./settings.js";
+import { loadSettings, renderSettings, openSettingEditor, saveSetting, deleteSetting, toggleSetting, handleSettingAction, importSTWorldBook, exportSTWorldBook, handleSTImport, updateTriggerFields, runAutocategorize, view as settingsView } from "./settings.js";
+import { openCatsModal } from "./settings-cats.js";
+import { loadDirectors, newDirector } from "./director.js";
 import { loadVariables, renderVariables, openVariableEditor, saveVariable, deleteVariable, handleVariableAction, testReplace } from "./variables.js";
-import { loadTools, renderToolGroups, renderTools } from "./tools.js";
-import { importFile, handleMigrationFile, loadExports, renderExports, downloadExport, downloadExportFile, deleteExportFile, copyExport, formatFileSize, exportAll } from "./migration.js";
+import { loadTools, renderToolGroups } from "./tools.js";
+import { importFile, handleMigrationFile, loadExports, renderExports, downloadExportFile, deleteExportFile, copyExport, formatFileSize, exportAll } from "./migration.js";
 import { saveBoardCell, deleteBoardCell, bindBoard } from "./board.js";
 import { bindGen } from "./gen.js";
 import { bindTts } from "./tts.js";
 import { bindImage } from "./image.js";
+import { bindScene } from "./scene.js";
+import { bindIllustrate } from "./illustrate.js";
+import { bindAppearance, loadAppearance } from "./appearance.js";
+import { bindCommand, bindScrollBottom } from "./command.js";
 import { saveRegexRule, deleteRegexRule, bindRegex } from "./regex.js";
 
 
@@ -75,23 +81,68 @@ document.getElementById("gen-meta-close")?.addEventListener("click", hideUsageBa
 // 设定库 / 变量 / 预设 / 工具 / 迁移（抽屉在 shell.js 里开，这里绑它们内部按钮）
 document.getElementById("create-setting-btn")?.addEventListener("click", () => openSettingEditor(null));
 document.getElementById("import-st-btn")?.addEventListener("click", importSTWorldBook);
-document.getElementById("refresh-settings-btn")?.addEventListener("click", loadSettings);
+document.getElementById("export-st-btn")?.addEventListener("click", exportSTWorldBook);
+
+// 设定库 2.0：自动分类 / 类目管理 / 分组维度 / 排序。
+// 新控件直接绑，保持主链可读性；
+// 它们与 settings-cats.js 之间的状态同步靠 CustomEvent，不走 import。
+document.getElementById("autocategorize-btn")?.addEventListener("click", runAutocategorize);
+document.getElementById("settings-cats-btn")?.addEventListener("click", openCatsModal);
+document.getElementById("settings-groupby")?.addEventListener("change", (e) => {
+  settingsView.groupBy = e.target.value;
+  settingsView.page = 1;
+  renderSettings(state.settingList);
+});
+document.getElementById("settings-sortby")?.addEventListener("change", (e) => {
+  settingsView.sortBy = e.target.value;
+  renderSettings(state.settingList);
+});
+document.getElementById("create-director-btn")?.addEventListener("click", newDirector);
+document.getElementById("refresh-directors-btn")?.addEventListener("click", loadDirectors);
+
+// 设定库搜索：改一个字就重渲染。106 条重排不卡，不必防抖。
+// 重渲染用的是内存里那份 state.settingList——不重拉网络。
+document.getElementById("settings-search")?.addEventListener("input", () => renderSettings(state.settingList));
 
 document.getElementById("create-variable-btn")?.addEventListener("click", () => openVariableEditor(null));
 document.getElementById("refresh-variables-btn")?.addEventListener("click", loadVariables);
 document.getElementById("test-replace-btn")?.addEventListener("click", testReplace);
 
-document.getElementById("refresh-tools-btn")?.addEventListener("click", loadTools);
-
 document.getElementById("export-all-btn")?.addEventListener("click", exportAll);
 document.getElementById("import-file-btn")?.addEventListener("click", () => dom.migrationFileInput.click());
-document.getElementById("refresh-exports-btn")?.addEventListener("click", loadExports);
-document.getElementById("download-export-btn")?.addEventListener("click", downloadExport);
-document.getElementById("copy-export-btn")?.addEventListener("click", copyExport);
 
 // 弹窗
 document.getElementById("modal-close")?.addEventListener("click", closeEditModal);
+document.getElementById("modal-cancel")?.addEventListener("click", closeEditModal);
 document.getElementById("modal-save")?.addEventListener("click", handleSave);
+// 导出下拉：开关 + 点外部关闭。
+// 为什么不直接把两个导出项放在页脚——它们属于同一件事的两个输出格式，
+// 拆开平列等于告诉用户“这是两件事”。合成一个下拉后，入口就一个，
+// 里面才是两个选项；标签也写清了各自导出什么。
+const exportToggle = document.getElementById("modal-export-toggle");
+const exportMenu = document.getElementById("modal-export-menu");
+if (exportToggle && exportMenu) {
+  exportToggle.addEventListener("click", () => {
+    const closed = exportMenu.classList.toggle("hidden");
+    exportToggle.setAttribute("aria-expanded", closed ? "false" : "true");
+  });
+  // 菜单里的两项：点完就关（否则用户以为菜单还开着可以接着选）
+  exportMenu.querySelectorAll(".em-item").forEach(b => {
+    b.addEventListener("click", () => {
+      exportMenu.classList.add("hidden");
+      exportToggle.setAttribute("aria-expanded", "false");
+    });
+  });
+  // 点弹窗外面关掉菜单
+  document.addEventListener("click", (e) => {
+    if (!exportMenu.classList.contains("hidden")
+        && !exportMenu.contains(e.target)
+        && !exportToggle.contains(e.target)) {
+      exportMenu.classList.add("hidden");
+      exportToggle.setAttribute("aria-expanded", "false");
+    }
+  });
+}
 document.getElementById("modal-export-json")?.addEventListener("click", handleExport);
 document.getElementById("modal-export-st")?.addEventListener("click", handleExportST);
 document.getElementById("modal-delete")?.addEventListener("click", handleDelete);
@@ -131,6 +182,13 @@ bindTts();
 // 出图设置（同样在 ⋯ 菜单里）：宿主供应商 / 本机 ComfyUI 两条路
 bindImage();
 
+// 场景插图设置（第 2 批）：三个开关
+bindScene();
+
+// 手动补一张场景图（⋯ 菜单里「这一场」那组）。
+// 面板文案承诺过这个入口、后端也早就写好了——缺的就是这一颗按钮。
+bindIllustrate();
+
 /*
  * 工具抽屉里的两个设置入口。
  *
@@ -145,6 +203,10 @@ document.getElementById("open-tts-settings")?.addEventListener("click", async ()
 document.getElementById("open-image-settings")?.addEventListener("click", async () => {
   const m = await import("./image.js");
   m.openImage();
+});
+document.getElementById("open-scene-settings")?.addEventListener("click", async () => {
+  const m = await import("./scene.js");
+  m.openScene();
 });
 
 // 聊天输入：Enter 发送，Shift+Enter 换行
@@ -194,6 +256,14 @@ export async function init() {
   // 一屏外壳：侧栏折叠 / 抽屉 / 点卡开聊
   bindShell();
 
+  // 自定义背景：先绑事件，再拉配置（拉不到就按“没背景”跑，不拦整屏）
+  bindAppearance();
+  loadAppearance().catch((e) => console.error("[bg] 初始化失败:", e));
+
+  // 命令面板（Ctrl/⌘K）与“滚到底”
+  bindCommand();
+  bindScrollBottom();
+
   // ⋯ 菜单（人设 / 预览）
   bindChatMore();
 
@@ -233,3 +303,26 @@ export async function init() {
 }
 
 init();
+
+// 抽屉工具条的「⋯」：点开 / 收起，点别处或按 Esc 收起。
+// 和左轨那个「设置」浮层同一套做法（都用 .more-menu）——
+// 菜单里的按钮点完就收起，不然它一直盖着下面的列表。
+(() => {
+  const btn = document.getElementById("settings-more-btn");
+  const menu = document.getElementById("settings-more-menu");
+  if (!btn || !menu) return;
+  const close = () => {
+    menu.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+  };
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation(); // 不让下面那个 document 监听立刻把它关回去
+    if (menu.hidden) {
+      menu.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+    } else close();
+  });
+  menu.addEventListener("click", close);
+  document.addEventListener("click", close);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+})();

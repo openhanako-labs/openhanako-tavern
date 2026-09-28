@@ -1,8 +1,27 @@
 // characters.js — 由 characters.js 按功能拆分（B5）
 
-import { apiAvatarBlobUrl, apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatDate, friendlyError, toast } from "./core.js";
+import { apiAvatarBlobUrl, apiFetch, apiUrl, bindAvatarZoom, confirmDialog, escapeHtml, extractArray, formatDate, friendlyError, toast } from "./core.js";
 import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
+import { askRailRefresh } from "./nav-bus.js";
+
+
+/**
+ * 刷新角色列表：主区与左栏 rail 一起刷。
+ *
+ * 为什么要封装：rail 与 card 是两个不同 iframe，
+ * 主区的 loadCharacters 只管主区——左栏不叫它也刷，就是“导入/新建/删除
+ * 后左栏角色列表不刷新”那个 bug。把“一次改动两处一起刷”写成一行，
+ * 以后新增角色变更入口不会忘。
+ *
+ * 纪律：
+ *   · 不检 railAlive()：rail 刚启动时心跳可能还没写盘，那个瞬间不刷就永失机会。
+ *   · 失败静默：askRailRefresh 已 catch 完，本层无需再包。
+ */
+export async function refreshCharacters() {
+  await loadCharacters();
+  askRailRefresh();
+}
 
 
 export function renderCharacters(characters) {
@@ -86,8 +105,11 @@ export async function openCharacterEditor(id) {
     document.getElementById("f-version").value = card.character_version || "1.0";
     document.getElementById("f-tags").value = (card.tags || []).join(", ");
     document.getElementById("f-notes").value = card.creator_notes || "";
+    // 编辑已有卡：删除 + 导出下拉 + 保存在，取消隐藏（标题栏的 ✕ 已能关）
     document.getElementById("modal-delete").classList.remove("hidden");
+    document.getElementById("modal-export-wrap").classList.remove("hidden");
     document.getElementById("modal-export-st").classList.remove("hidden");
+    document.getElementById("modal-cancel").classList.add("hidden");
     // 出图入口：只有编辑**已有**的卡时才出现（新卡还没有 id，出完图没地方放）
     document.getElementById("modal-portrait").classList.remove("hidden");
     const pnote = document.getElementById("modal-portrait-note");
@@ -96,8 +118,10 @@ export async function openCharacterEditor(id) {
     bindModalPortrait();
   } else {
     document.getElementById("modal-title").textContent = "新建角色";
+    // 新建时没有 id 可删、也没有卡可导出；只留「取消 / 保存」
     document.getElementById("modal-delete").classList.add("hidden");
-    document.getElementById("modal-export-st").classList.add("hidden");
+    document.getElementById("modal-export-wrap").classList.add("hidden");
+    document.getElementById("modal-cancel").classList.remove("hidden");
     // 新卡还没 id：出完图没地方放，所以这个入口不显示。
     // 但**得说出来**——不写一个字的话，用户写完一张卡找不到“生成立绘”，
     // 会以为是自己漏了步骤。（复核点出来的：这里原本只是把 note 清空。）
@@ -125,15 +149,16 @@ export async function saveCharacter() {
     creator_notes: document.getElementById("f-notes").value.trim()
   };
 
-  if (!card.name || !card.description || !card.first_mes) {
-    // 说缺哪一项。只说“请填写必填字段”，用户得自己去猜是三个里的哪一个。
-    const miss = [];
-    if (!card.name) miss.push("名称");
-    if (!card.description) miss.push("描述");
-    if (!card.first_mes) miss.push("开场白");
-    toast(`还缺：${miss.join("、")}`, "error");
+  // 只有名称是硬性必填。描述与开场白缺了照样存——它们决定的是这张卡
+  // 用起来好不好，不是它成不成立（后端同理，见 lib/characters/model.js）。
+  if (!card.name) {
+    toast("名称不能空——列表里得有东西认它", "error");
     return;
   }
+
+  const thin = [];
+  if (!card.description) thin.push("描述");
+  if (!card.first_mes) thin.push("开场白");
 
   try {
     if (state.currentCharacter) {
@@ -143,8 +168,12 @@ export async function saveCharacter() {
       await apiFetch("characters", { method: "POST", body: JSON.stringify(card) });
       toast("已创建", "success");
     }
+    if (thin.length) {
+      // 不拦，但要说清代价——静默放行和硬拒一样不负责。
+      toast(`这张卡缺${thin.join("、")}——能用，只是设定会干一些`, "warn");
+    }
     closeEditModal();
-    loadCharacters();
+    refreshCharacters();
   } catch (e) {
     toast(`失败: ${e.message}`, "error");
   }
@@ -163,10 +192,11 @@ export async function deleteCharacter(id) {
   try {
     await apiFetch(`characters/${id}`, { method: "DELETE" });
     toast("已删除", "success");
-    loadCharacters();
   } catch (e) {
     toast("删除失败：" + friendlyError(e), "error");
+    return;
   }
+  refreshCharacters();
 }
 
 export async function exportCharacter(id, format = "json") {
@@ -315,6 +345,10 @@ export function renderImportPreview(items) {
     if (it.preview && it.preview.has_book) flags += '<span class="fmt book">世界书</span>';
     if (it.preview && it.preview.has_alternate_greetings) flags += '<span class="fmt">多开场</span>';
     if (!ok) flags += '<span class="err">' + escapeHtml(it.error || "不可导入") + "</span>";
+    else if (Array.isArray(it.warnings) && it.warnings.length) {
+      // 警告不是错误：卡能进，只是进来之后会缺东西。用黄色，且不阻止勾选。
+      flags += it.warnings.map(w => '<span class="warn">' + escapeHtml(w) + "</span>").join("");
+    }
     return '<div class="import-item' + (ok ? "" : " bad") + '" data-i="' + i + '">'
       + '<div class="nm">' + name + "</div>"
       + '<div class="ds">' + desc + "</div>"
@@ -372,7 +406,7 @@ export async function commitImport() {
     }
 
     closeImportModal();
-    await loadCharacters();
+    await refreshCharacters();
   } catch (e) {
     console.error("[Import] commit failed:", e);
     toast("导入失败: " + friendlyError(e), "error");
@@ -470,31 +504,53 @@ export async function renderCharContext(greetIdx = 0) {
   /*
    * 同场角色：谁在这一场里。
    *
-   * 过去这事只能在**建对话**时定，之后加不了也减不了——想加第三个人
-   * 只能重开一场，等于把上下文全丢了。
+   * 结构（用户方案·乙）：
+   *   ① 主角事实块——当前角色卡本人，一定在场，不是可勾选项
+   *   ② 别的世界书分组折叠——默认只显示书名 + N 位，点开才列那本里
+   *      标了 category="角色" 的条目
+   *   ③ 自己那本世界书不列——那些条目在设定库那边直接开关
+   *
+   * 数据源：GET /settings/cast-candidates?characterId=<当前卡id>
+   *   返回 { self: {characterId, name}, books: [{characterId, name, characters: [...]}] }
+   *
+   * 三态分开：
+   *   · 加载 = 骨架条（先渲染骨架，数据到了再替换）
+   *   · 空   = 解释性文案 + 动作——真库 106 条 category 全空，
+   *           所以这个抽屉打开十之八九会看到“空态”，不能空白也不能报错
+   *   · 错误 = 分清是谁的错（网络/鉴权 vs 角色不存在）
+   *
+   * 交互：
+   *   · 点头像抬头 → 折叠/展开那本书
+   *   · 点头像 → 选中/取消该角色（不要 <select multiple>、不要 Ctrl+点）
+   *   · 保存   → PATCH /conversations/:id/participants
+   *
    * 服务端那条路是严格的（主角不在名单里就报错，不安静换）；
-   * 界面的活是**替他把话说完**：自动把第一位当新主角带上，并说明白。
+   * 界面的活是替他把话说完：主角固定当第一位，只让用户选“另加谁”。
    */
+  const selfId = String(state.currentConv?.characterId || c.id || "").trim();
+  // 当前名单（用于回显“已选”）：优先用数组，退到单角色
   const castIds = Array.isArray(state.currentConv?.characterIds) && state.currentConv.characterIds.length > 0
-    ? state.currentConv.characterIds
-    : (state.currentConv?.characterId ? [state.currentConv.characterId] : []);
+    ? state.currentConv.characterIds.map(String)
+    : (state.currentConv?.characterId ? [String(state.currentConv.characterId)] : []);
   const nameOf = (id) =>
     (state.charList || []).find((x) => String(x.id) === String(id))?.name || "（已删除）";
-  const castHtml = state.currentConv ? `
-    <div class="ctx-cast">
+
+  // 骨架条：占位三行，避免数据回来时整块弹出。
+  // 用 aria-busy 标个忙，屏幕阅读器能告知
+  const castSkeleton = state.currentConv ? `
+    <div class="ctx-cast" aria-busy="true">
       <div class="ctx-cast-head">
         <span>同场角色</span>
-        <span class="dim">${castIds.length} 位</span>
+        <span class="dim">加载中…</span>
       </div>
-      <div class="ctx-cast-now">${castIds.map((id) => escapeHtml(nameOf(id))).join(" · ")}</div>
-      <select id="ctx-cast-select" multiple size="5">
-        ${(state.charList || []).map((ch) => `<option value="${escapeHtml(ch.id)}"${castIds.includes(ch.id) ? " selected" : ""}>${escapeHtml(ch.name)}</option>`).join("")}
-      </select>
-      <div class="ctx-cast-acts">
-        <button type="button" class="mini" id="ctx-cast-save">保存名单</button>
+      <div class="cast-new">
+        <div class="cast-lead"><span class="cn">${escapeHtml(c.name || "（未命名）")}</span><span class="tag">主角</span><span class="hint">一定在场</span></div>
+        <div class="cast-skel-row"></div>
+        <div class="cast-skel-row"></div>
       </div>
-      <div class="dim ctx-cast-note" id="ctx-cast-note">选一个=单人；多个=群聊。第一位是主角。新加进来的人没有开场白。</div>
     </div>` : "";
+
+  const castHtml = castSkeleton;
 
   // 有头像就画头像，没有才退回首字母。
   // 之前这里只会画首字母，于是「生成立绘」成功后界面上什么都没变——
@@ -522,6 +578,7 @@ export async function renderCharContext(greetIdx = 0) {
     <div class="char-ctx-actions">
       <button class="btn btn-sm" data-ctx="edit">编辑</button>
       <button class="btn btn-sm" id="ctx-portrait">生成立绘</button>
+      <button class="btn btn-sm" id="ctx-scene">场景插图</button>
       <button class="btn btn-sm" data-ctx="export">导出</button>
       <button class="btn btn-sm danger" data-ctx="delete">删除</button>
     </div>
@@ -541,46 +598,24 @@ export async function renderCharContext(greetIdx = 0) {
         if (slot) slot.title = `头像没显示出来：${e?.message || e}`;
         console.warn("[tavern] 头像取回失败", e);
       });
+    // 0.1：点头像看大图。绑在 <img> 上而不是外层——外层包含回退后的文字内容，
+    // 点文字放大没有意义，点图才说得通。
+    bindAvatarZoom(avaImg, avaImg.dataset.ava);
   }
 
-  // 同场角色：保存名单。
-  box.querySelector("#ctx-cast-save")?.addEventListener("click", async () => {
-    const sel = box.querySelector("#ctx-cast-select");
-    if (!sel) return;
-    const ids = [...sel.selectedOptions].map((o) => o.value);
-    const note = box.querySelector("#ctx-cast-note");
-    if (ids.length === 0) {
-      // 本地先说，不白跑一趟服务端（那边也会报同样的话）。
-      if (note) note.textContent = "至少留一位——一场没法说话的对话没有意义。";
-      return;
-    }
-    const body = { characterIds: ids };
-    if (!ids.includes(String(state.currentConv?.characterId || ""))) {
-      // 服务端不安静换主角（它只报错）。这里替他把话说完。
-      body.characterId = ids[0];
-      if (note) note.textContent = `主角换成 ${nameOf(ids[0])} 了（原来的那位不在新名单里）。`;
-    }
-    try {
-      const res = await apiFetch(`conversations/${state.currentConv.id}/participants`, {
-        method: "PATCH",
-        body: JSON.stringify(body)
-      });
-      const data = res?.data || res || {};
-      if (state.currentConv) {
-        state.currentConv.characterIds = data.characterIds;
-        state.currentConv.characterId = data.characterId;
-        state.currentConv.characterName = data.characterName;
-      }
-      toast("同场角色已更新", "success");
-      // 名单变了，发言者那一行与气泡署名都得跟着变——
-      // 交给“打开对话”那条路重画，不自己再拼一遍。
-      // （动态 import：静态 import 会让 characters ↔ chat 形成环。）
-      const { openConversation } = await import("./chat.js");
-      await openConversation(state.currentConv.id);
-    } catch (e) {
-      toast("改名单失败: " + friendlyError(e), "error");
-    }
-  });
+  // 同场角色：异步拉候选名单，把骨架换成真正的内容。
+  // 不在上面 await：那样整个抽屉都得等接口，头像、开场白、前情提要都卡着。
+  // 骨架先上，数据到了就地换，用户看到的是“先出个主体、同场角色那块稍后填充”。
+  if (state.currentConv && selfId) {
+    loadCastCandidates(box, {
+      selfId, castIds, nameOf, greetIdx: gi,
+      refresh: () => renderCharContext(gi)
+    }).catch((e) => {
+      // 这里已处理错误（写进那个抽屉块本身），不另弹 toast——
+      // 用户正在看的就在那个抽屉里，弹一层反而打断。
+      console.warn('[Cast] 加载候选失败:', e);
+    });
+  }
 
   // 前情提要的动作：保存 / 清掉。
   // 清掉是**安全操作**：折叠每轮按预算重算，原文一条不少。
@@ -669,4 +704,223 @@ export async function renderCharContext(greetIdx = 0) {
   // 生成立绘：按钮是每次重画重建的，所以绑定也要每次重来一趟
   const { bindPortraitButton } = await import("./media.js");
   bindPortraitButton();
+
+  /*
+   * 场景插图：入口从工具抽屉那排「App 设置」里摆到它该在的地方。
+   *
+   * 为什么该在这儿：这是**聊天时**才会想动的开关——写着写着想让这场配张图，
+   * 却发现得先退出聊天、开工具抽屉、再翻到 App 设置，三个动作换一个开关。
+   * 它跟隔壁那颗「生成立绘」本来就是同一族（都是给这一场配图），分开放没道理。
+   *
+   * 工具抽屉那份**留着**：那个抽屉是没开对话时唯一的入口
+   *（⋯ 菜单那颗只在开了对话时才显示，没对话就进不去设置——那是死路）。
+   * 语音朗读与出图引擎也是这么两份，规矩一致。
+   */
+  box.querySelector("#ctx-scene")?.addEventListener("click", async () => {
+    const m = await import("./scene.js");
+    m.openScene();
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * 同场角色候选名单——独立于 renderCharContext 的异步加载与交互。
+ *
+ * 为什么拆出去：renderCharContext 里那块骨架先上，然后异步拉数据。
+ * 如果写在 renderCharContext 内部，它就是个非异步的 IIFE（fire-and-forget），
+ * 拿不到 renderCharContext 里的 `gi`、`nameOf` 那些局部变量，
+ * 传参列表会越长越胖。拆成独立函数、只靠一个 ctx 对象传上下文，
+ * 以后新需求（如“当前对话已勾选”回显）就一处改。
+ * ════════════════════════════════════════════════════════════════ */
+
+/**
+ * 拉候选名单，把骨架换成真正内容。
+ *
+ * 三态：
+ *   · 成功 + books 非空 → 主角事实块 + 世界书分组
+ *   · 成功 + books 空   → 解释性空态 + “去设定库标”动作
+ *   · 失败              → 错误态，分清是哪一方的错
+ *
+ * @param {HTMLElement} box  抽屉 body 容器
+ * @param {{
+ *   selfId: string,
+ *   castIds: string[],
+ *   nameOf: (id: string) => string,
+ *   greetIdx: number,
+ *   refresh: () => Promise<void>
+ * }} ctx
+ */
+async function loadCastCandidates(box, ctx) {
+  const { selfId, castIds, nameOf, greetIdx, refresh } = ctx;
+  const castWrap = box.querySelector('.ctx-cast');
+  if (!castWrap) return;
+
+  let data;
+  try {
+    const res = await apiFetch(`settings/cast-candidates?characterId=${encodeURIComponent(selfId)}`);
+    data = res?.data || res || {};
+  } catch (e) {
+    // 错误态：分清是网络错（接口连不上/鉴权失效）还是角色不存在
+    const status = e?.status || e?.response?.status;
+    const msg = friendlyError(e);
+    let title, body, action;
+    if (status === 404) {
+      // 404 只有两种可能：characterId 不存在，或接口未注册（后者不该发生）
+      title = `角色卡 ${nameOf(selfId)} 读不到`;
+      body = '它可能已被删除，或数据目录里那张卡读不出。';
+    } else {
+      title = '候选名单暂时拉不下来';
+      body = `${msg}（网络/鉴权/服务重启之类）`;
+    }
+    castWrap.innerHTML = `
+      <div class="ctx-cast-head">
+        <span>同场角色</span>
+        <span class="dim">出错</span>
+      </div>
+      <div class="cast-err">
+        <div class="cast-err-title">${escapeHtml(title)}</div>
+        <div class="cast-err-body">${escapeHtml(body)}</div>
+      </div>`;
+    return;
+  }
+
+  const self = data?.self || { characterId: selfId, name: nameOf(selfId) };
+  const books = Array.isArray(data?.books) ? data.books : [];
+  const totalChars = books.reduce((n, b) => n + (b.characters?.length || 0), 0);
+
+  // 空态：解释 + 动作。
+  // 真库 106 条 category 全空，所以这个抽屉打开十之八九会看到这句。
+  // 不能空白（用户以为坏了），也不能报错（真没事）。
+  if (books.length === 0) {
+    castWrap.innerHTML = `
+      <div class="ctx-cast-head">
+        <span>同场角色</span>
+        <span class="dim">只主角一人</span>
+      </div>
+      <div class="cast-new">
+        <div class="cast-lead"><span class="cn">${escapeHtml(self.name || "（未命名）")}</span><span class="tag">主角</span><span class="hint">一定在场</span></div>
+        <div class="cast-empty">
+          <div class="cast-empty-title">别的世界书里还没有标为「角色」的条目</div>
+          <div class="cast-empty-hint">在设定库的每条设定上标一个分类叫「角色」，它才会出现在这里。
+            当前卡自己的世界书不在这份名单里——那些在设定库那边直接开关。</div>
+          <button type="button" class="mini" id="ctx-cast-goto-settings">去设定库看看</button>
+        </div>
+      </div>`;
+    // “去设定库看看”——打开设定库抽屉，把主角的世界书带过去
+    document.getElementById('ctx-cast-goto-settings')?.addEventListener('click', async () => {
+      try {
+        const { openDrawer } = await import('./shell.js');
+        await openDrawer('settings');
+      } catch {
+        // shell.js 不存在时降级为一句 toast——不阻断用户
+        toast('设定库打开失败', 'info');
+      }
+    });
+    return;
+  }
+
+  // 正常态：主角事实块 + 世界书分组折叠
+  const bookHtml = books.map((b) => {
+    const n = b.characters?.length || 0;
+    // 默认展开有已选角色的那本——用户上次点了谁，重进时就直接看到
+    const hasSelected = (b.characters || []).some(ch => castIds.includes(String(ch.id)));
+    const rows = (b.characters || []).map(ch => {
+      const checked = castIds.includes(String(ch.id));
+      return `
+        <div class="cast-row${checked ? ' on' : ''}" data-cid="${escapeHtml(String(ch.id))}" data-cname="${escapeHtml(ch.name)}" title="${escapeHtml(ch.description || ch.name)}">
+          <span class="bx"></span>
+          <span class="cn">${escapeHtml(ch.name)}</span>
+        </div>`;
+    }).join('');
+    return `
+      <div class="wsblk${hasSelected ? ' open' : ''}" data-book="${escapeHtml(String(b.characterId))}">
+        <button type="button" class="ws-hd" data-act="toggle-book">
+          <span class="car">▸</span>
+          <span class="nm">${escapeHtml(b.name)}<span class="ws"> 的世界书</span></span>
+          <span class="n">${n} 位</span>
+        </button>
+        <div class="ws-body">${rows}</div>
+      </div>`;
+  }).join('');
+
+  castWrap.innerHTML = `
+    <div class="ctx-cast-head">
+      <span>同场角色</span>
+      <span class="dim"><b id="ctx-cast-count">${castIds.length}</b> 位 · ${books.length} 本世界书</span>
+    </div>
+    <div class="cast-new">
+      <div class="cast-lead"><span class="cn">${escapeHtml(self.name || "（未命名）")}</span><span class="tag">主角</span><span class="hint">一定在场</span></div>
+      ${bookHtml}
+    </div>
+    <div class="cast-acts">
+      <button type="button" class="mini primary" id="ctx-cast-save">保存名单</button>
+    </div>`;
+
+  // 折叠：点头像抬头翻那一本书的展开状态
+  castWrap.querySelectorAll('.ws-hd[data-act="toggle-book"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.parentElement.classList.toggle('open');
+    });
+  });
+
+  // 点选：点头像 → 选中/取消
+  castWrap.querySelectorAll('.cast-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const cid = row.dataset.cid;
+      const idx = castIds.indexOf(cid);
+      if (idx >= 0) castIds.splice(idx, 1);
+      else castIds.push(cid);
+      // 主角永远在名单里当第一位（服务端不接受他不在）——
+      // 用户点掉他也不行。所以主角不在 castIds 里时自动补回。
+      if (!castIds.includes(selfId)) castIds.unshift(selfId);
+      // 就地刷新选中态（不重拉接口）
+      row.classList.toggle('on');
+      const countEl = document.getElementById('ctx-cast-count');
+      if (countEl) countEl.textContent = castIds.length;
+    });
+  });
+
+  // 保存
+  document.getElementById('ctx-cast-save')?.addEventListener('click', () => {
+    saveCastList({
+      castIds: [...castIds],
+      selfId,
+      convId: state.currentConv.id,
+      nameOf,
+      refresh
+    });
+  });
+}
+
+/**
+ * 保存同场角色名单。从 loadCastCandidates 里拆出来，因为：
+ *   · 它是“写库”操作，与“渲染”不在同一层
+ *   · 以后“去设定库直接开关”那个入口也要能复用它
+ */
+async function saveCastList({ castIds, selfId, convId, nameOf, refresh }) {
+  // 服务端不接受主角不在名单里，本地先补齐（不弹 toast——他本来就该在）
+  if (!castIds.includes(selfId)) castIds.unshift(selfId);
+  if (castIds.length === 0) {
+    toast('至少留主角一位——一场没法说话的对话没有意义', 'info');
+    return;
+  }
+  try {
+    const res = await apiFetch(`conversations/${convId}/participants`, {
+      method: 'PATCH',
+      body: JSON.stringify({ characterIds: castIds })
+    });
+    const data = res?.data || res || {};
+    if (state.currentConv) {
+      state.currentConv.characterIds = data.characterIds;
+      state.currentConv.characterId = data.characterId;
+      state.currentConv.characterName = data.characterName;
+    }
+    toast('同场角色已更新', 'success');
+    // 名单变了，发言者那一行与气泡署名都得跟着变——
+    // 交给“打开对话”那条路重画，不自己再拼一遍。
+    // （动态 import：静态 import 会让 characters ↔ chat 形成环。）
+    const { openConversation } = await import('./chat.js');
+    await openConversation(convId);
+  } catch (e) {
+    toast('改名单失败: ' + friendlyError(e), 'error');
+  }
 }

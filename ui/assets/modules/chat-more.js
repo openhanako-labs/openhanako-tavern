@@ -67,7 +67,11 @@ export function bindChatMore() {
       else if (act === "prompt") openPreview("prompt");
       else if (act === "tts") import("./tts.js").then(m => m.openTts());
       else if (act === "image") import("./image.js").then(m => m.openImage());
+      // 场景插图的**设置**入口。它原本只有工具抽屉那一份——
+      // 而语音朗读与出图设置都在这组里，兄弟仨缺一个，用户在 ⋯ 菜单里怎么找也找不到。
+      else if (act === "scene") import("./scene.js").then(m => m.openScene());
       else if (act === "play-all") import("./tts.js").then(m => m.playConversation());
+      else if (act === "illustrate") import("./illustrate.js").then(m => m.openIllustrate());
       else if (act === "export") exportChatFromMenu();
       else if (act === "delete") deleteChatFromMenu();
     });
@@ -84,7 +88,6 @@ export function bindChatMore() {
   const previewModal = document.getElementById("preview-modal");
   document.getElementById("preview-close")?.addEventListener("click", closePreview);
   document.getElementById("preview-ok")?.addEventListener("click", closePreview);
-  document.getElementById("preview-refresh")?.addEventListener("click", refreshPreview);
   previewModal?.addEventListener("click", (e) => {
     if (e.target === previewModal) closePreview();
   });

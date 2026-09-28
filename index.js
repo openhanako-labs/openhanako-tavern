@@ -24,6 +24,7 @@ import { registerVariableRoutes } from "./lib/variables/routes.js";
 
 import { SettingRepo } from "./lib/settings/repo.js";
 import { registerSettingRoutes } from "./lib/settings/routes.js";
+import { createCategoryStore } from "./lib/settings/categories.js";
 
 import { RegexRepo } from "./lib/regex/repo.js";
 import { registerRegexRoutes } from "./lib/regex/routes.js";
@@ -32,6 +33,8 @@ import { PresetRepo } from "./lib/presets/repo.js";
 import { registerPresetRoutes } from "./lib/presets/routes.js";
 
 import { BoardRepo } from "./lib/board/repo.js";
+import { DirectorRepo } from "./lib/director/repo.js";
+import { registerDirectorRoutes } from "./lib/director/routes.js";
 import { registerBoardRoutes } from "./lib/board/routes.js";
 
 import { registerToolRoutes } from "./lib/tools/routes.js";
@@ -44,7 +47,9 @@ import { loadGroupState, isGroupEnabled } from "./lib/tools/group.js";
 import { registerMigrationRoutes } from "./lib/migration/routes.js";
 import { registerGenRoutes } from "./lib/gen/routes.js";
 import { registerMediaRoutes } from "./lib/media/routes.js";
+import { registerIllustrationRoutes } from "./lib/illustration/routes.js";
 import { registerTtsRoutes } from "./lib/tts/routes.js";
+import { registerAppearanceRoutes } from "./lib/appearance/routes.js";
 import { LLMService } from "./lib/llm/service.js";
 import { runSelfCheck } from "./lib/selfcheck.js";
 
@@ -130,6 +135,17 @@ export default defineApp(async (sdk) => {
     s.settings = { repoInitialized: true, settingsFile: path.join(dataDir, "settings.json") };
   }
 
+  // 类目表。单独一个 store，因为它有自己的生命周期（新建/并/改/删），
+  // 而且「并到」要连锁改 settings.json，两步都得原子。
+  let categoryStore = null;
+  if (dataDir) {
+    categoryStore = createCategoryStore(dataDir);
+    await probe.safe(() => categoryStore.init(), "categoryStore.init");
+    s.settings = s.settings || {};
+    s.settings.categoriesFile = path.join(dataDir, "categories.json");
+    s.settings.categoryStoreInitialized = true;
+  }
+
   let regexRepo = null;
   if (dataDir) {
     regexRepo = new RegexRepo(dataDir);
@@ -149,6 +165,14 @@ export default defineApp(async (sdk) => {
     boardRepo = new BoardRepo(dataDir);
     await probe.safe(() => boardRepo.init(), "boardRepo.init");
     s.board = { repoInitialized: true, worldCellsFile: path.join(dataDir, "board-cells.json") };
+  }
+
+  // 导演实体（配方式文游的剧情公式）。纯配置，全局一份，谁都能绑。
+  let directorRepo = null;
+  if (dataDir) {
+    directorRepo = new DirectorRepo(dataDir);
+    await probe.safe(() => directorRepo.init(), "directorRepo.init");
+    s.director = { repoInitialized: true, file: path.join(dataDir, "directors.json") };
   }
 
   // ── LLM 服务 ──
@@ -235,13 +259,15 @@ export default defineApp(async (sdk) => {
       registerCharacterRoutes(app, characterRepo, characterTransfer, settingRepo);
     }
     if (conversationRepo && characterRepo) {
-      registerConversationRoutes(app, conversationRepo, llmService, characterRepo, settingRepo, regexRepo, presetRepo, boardRepo);
+      // opts 传 { sdk, dataDir }：供场景插图自动触发使用。
+      // 不传时自动触发会静默跳过（只保留 [场景] 标记的剥离行为）。
+      registerConversationRoutes(app, conversationRepo, llmService, characterRepo, settingRepo, regexRepo, presetRepo, boardRepo, { sdk, dataDir, directorRepo });
     }
     if (variableRepo && conversationRepo) {
       registerVariableRoutes(app, variableRepo, conversationRepo, characterRepo);
     }
     if (settingRepo) {
-      registerSettingRoutes(app, settingRepo, conversationRepo);
+      registerSettingRoutes(app, settingRepo, conversationRepo, categoryStore, characterRepo);
     }
     if (regexRepo) {
       registerRegexRoutes(app, regexRepo);
@@ -251,6 +277,9 @@ export default defineApp(async (sdk) => {
     }
     if (boardRepo) {
       registerBoardRoutes(app, boardRepo);
+    }
+    if (directorRepo) {
+      registerDirectorRoutes(app, directorRepo);
     }
 
     registerToolRoutes(app, sdk);
@@ -269,9 +298,20 @@ export default defineApp(async (sdk) => {
   // 拿不到就在调用的那一步报「出图未就绪」，不静默降级。
   registerMediaRoutes(app, { sdk, characterRepo, transfer: characterTransfer, dataDir });
 
+  // 场景插图（第 2 批 2.6）：手动补一张 + 配置 + 最新状态查询。
+  // 与 media 分开注册：media 需要 characterTransfer（写头像），
+  // illustration 需要 conversationRepo（追加消息）与 scene-config。
+  if (conversationRepo && characterRepo) {
+    registerIllustrationRoutes(app, { sdk, dataDir, conversationRepo, characterRepo });
+  }
+
   // 语音合成。管子做在 App 里、水由用户自己填（参见 lib/tts/providers.js 开头）。
   // 宿主没有 TTS 这条能力（docs/req-tts.md 是实测证据），所以不等它。
   registerTtsRoutes(app, { sdk, dataDir });
+
+  // 自定义背景图。配置 + 图文件都落在 app-data/appearance/。
+  // 不依赖 sdk，纯数据目录读写，所以只 gate 在 dataDir 上。
+  registerAppearanceRoutes(app, dataDir);
     }
   });
   probe.record("routes registered");

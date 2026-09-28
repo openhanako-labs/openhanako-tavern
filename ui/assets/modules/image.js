@@ -10,11 +10,15 @@
 //      工作流、提示词节点、以及 ComfyUI 本身。缺哪一项就卡在哪一项，说清楚。
 //   ③ 「列出有哪些」把 ComfyUI 回的原始清单直接摊给用户看——
 //      工作流名字是**他的**东西，我不猜、也不替他挑。
+//
+// 2026-09-28 改造：状态条提到最上（.modal-health）——体检结果是主角；
+// 底部按钮改成 取消 / 保存 右对齐；单选卡只展开当前这一家。
 
 import { apiFetch, toast, escapeHtml, friendlyError } from "./core.js";
 
 let current = null;
 let busy = false;
+let engines = null;   // 最近一次体检结果
 
 const $ = (id) => document.getElementById(id);
 
@@ -24,11 +28,38 @@ function readEnvelope(res, what) {
   return env.data !== undefined ? env.data : env;
 }
 
-function setStatus(text, bad = false) {
-  const el = $("image-status");
+/**
+ * 体检条：● + 一句人话 + 一句细节 + 一个直接动作。
+ *
+ * 三态：
+ *   is-ok    —— 已配好，可以去用
+ *   is-bad   —— 已配置但缺东西
+ *   （默认灰） —— 还没体检或未配置
+ *
+ * 与旧的 .tts-status 不一样：状态在这里是**主角**，不再是底部一行小字。
+ */
+function setHealth(opts) {
+  const el = $("image-health");
   if (!el) return;
-  el.classList.toggle("bad", !!bad);
-  el.textContent = text || "";
+  const { state = "", title = "", sub = "", hasAction = false } = opts || {};
+  el.classList.remove("is-ok", "is-bad");
+  if (state === "ok") el.classList.add("is-ok");
+  if (state === "bad") el.classList.add("is-bad");
+  el.querySelector(".mh-title")?.replaceChildren(title);
+  el.querySelector(".mh-sub")?.replaceChildren(sub);
+  el.querySelector(".mh-act")?.classList.toggle("hidden", !hasAction);
+}
+
+function describeEngine() {
+  const host = engines?.host;
+  const comfy = engines?.comfyui;
+  const b = current?.backend || "host";
+  if (b === "host") {
+    return host?.available ? `宿主媒体供应商可用 · ${host.reason || ""}`.trim() : `宿主媒体供应商：${host?.reason || "还没体检"}`;
+  }
+  return comfy?.available
+    ? `本机 ComfyUI · ${comfy.tool || "工具就绪"}`
+    : `本机 ComfyUI：${comfy?.reason || "还没体检"}`;
 }
 
 function fillForm(cfg) {
@@ -47,30 +78,46 @@ function fillForm(cfg) {
   const pt = $("image-prompt-target");
   if (pt) pt.value = cfg.promptTarget || "";
 
-  setStatus(cfg.ready
-    ? `当前用：${meta?.label || cfg.backend} · 已配好，去角色面板点「生成立绘」`
-    : `当前用：${meta?.label || cfg.backend} · ${cfg.reason || "还没配好"}`, !cfg.ready);
+  // 体检条：先看配置齐不齐，再看引擎通不通
+  refreshHealth();
 }
 
-function renderEngines(e) {
-  const box = $("image-engines");
-  if (!box) return;
-  const line = (label, ok, reason) =>
-    `<div>${ok ? "✓" : "·"} ${escapeHtml(label)}：${ok ? "可用" : escapeHtml(reason || "不可用")}</div>`;
-  box.innerHTML =
-    line("宿主媒体供应商", !!e?.host?.available, e?.host?.reason) +
-    line("本机 ComfyUI", !!e?.comfyui?.available, e?.comfyui?.reason);
-  box.classList.toggle("bad", !e?.host?.available && !e?.comfyui?.available);
+function refreshHealth() {
+  const b = current?.backend || "host";
+  const meta = (current?.backends || []).find((x) => x.id === b);
+  const label = meta?.label || b;
+
+  // 引擎没体检过
+  if (!engines) {
+    setHealth({ title: "还没体检", sub: `当前选：${label} · 打开面板会自动探测一次`, hasAction: true });
+    return;
+  }
+
+  // 引擎体检过但配置没齐（comfyui 缺 workflow / promptTarget）
+  if (!current?.ready) {
+    setHealth({ state: "bad", title: "还缺配置", sub: `${label} · ${current.reason || "还没配好"}`, hasAction: true });
+    return;
+  }
+
+  // 配置齐了但引擎不可用
+  const engineOk = b === "host" ? !!engines.host?.available : !!engines.comfyui?.available;
+  if (!engineOk) {
+    const reason = b === "host" ? engines.host?.reason : engines.comfyui?.reason;
+    setHealth({ state: "bad", title: "引擎不可用", sub: `${label} · ${reason || "探测失败"}`, hasAction: true });
+    return;
+  }
+
+  // 全部通过
+  setHealth({ state: "ok", title: "可用", sub: describeEngine(), hasAction: true });
 }
 
 async function loadEngines() {
   try {
-    const e = readEnvelope(await apiFetch("media/engines"), "读引擎状态");
-    renderEngines(e);
-    return e;
+    engines = readEnvelope(await apiFetch("media/engines"), "读引擎状态");
+    refreshHealth();
+    return engines;
   } catch (err) {
-    const box = $("image-engines");
-    if (box) { box.classList.add("bad"); box.textContent = "体检失败：" + friendlyError(err); }
+    setHealth({ state: "bad", title: "体检失败", sub: friendlyError(err), hasAction: true });
     return null;
   }
 }
@@ -79,6 +126,8 @@ export async function openImage() {
   const modal = $("image-modal");
   if (!modal) return;
   modal.classList.remove("hidden");
+  engines = null;   // 每次打开重新体检
+  setHealth({ title: "正在体检…", sub: "读配置与探测引擎", hasAction: false });
   try {
     const cfg = readEnvelope(await apiFetch("media/config"), "读出图配置");
     const box = $("image-backends");
@@ -89,13 +138,13 @@ export async function openImage() {
           <span class="tts-prov-sub">${escapeHtml(b.id === "host" ? "装上就能用" : "要工作流与节点")}</span>
         </button>`).join("");
       box.querySelectorAll(".tts-prov").forEach((el) => {
-        el.addEventListener("click", () => fillForm({ ...current, backend: el.dataset.id, ready: el.dataset.id === "host", reason: null }));
+        el.addEventListener("click", () => fillForm({ ...current, backend: el.dataset.id }));
       });
     }
     fillForm(cfg);
     await loadEngines();
   } catch (e) {
-    setStatus("读出图配置失败：" + friendlyError(e), true);
+    setHealth({ state: "bad", title: "读不到配置", sub: friendlyError(e), hasAction: true });
   }
 }
 
@@ -114,6 +163,7 @@ async function save() {
   });
   const cfg = readEnvelope(res, "保存出图设置");
   fillForm(cfg);
+  // 保存后不用重新体检引擎——配置变更不影响引擎的可用性
   toast(cfg.ready ? "出图设置已保存" : "已保存——" + cfg.reason, cfg.ready ? "success" : "error");
   return cfg;
 }
@@ -130,6 +180,17 @@ export function bindImage() {
   $("image-save")?.addEventListener("click", async () => {
     try { await save(); }
     catch (e) { toast("保存失败：" + friendlyError(e), "error"); }
+  });
+
+  // 「重测」按钮：重新跑一次引擎体检
+  $("image-retest")?.addEventListener("click", async () => {
+    const btn = $("image-retest");
+    if (busy) return;
+    busy = true;
+    if (btn) btn.disabled = true;
+    setHealth({ title: "正在体检…", sub: "重新探测引擎", hasAction: false });
+    try { await loadEngines(); }
+    finally { busy = false; if (btn) btn.disabled = false; }
   });
 
   $("image-list-workflows")?.addEventListener("click", async () => {

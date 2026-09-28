@@ -1,7 +1,10 @@
-// tools.js — 工具列表与工具组开关界面
+// tools.js — 工具列表与工具组开关界面（2026-09-28 重做）
 //
 // 只读 + 一个开关动作：工具本身在 defineApp 时就注册完了，
 // 改开关要重启 App 才生效（端点如实返回这点，不假装热生效）。
+//
+// 结构改成正向因果：组是"因"（开了这一整类才可用），组下的工具是"果"。
+// 组关了 → 组下的行自己淡掉（opacity + 删除线），影响面一眼可见。
 
 import { apiFetch, toast, escapeHtml, extractArray, friendlyError } from "./core.js";
 import { dom } from "./dom.js";
@@ -9,9 +12,6 @@ import { state } from "./state.js";
 
 /**
  * 拉工具列表与组开关并渲染。
- *
- * 两个列表分开：上面是分组的开关，下面是该组下的工具明细。
- * 组关了，明细里对应的行会淡掉——比只改开关更容易看懂影响面。
  */
 export async function loadTools() {
   try {
@@ -25,7 +25,6 @@ export async function loadTools() {
     state.toolGroups = extractArray(groupsRes);
     state.toolList = flattenTools(state.toolGroups, extractArray(infoRes));
     renderToolGroups(state.toolGroups);
-    renderTools(state.toolList);
   } catch (e) {
     console.error("[Tools] load failed:", e);
     toast("加载失败: " + friendlyError(e), "error");
@@ -62,25 +61,57 @@ function flattenTools(groups, known) {
   return rows;
 }
 
-/** 渲染工具组开关。 */
+/**
+ * 渲染工具组：每个组一行（折叠箭头 + 组名 + "N 个" + 开关），
+ * 组下面直接挂着它的工具明细（可折叠）。
+ *
+ * 宿主报了、但没有组认领的工具（自加工具）单独成一组，标记为"自加"。
+ */
 export function renderToolGroups(groups) {
   const el = dom.toolGroupsEl || document.getElementById("tool-groups-list");
   if (!el) return;
   const arr = Array.isArray(groups) ? groups : [];
-  if (arr.length === 0) { el.innerHTML = ""; return; }
+  const tools = state.toolList || [];
 
-  el.innerHTML = arr.map(g => `<div class="tool-group${g.enabled ? "" : " off"}" data-id="${escapeHtml(g.id)}">
-      <span class="g-name">${escapeHtml(g.name || g.id)}</span>
-      <label class="switch" title="重启 App 后生效">
-        <input type="checkbox" data-g="${escapeHtml(g.id)}" ${g.enabled ? "checked" : ""}>
-        <span></span>
-      </label>
-    </div>`).join("");
+  // 分组：按 group id 收拢
+  const byGroup = new Map();
+  for (const t of tools) {
+    const key = t.group || "";
+    if (!byGroup.has(key)) byGroup.set(key, []);
+    byGroup.get(key).push(t);
+  }
 
-  el.querySelectorAll('input[data-g]').forEach(cb => {
-    cb.addEventListener("change", async () => {
-      const id = cb.dataset.g;
-      const on = cb.checked;
+  if (arr.length === 0 && byGroup.size === 0) {
+    el.innerHTML = "";
+    if (dom.toolsCountEl) dom.toolsCountEl.textContent = "";
+    return;
+  }
+
+  // 计数：开了的组里的工具数 / 总数
+  const offGroups = new Set(arr.filter(g => g.enabled === false).map(g => g.id));
+  const totalTools = tools.length;
+  const onTools = tools.filter(t => !offGroups.has(t.group)).length;
+  if (dom.toolsCountEl) {
+    dom.toolsCountEl.textContent = `${arr.length} 组 · ${onTools}/${totalTools} 启用`;
+  }
+
+  el.innerHTML = arr.map(g => renderGroupCard(g, byGroup.get(g.id) || [], offGroups.has(g.id))).join("")
+    + (byGroup.has("") ? renderUnclaimed(byGroup.get("") || [], tools) : "");
+
+  // 折叠：点组头展开/收起（默认展开）
+  el.querySelectorAll(".tool-group-card").forEach(card => {
+    card.querySelector(".tool-group-hd")?.addEventListener("click", (e) => {
+      // 点在开关上不算折叠
+      if (e.target.closest(".tg-switch")) return;
+      card.classList.toggle("is-open");
+    });
+  });
+
+  // 开关
+  el.querySelectorAll(".tg-switch").forEach(sw => {
+    sw.addEventListener("click", async () => {
+      const id = sw.dataset.g;
+      const on = !sw.classList.contains("is-on");
       try {
         await apiFetch(`tools/groups/${encodeURIComponent(id)}/toggle`, {
           method: "PUT",
@@ -90,34 +121,61 @@ export function renderToolGroups(groups) {
         // 本地先反映出来，不重拉（重拉会读回旧值造成"开关没反应"的错觉）
         const g = (state.toolGroups || []).find(x => x.id === id);
         if (g) g.enabled = on;
-        renderTools(state.toolList || []);
+        // 直接改 DOM 状态，不整块重绘（重绘会丢折叠状态）
+        sw.classList.toggle("is-on", on);
+        const card = sw.closest(".tool-group-card");
+        card?.classList.toggle("is-off", !on);
       } catch (e) {
         toast("保存失败: " + friendlyError(e), "error");
-        cb.checked = !on;
       }
     });
   });
 }
 
-/** 渲染工具明细；所属组关闭的行淡掉。 */
-export function renderTools(tools) {
-  const el = dom.toolsListEl || document.getElementById("tools-list");
-  if (!el) return;
-  const arr = Array.isArray(tools) ? tools : [];
-  const groups = state.toolGroups || [];
-  const off = new Set(groups.filter(g => g.enabled === false).map(g => g.id));
+function renderGroupCard(g, tools, isOff) {
+  const open = !isOff;  // 关了的组默认折叠，开着的展开
+  const count = tools.length;
+  return `<div class="tool-group-card${isOff ? " is-off" : ""}${open ? " is-open" : ""}" data-id="${escapeHtml(g.id)}">
+    <div class="tool-group-hd">
+      <span class="tg-arrow">▸</span>
+      <span class="tg-name">${escapeHtml(g.name || g.id)}</span>
+      <span class="tg-count">${count} 个</span>
+      <span class="tg-switch${g.enabled ? " is-on" : ""}" data-g="${escapeHtml(g.id)}" role="switch" aria-checked="${g.enabled}" title="重启 App 后生效"></span>
+    </div>
+    <div class="tool-group-body">
+      ${tools.map(t => renderToolRow(t)).join("")}
+    </div>
+  </div>`;
+}
 
-  if (dom.toolsCountEl) {
-    const on = arr.filter(t => !off.has(t.group)).length;
-    dom.toolsCountEl.textContent = `${on} / ${arr.length} 启用`;
-  }
+/**
+ * 自加工具组：宿主报了、但没有组认领的。
+ * 后端 isToolEnabled 对这类默认放行——界面得把它亮出来，
+ * 否则"默认放行"的东西在面板上看不见，开关就名不副实。
+ */
+function renderUnclaimed(tools, allTools) {
+  if (tools.length === 0) return "";
+  return `<div class="tool-group-card is-open is-unclaimed" data-id="_unclaimed">
+    <div class="tool-group-hd">
+      <span class="tg-arrow">▸</span>
+      <span class="tg-name">自加工具</span>
+      <span class="tg-count">${tools.length} 个</span>
+      <span class="tg-switch is-on" data-g="_unclaimed" role="switch" aria-checked="true" title="后端默认放行，不可关"></span>
+    </div>
+    <div class="tool-group-body">
+      ${tools.map(t => renderToolRow(t)).join("")}
+    </div>
+  </div>`;
+}
 
-  el.innerHTML = arr.map(t => {
-    const disabled = off.has(t.group);
-    return `<div class="tool-row${disabled ? " off" : ""}">
-      <code class="t-name">${escapeHtml(t.name)}</code>
-      <span class="t-group">${escapeHtml(t.group || "")}</span>
-      <div class="t-desc">${escapeHtml(t.description || "")}</div>
-    </div>`;
-  }).join("");
+/**
+ * 工具行。
+ * "说明"那半份来自宿主，可能拿不到——拿不到时只显示工具名，不显示成空。
+ */
+function renderToolRow(t) {
+  const desc = t.description ? `<div class="tdesc">${escapeHtml(t.description)}</div>` : "";
+  return `<div class="trow">
+    <div class="tname">${escapeHtml(t.name)}</div>
+    ${desc}
+  </div>`;
 }

@@ -1,8 +1,11 @@
 // chat.js — 由 characters.js 按功能拆分（B5）
 
 import { hana } from "../sdk.js";
-import { apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatTime, friendlyError, toast, unwrap } from "./core.js";
+import { apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatTime, friendlyError, openImageViewer, toast, unwrap } from "./core.js";
+import { splitFailure, detailIsShort } from "./illustration-failure.js";
 import { renderMarkdown } from "./markdown.js";
+import { splitStatusBlock } from "./status-block.js";
+import { envFromStatus, envText } from "./env-line.js";
 // 宏引擎用 ui/assets/lib/macros.js（/ui/ 可达域内的镜像）。
 // 早期写成 ../../../lib/... —— URL 层级多 _surface/<token> 两级，且 lib/
 // 不在 /ui/ 暴露域：整张模块图 404，页面停在"加载中"的静态初始态。
@@ -19,6 +22,208 @@ import { state } from "./state.js";
 function charNameOf(id) {
   const hit = (state.charList || []).find(c => String(c.id) === String(id));
   return hit?.name || "（角色已删除）";
+}
+
+/**
+ * 头像格里的那一个字。
+ *
+ * 样张 v4 用「头像 + 说话人 + 直排正文」取代气泡——而头像**不是图片**，
+ * 是名字首字。所以这条改动不需要任何立绘数据，任何角色卡都立刻成立。
+ * 认不出名字时给一个点：空框看起来像「图没加载出来」，一个点只是「没有名字」。
+ */
+function msgAvaText(m) {
+  if (m.role === "user") return "你";
+  const name = m.speakerId ? charNameOf(m.speakerId) : (state.currentCharacter?.name || "");
+  return name ? name.slice(0, 1) : "·";
+}
+
+/**
+ * 说话人那一行。
+ *
+ * 样张里**每条**都有它（单人对话、玩家自己也都有）——因为气泡没了之后，
+ * 「这是谁说的」只剩下这一行可以读。旧代码只在群聊里输出，单人就整条没有归属。
+ *
+ * system 是旁白式的居中提示，不属于任何人，不给。
+ */
+/** 头像格。system 是居中旁白，不属于任何人，不给头像。 */
+function avaHtml(m) {
+  if (m.role === "system") return "";
+  return `<div class="msg-ava">${escapeHtml(msgAvaText(m))}</div>`;
+}
+
+function speakerLineHtml(m) {
+  if (m.role === "system") return "";
+  if (m.role === "user") return '<div class="msg-speaker">你</div>';
+  const name = m.speakerId ? charNameOf(m.speakerId) : (state.currentCharacter?.name || "");
+  return name ? `<div class="msg-speaker">${escapeHtml(name)}</div>` : "";
+}
+
+/**
+ * 插图消息的正文（第 2 批 2.7）。
+ * 三态：pending / ok / failed。每态都是不同的一块，不共享。
+ *
+ * 为什么不用 CSS spinner：App 里没有统一 spinner 样式，
+ * 而字符动画（CSS animation on ::before）在部分嵌入环境里不跑。
+ * 所以用「脉动的圆点」——两个 CSS keyframes 就行。
+ */
+function renderIllustrationBody(m) {
+  const promptLine = m.prompt
+    ? `<div class="illus-prompt">${escapeHtml(m.prompt)}</div>`
+    : "";
+  if (m.status === "pending") {
+    return `<div class="illus-pending">
+      <span class="illus-spinner">●</span> 正在画这一幕…
+      ${promptLine}
+    </div>`;
+  }
+  if (m.status === "failed") {
+    /*
+     * 一句人话 + 原话收在「详情」里（见 illustration-failure.js 的文件头）。
+     *
+     * 这里原本是把宿主原话**整段**糊进聊天：跨四层调用链、中英夹杂。
+     * 判据 4 要的是“不许换成一句笼统的生成失败”，不是“把栈晒给用户看”。
+     */
+    const { headline, detail } = splitFailure(m.failReason);
+    const detailHtml = detail
+      ? (detailIsShort(detail)
+        ? `<div class="illus-reason">${escapeHtml(detail)}</div>`
+        : `<details class="illus-detail"><summary>详情</summary><pre>${escapeHtml(detail)}</pre></details>`)
+      : "";
+    return `<div class="illus-failed">
+      <div class="illus-failed-title">❌ 这张没画出来</div>
+      <div class="illus-headline">${escapeHtml(headline)}</div>
+      ${detailHtml}
+      ${promptLine}
+    </div>`;
+  }
+  /*
+   * ok，但**参考图那条路没生效**。
+   *
+   * 图是出来了，可它没带上她——这时候不说，用户只会以为“模型画得不像”，
+   * 而真相是“参考图根本没用上”。与 refNote（该卡没立绘）分开说：
+   * 一个是“有但用不了”，一个是“本来就没有”。
+   */
+  const refLine = m.degraded
+    ? `<div class="illus-note">参考图没生效——这张是纯文生图，可能不太像她。</div>`
+    : (m.refNote ? `<div class="illus-note">${escapeHtml(m.refNote)}</div>` : "");
+
+  // ok：图片从 /media/:id 拿 base64，前端拼 data URL
+  return `<div class="illus-ok">
+    <img class="illus-img" alt="${escapeHtml(m.prompt || "场景插图")}" data-media-id="${escapeHtml(m.mediaId || "")}" />
+    ${promptLine}${refLine}
+  </div>`;
+}
+
+/**
+ * 把插图消息里那些带 data-media-id 的 <img> 填上真图。
+ *
+ * 从 /media/:id 拿 base64，拼成 data URL 写进 src。
+ * 为什么不用 <img src="/media/:id">：真机里裸路径没有鉴权，会 403。
+ * 所以走 JSON 通道拿 base64，与头像那条路同一个方向。
+ */
+async function loadIllustrationImages() {
+  const imgs = dom.messagesContainer.querySelectorAll(".illus-img[data-media-id]");
+  for (const img of imgs) {
+    const id = img.dataset.mediaId;
+    if (!id || img.dataset.loaded === "1") continue;
+    img.dataset.loaded = "1";
+    try {
+      const r = await apiFetch(`media/${encodeURIComponent(id)}`);
+      if (r.ok && r.data?.base64) {
+        img.src = `data:${r.data.mime || "image/png"};base64,${r.data.base64}`;
+        /*
+         * 点开放大（2.7 要的那一半）。
+         *
+         * 之前只给**头像**绑了 bindAvatarZoom，插图没绑——画出来了却点不开，
+         * 而计划里写的是“缩略图 + 点开放大 + 生成中/失败三态”。
+         * 这里连图都不用再取一趟：base64 已经在手上，直接交给浮层。
+         */
+        img.classList.add("illus-zoomable");
+        img.addEventListener("click", () => openImageViewer(img.src, img.alt || "场景插图"));
+      } else {
+        // 图没了：把 src 清空，给个提示
+        img.src = "";
+        img.alt = "插图文件已不存在";
+        img.classList.add("illus-img-missing");
+      }
+    } catch {
+      img.alt = "插图加载失败";
+      img.classList.add("illus-img-missing");
+    }
+  }
+}
+
+/**
+ * 插图轮询（第 2 批 2.7）。
+ *
+ * 服务端在 SSE done 之后异步触发插图生成，前端不知道什么时候好。
+ * 所以发完一条消息后，每 4 秒问一次 /illustration/latest，
+ * 看到 status 从 pending 变 ok/failed 就停。
+ *
+ * 纪律：
+ *   · 同一场同一时间只跑一个轮询（幂等）。
+ *   · 最多轮询 60 次（4 分钟），避免插图永远不会完成时死循环。
+ *   · 用户离开这一场就停。
+ */
+let illusPollTimer = null;
+let illusPollConvId = null;
+let illusPollCount = 0;
+const ILLUS_POLL_INTERVAL = 4000;
+const ILLUS_POLL_MAX = 60;
+
+function stopIllustrationPoll() {
+  if (illusPollTimer) {
+    clearTimeout(illusPollTimer);
+    illusPollTimer = null;
+  }
+  illusPollConvId = null;
+  illusPollCount = 0;
+}
+
+async function pollIllustration() {
+  // 用户已经离开这一场：不轮询
+  if (state.currentConv?.id !== illusPollConvId) return stopIllustrationPoll();
+  if (illusPollCount++ >= ILLUS_POLL_MAX) return stopIllustrationPoll();
+
+  try {
+    const r = await apiFetch(`conversations/${encodeURIComponent(illusPollConvId)}/illustration/latest`);
+    const latest = r.data?.latest;
+    if (!latest || latest.status !== "pending") {
+      // 要么没有插图，要么已经完成了：都停轮询，重画一次
+      if (latest) {
+        /*
+         * 图是**新的一条消息**，不是更新已有那条。
+         *
+         * 服务端在回复落盘之后才异步追加它（先 pending，再回写 ok/failed），
+         * 所以前端手里根本没有这条。只做 map 更新的话，永远匹配不到——
+         * 出图成功了、消息也在库里，屏幕上什么都不出现。
+         * 【2026-09-27 修：匹配不到就追加，而不是默默什么都不做】
+         */
+        if (state.currentConv.messages.some(m => m.id === latest.id)) {
+          state.currentConv.messages = state.currentConv.messages.map(m =>
+            m.id === latest.id ? latest : m
+          );
+        } else {
+          state.currentConv.messages.push(latest);
+        }
+        renderMessages();
+      }
+      stopIllustrationPoll();
+      return;
+    }
+    // 还是 pending：继续等
+    illusPollTimer = setTimeout(pollIllustration, ILLUS_POLL_INTERVAL);
+  } catch {
+    // 网络失败：继续下一次
+    illusPollTimer = setTimeout(pollIllustration, ILLUS_POLL_INTERVAL);
+  }
+}
+
+export function startIllustrationPoll(convId) {
+  stopIllustrationPoll();
+  illusPollConvId = convId;
+  illusPollCount = 0;
+  illusPollTimer = setTimeout(pollIllustration, ILLUS_POLL_INTERVAL);
 }
 
 import { participantsOf, nextSpeaker } from "./speaker-rotation.js";
@@ -174,6 +379,37 @@ function renderWhisperRow() {
   });
 }
 
+/** 状态栏的呈现：一个默认收起的条。展开就是原来那段原文。 */
+function statusBlockHtml(status, items) {
+  if (!status) return "";
+  return `<details class="status-block">` +
+    `<summary><span class="sb-label">状态栏</span><span class="sb-n">${items} 项</span></summary>` +
+    `<pre class="sb-body">${escapeHtml(status)}</pre></details>`;
+}
+
+/**
+ * assistant 正文的统一入口：先切状态栏，剩下的交给 markdown。
+ *
+ * dialogue: true 打开对白标记（引号配对，判据在 markdown.js）。
+ * 它只把引号里的字包一层 span，不动结构——静态渲染和流式增量
+ * 都经过这个函数，所以一处打开，两条路一起生效。
+ */
+function renderAssistantBody(text) {
+  const { status, body, items } = splitStatusBlock(text);
+  const env = envText(envFromStatus(status));
+  return envLineHtml(env) + statusBlockHtml(status, items) + renderMarkdown(body, { dialogue: true });
+}
+
+/**
+ * 环境行：从状态栏里挑出的时间 / 地点 / 天候，拼成叙述上方那一行。
+ *
+ * 为什么从状态栏拿：这些事实本来就在状态栏里，模型每轮自己报。
+ * 认不出来（env 为空串）就整行不渲染——宁可没有，也不要写一行假的。
+ */
+function envLineHtml(env) {
+  return env ? `<div class="env-line">${escapeHtml(env)}</div>` : "";
+}
+
 export function renderMessages() {
   /*
    * 发言者行放在**最上面**，不能放在有消息的那条路径里。
@@ -239,8 +475,26 @@ export function renderMessages() {
   };
 
   dom.messagesContainer.innerHTML = state.currentConv.messages.map(m => {
+    // 插图消息（第 2 批 2.7）：不走正文渲染，按 status 显示
+    if (m.kind === "illustration") {
+      const spk = speakerLineHtml(m);
+      return `<div class="message ${m.role} illustration" data-id="${m.id}" data-media-id="${escapeHtml(m.mediaId || "")}">
+        ${avaHtml(m)}
+        <div class="msg-col">
+          ${spk}
+          <div class="bubble illus-bubble">${renderIllustrationBody(m)}</div>
+          <div class="msg-foot">
+            <div class="msg-acts">
+              <button class="mini" data-act="del" data-id="${m.id}">删除</button>
+            </div>
+            <div class="time">${formatTime(m.timestamp)}</div>
+          </div>
+        </div>
+      </div>`;
+    }
+    // assistant 正文开头的状态栏块要折起来——它压在叙述上面（见 splitStatusBlock）
     const body = m.role === "assistant"
-      ? renderMarkdown(expand(m.content))
+      ? renderAssistantBody(expand(m.content))
       : escapeHtml(expand(m.content));
     const acts = `<div class="msg-acts">
         <button class="mini" data-act="copy" data-id="${m.id}" title="复制">复制</button>
@@ -257,9 +511,7 @@ export function renderMessages() {
       ? `<div class="msg-vars">${m.varDiff.map(d => `<span class="var-chip" data-change="${escapeHtml(d.change || "set")}">${escapeHtml(d.text || d.name || "")}</span>`).join("")}</div>`
       : "";
     // 群聊：这条回复是谁说的。名字从角色列表解（消息上只存 id）。
-    const spk = (m.role === "assistant" && m.speakerId
-      ? `<div class="msg-speaker">${escapeHtml(charNameOf(m.speakerId))}</div>`
-      : "") +
+    const spk = speakerLineHtml(m) +
       // 私语要标出来：屏幕上谁都看得到全部，但“这句当时只给了谁”是历史的一部分。
       (Array.isArray(m.audience)
         ? `<div class="whisper-badge">${m.audience.length === 0
@@ -267,13 +519,20 @@ export function renderMessages() {
             : "私语 · 只给 " + m.audience.map(id => escapeHtml(charNameOf(id))).join("、")}</div>`
         : "");
     return `<div class="message ${m.role}" data-id="${m.id}">
-      ${spk}
-      <div class="bubble">${body}</div>
-      ${varLine}
-      ${acts}
-      <div class="time">${formatTime(m.timestamp)}</div>
+      ${avaHtml(m)}
+      <div class="msg-col">
+        ${spk}
+        <div class="bubble">${body}</div>
+        ${varLine}
+        <div class="msg-foot">
+          ${acts}
+          <div class="time">${formatTime(m.timestamp)}</div>
+        </div>
+      </div>
     </div>`;
   }).join("");
+  // 插图消息里带 data-media-id 的 <img> 要填上真图（base64）
+  loadIllustrationImages();
 
   // 事件委托：消息多了逐个绑会很慢，而且重渲染后要重绑一遍
   dom.messagesContainer.querySelectorAll(".message").forEach(el => {
@@ -347,7 +606,17 @@ export async function sendMessage() {
     // 优先走流式；失败或不可用时降级为一次性生成
     const streamRes = await sendMessageStream(content);
 
-    if (streamRes && streamRes.content) {
+    if (streamRes && !streamRes.content) {
+      /*
+       * 通道通了，却一帧内容都没来。
+       *
+       * 这条**不能**再走降级：流式路径在生成之前就把用户消息落了盘，
+       * 再 POST 一次 /messages 会把同一条消息写第二遍，屏幕和库里就对不上了。
+       * 只有「通道压根没建起来」才允许降级——那一种在下面的 else 里。
+       */
+      loadingEl.remove();
+      toast("这次没拿到回复——流式通道通了但一帧内容都没来。可以直接再发一条，或看一眼模型设置。", "error");
+    } else if (streamRes && streamRes.content) {
       // 流式成功，移除 loading 并添加完整消息
       loadingEl.remove();
       /*
@@ -372,14 +641,19 @@ export async function sendMessage() {
       renderMessages();
     } else {
       // 降级为同步
+      // 同步生成：服务端把整段回复一次性返回，几十秒是常态——
+      // 所以这条必须显式给长超时，不能吃 apiFetch 默认那 10 秒。
       const res = await apiFetch(`conversations/${state.currentConv.id}/messages`, {
         method: "POST",
+        timeoutMs: 180_000,
         body: JSON.stringify({ content, speakerId: state.speakerId || undefined, audience: state.whisperTo || undefined })
       });
       if (res.data?.assistantMessage) {
         loadingEl.remove();
         state.currentConv.messages.push(res.data.assistantMessage);
         renderMessages();
+        // 非流式路径：插图也可能已经触发了（服务端保存后异步）
+        startIllustrationPoll(state.currentConv.id);
       } else {
         loadingEl.remove();
         // 这里**没有异常对象**：请求是成功的，只是返回里没有回复。
@@ -441,13 +715,28 @@ export async function sendMessageStream(content) {
       if (assistantMsgEl) return;
       assistantMsgEl = document.createElement("div");
       assistantMsgEl.className = "message assistant";
-      assistantMsgEl.innerHTML = '<div class="content"></div>';
+      /*
+       * 与静态渲染同构：头像 + 列。
+       * 不同构的代价是可见的——流式结束时 acceptSavedMessage 会整场重画，
+       * 消息会在那一帧「跳」一下（头像凭空出现、正文横移 41px）。
+       */
+      const streamSpeakerId = state.speakerId || state.currentConv?.characterId || "";
+      const streamName = streamSpeakerId
+        ? charNameOf(streamSpeakerId)
+        : (state.currentCharacter?.name || "");
+      assistantMsgEl.innerHTML =
+        `<div class="msg-ava">${escapeHtml(streamName ? streamName.slice(0, 1) : "·")}</div>` +
+        `<div class="msg-col">` +
+        (streamName ? `<div class="msg-speaker">${escapeHtml(streamName)}</div>` : "") +
+        `<div class="content"></div>` +
+        `</div>`;
       dom.messagesContainer.appendChild(assistantMsgEl);
       try { loadingEl?.remove(); } catch { /* 已经拿掉 */ }
     };
     const paint = () => {
       if (!assistantMsgEl) return;
-      assistantMsgEl.querySelector(".content").innerHTML = escapeHtml(fullContent);
+      // 和静态渲染走同一条路：流式过程中也别让状态栏裸着铺满屏幕
+      assistantMsgEl.querySelector(".content").innerHTML = renderAssistantBody(fullContent);
       dom.messagesContainer.scrollTop = dom.messagesContainer.scrollHeight;
     };
     
@@ -483,6 +772,9 @@ export async function sendMessageStream(content) {
               if (data.meta) state.lastMeta = data.meta;
               if (acceptSavedMessage(data.message)) renderMessages();
               renderUsageBar();
+              // 插图可能已经在后台生成了（服务端在保存回复后异步触发）。
+              // 前端不知道什么时候好，所以轮询。
+              startIllustrationPoll(state.currentConv.id);
               // 这一轮可能写进了变量（{{setvar}}）。变量抽屉开着就顺手刷新，
               // 不然它会一直显示上一轮的值。
               if (!document.getElementById("drawer-variables")?.classList.contains("hidden")) {
@@ -499,8 +791,20 @@ export async function sendMessageStream(content) {
               state.lastUsage = data.usage || null;
               renderUsageBar();
             } else if (data.type === "error") {
-              console.error("Stream error:", data.error);
-              return null;
+              /*
+               * 连接已经建立，这是**生成**出的错（模型未响应、上游 4xx）。
+               *
+               * 它和「流式通道压根没建起来」是两件事，处理方式也必须不同：
+               * 通道没起来才允许降级重发；这里是已经发出去、模型跑了一半才断的，
+               * 再走降级等于把同一条用户消息写第二遍，还白让模型重跑一遍。
+               *
+               * 原来写的是 return null 静默降级——真错只进 console，
+               * 用户面前弹的是降级请求那条 10 秒超时的假象。
+               * 两个错叠在一起，谁都看不见真凶。
+               */
+              const err = new Error(data.error?.message || data.error || "生成中断");
+              err.fromStream = true;
+              throw err;
             }
           } catch (e) {
             console.error("Failed to parse stream data:", e);
@@ -513,6 +817,12 @@ export async function sendMessageStream(content) {
     return { role: "assistant", content: fullContent };
   } catch (e) {
     console.error("Stream failed:", e);
+    /*
+     * 只有「通道没建起来」才返回 null 交给降级路径兜（宿主不支持 SSE、
+     * 路由 404 这一类）。生成阶段断掉的错要原样往上抛——真因得能走到界面上，
+     * 而不是被降级路径那条超时盖过去。
+     */
+    if (e?.fromStream) throw e;
     return null;
   }
 }
@@ -521,10 +831,40 @@ export async function createConversation() {
   try {
     const res = await apiFetch("characters-for-conv");
     const characters = extractArray(res);
-    const select = document.getElementById("conv-character-select");
-    select.innerHTML = '<option value="">选择角色...</option>' + 
-      characters.map(c => `<option value="${c.id}">${escapeHtml(c.name || "（无名称）")}</option>`).join("");
+    const listEl = document.getElementById("conv-character-picks");
+    if (!listEl) return;
     if (characters.length === 0) { toast("请先创建角色卡", "error"); return; }
+
+    // 卡片点选（与角色抽屉同一套语言）。
+    // 那个数字才是选卡时真正要看的：
+    //   1 场 → 直接续   0 场 → 开新场   多条 → 弹选择器
+    // convCount 从 state.convList 里就地数——不向服务器多要一次。
+    const convs = state.convList || [];
+    listEl.innerHTML = characters.map(c => {
+      const convCount = convs.filter(x => x.characterId === c.id).length;
+      const countText = convCount ? `${convCount} 场` : "还没开过";
+      const initial = escapeHtml(String(c.name || "?").trim().slice(0, 1) || "?");
+      return `
+        <div class="conv-pick" data-char-id="${escapeHtml(String(c.id))}">
+          <div class="cp-av">${initial}</div>
+          <div class="cp-nm">${escapeHtml(c.name || "（无名称）")}</div>
+          <div class="cp-ct">${countText}</div>
+          <div class="cp-ck">✓</div>
+        </div>`;
+    }).join("");
+
+    // 多选：默认单选，按住 Ctrl / Cmd 可多挑（向后兼容群聊）。
+    listEl.querySelectorAll(".conv-pick").forEach(el => {
+      el.addEventListener("click", (ev) => {
+        if (ev.ctrlKey || ev.metaKey) {
+          el.classList.toggle("selected");
+          return;
+        }
+        listEl.querySelectorAll(".conv-pick").forEach(x => x.classList.remove("selected"));
+        el.classList.add("selected");
+      });
+    });
+
     dom.newConvModalEl.classList.remove("hidden");
   } catch (e) {
     toast("加载角色失败：" + friendlyError(e), "error");
@@ -532,10 +872,11 @@ export async function createConversation() {
 }
 
 export async function confirmNewConversation() {
-  const select = document.getElementById("conv-character-select");
+  const picksEl = document.getElementById("conv-character-picks");
   // 多选：选一个 = 单人；选多个 = 群聊（**第一个是主角**，开场白由他出）。
   // 单人时只发 characterId，路径与以前逐字一样。
-  const picked = [...(select?.selectedOptions || [])].map(o => o.value).filter(Boolean);
+  const picked = [...(picksEl?.querySelectorAll(".conv-pick.selected") || [])]
+    .map(el => el.dataset.charId).filter(Boolean);
   if (picked.length === 0) { toast("请选择角色", "error"); return; }
   try {
     const userName = (document.getElementById("conv-user-name")?.value || "").trim();
@@ -565,6 +906,9 @@ export function closeNewConvModal() {
   const pe = document.getElementById("conv-persona");
   if (un) un.value = "";
   if (pe) pe.value = "";
+  // 注意：?. 不能出现在赋值左侧（早期错误，整个模块会加载失败）。
+  const picksEl = document.getElementById("conv-character-picks");
+  if (picksEl) picksEl.innerHTML = "";
 }
 
 export async function deleteConversation() {

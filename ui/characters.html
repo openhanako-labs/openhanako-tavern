@@ -4,9 +4,92 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ElecKoi Tavern</title>
+  <!-- vanilla-jsoneditor 的主题。放前面：characters.css 里覆盖了它的变量，后者胜。 -->
+  <link rel="stylesheet" href="./vendor/vanilla-jsoneditor.css">
   <link rel="stylesheet" href="./assets/characters.css">
+  <!-- 场景插图（第 2 批 2.7）：三态样式。独立一块是因为 characters.css 不在可写范围。 -->
+  <style>
+    .illus-bubble {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px;
+      min-width: 220px;
+      max-width: 100%;
+      border-radius: 10px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.08);
+    }
+    .illus-pending {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--fg-muted, #888);
+      font-size: 13px;
+    }
+    .illus-spinner {
+      display: inline-block;
+      animation: illus-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes illus-pulse {
+      0%, 100% { opacity: .3; transform: scale(.8); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+    .illus-ok {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .illus-img {
+      max-width: 100%;
+      max-height: 360px;
+      border-radius: 8px;
+      object-fit: contain;
+      background: rgba(0,0,0,.2);
+    }
+    .illus-img-missing {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: var(--fg-muted, #888);
+    }
+    .illus-failed {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      color: var(--danger, #e06);
+      font-size: 12px;
+    }
+    .illus-failed-title {
+      font-weight: 600;
+    }
+    .illus-reason {
+      font-size: 11px;
+      color: var(--fg-muted, #999);
+      word-break: break-word;
+      max-height: 80px;
+      overflow-y: auto;
+    }
+    .illus-prompt {
+      font-size: 11px;
+      color: var(--fg-muted, #aaa);
+      margin-top: 4px;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+  </style>
 </head>
 <body>
+<!--
+  自定义背景层：位置在 z-index 0，整个 .shell 在它上面（z-index 1）。
+  它就是一块指向 blob URL 的底图，内容全由 appearance.js 填。
+  为什么自带一层而不是直接给 body 加 background-image：
+  body 上还有宿主注入的主题变量与自己的底色，叠在一起难收回来；
+  单独一层看得见、也关得掉。
+-->
+<div id="app-bg" aria-hidden="true"></div>
 <!--
   U 批次的布局：一屏聊天 + 可折叠左栏（角色与对话混排）。
   次要功能（设定库/变量/工具/迁移）从右侧抽屉出，不再占 Tab。
@@ -15,24 +98,115 @@
 <div class="shell">
 
   <!--
-    顶栏：九个入口一排。
+    左轨：全 App **唯一**的导航（2026-09-27 重设计 · 方向 A）
 
-    卡里这一排是整页的脊梁——它一眼说明「这是个有几段的 App」，
-    不是「一个聊天框加一根侧栏」。我们先前的做法是把入口全塞进右栏顶上
- （只放四个），那是为了“一级要干净”；但屏幕上少掉的不是“复杂度”，
-    是**入口本身**。现在回到一排，靠 --ctx-w 那个开关控制面板。
+    为什么把九个平铺项立起来：
+      原来 #topnav 九个文字按钮一排、#ctx-tabs 又是「角色/设定库/世界/变量」
+      四个——两套导航指着同一批内容，所以“哪只手放哪里”永远含糊。
+
+    现在只剩这一条：图标 + 字，按「这一场 / 配置」分两组。
+    宽度固定，以后再加入口也不会折行；横带整个让给对话。
+
+    图标下带字是必须的——只给图标、靠 hover 才知道是什么，
+    是把“不顺手”换个地方。
   -->
-  <nav class="topnav" id="topnav" aria-label="主导航">
-    <button type="button" class="topnav-item" id="topnav-chat">对话</button>
-    <button type="button" class="topnav-item" data-drawer="character">角色</button>
-    <button type="button" class="topnav-item" data-drawer="settings">设定库</button>
-    <button type="button" class="topnav-item" data-drawer="board">世界</button>
-    <button type="button" class="topnav-item" data-drawer="variables">变量</button>
-    <button type="button" class="topnav-item" data-drawer="presets">预设</button>
-    <button type="button" class="topnav-item" data-drawer="regex">正则</button>
-    <button type="button" class="topnav-item" data-drawer="tools">工具</button>
-    <button type="button" class="topnav-item" data-drawer="migration">迁移</button>
+  <nav class="apprail" id="apprail" aria-label="主导航">
+    <!--
+      收起键。这一列宽 66px，每个入口固定 50px，11 项加两组标签
+      已经吃掉约 640px——窄屏或想专心读的时候，把它收成 46px 的纯图标条。
+
+      默认展开：「图标下带字」是上一轮定下的（只给图标、靠 hover 才知道
+      是什么，是把“不顺手”换个地方），所以收起只是留个出口，不打折。
+    -->
+    <button type="button" class="rail-fold" id="rail-fold" title="收起导航" aria-label="收起导航" aria-expanded="true">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 4 5.5 8l4 4"/></svg>
+    </button>
+    <span class="rail-group">这一场</span>
+    <button type="button" class="rail-item" id="topnav-chat" title="对话">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.6h10v6.2H7.1L4.1 13V10.8H3z"/></svg>
+      <span>对话</span>
+    </button>
+    <button type="button" class="rail-item" data-drawer="character" title="角色">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="5.8" r="2.4"/><path d="M3.6 13.2c0-2.4 2-3.7 4.4-3.7s4.4 1.3 4.4 3.7"/></svg>
+      <span>角色</span>
+    </button>
+    <button type="button" class="rail-item" data-drawer="settings" title="设定库">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3.5h4c.7 0 1 .4 1 1v8c0-.6-.3-1-1-1H3z"/><path d="M13 3.5H9c-.7 0-1 .4-1 1v8c0-.6.3-1 1-1h4z"/></svg>
+      <span>设定库</span>
+    </button>
+    <button type="button" class="rail-item" data-drawer="director" title="剧情公式（导演）">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.8 4.6h10.4v7.2H2.8z"/><path d="M2.8 7.2h10.4M5.6 4.6v2.6M8 4.6v2.6M10.4 4.6v2.6"/></svg>
+      <span>公式</span>
+    </button>
+    <button type="button" class="rail-item" data-drawer="board" title="世界（黑板列）">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="5.2"/><path d="M2.9 8h10.2M8 2.9c1.5 1.6 2.2 3.3 2.2 5.1S9.5 11.5 8 13.1c-1.5-1.6-2.2-3.3-2.2-5.1S6.5 4.5 8 2.9z"/></svg>
+      <span>世界</span>
+    </button>
+    <button type="button" class="rail-item" data-drawer="variables" title="变量">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.8c-1.5 0-1.9.7-1.9 2v1.5c0 1-.4 1.5-1.4 1.5.9 0 1.4.5 1.4 1.5v1.7c0 1.3.4 2 1.9 2"/><path d="M10 2.8c1.5 0 1.9.7 1.9 2v1.5c0 1 .4 1.5 1.4 1.5-.9 0-1.4.5-1.4 1.5v1.7c0 1.3-.4 2-1.9 2"/></svg>
+      <span>变量</span>
+    </button>
+    <div class="rail-sep"></div>
+    <span class="rail-group">配置</span>
+    <!--
+      「预设 / 正则 / 工具 / 迁移」并成一个入口。
+      这四项本来就是低频，各占一格是在用一等位置放三等入口。
+      点它弹出的浮层在这条 nav 之外（这一列 overflow-y:auto，
+      绝对定位的子元素会被裁掉，所以菜单不能待在 nav 里）。
+    -->
+    <button type="button" class="rail-item" id="cfg-open" title="设置：预设 / 正则 / 工具 / 迁移" aria-haspopup="menu" aria-expanded="false">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M12.4 3.6l-1.1 1.1M4.7 11.3l-1.1 1.1"/></svg>
+      <span>设置</span>
+    </button>
+    <div class="rail-grow"></div>
+    <button type="button" class="rail-item" id="bg-open" title="自定义背景">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="3.4" width="10.8" height="9.2" rx="1.4"/><path d="M2.6 10.4 6 7.6l3 2.4 2.2-1.8 2.2 1.8"/></svg>
+      <span>背景</span>
+    </button>
   </nav>
+
+  <!--
+    「设置」的浮层：四项低频配置收在一个入口后面。
+
+    做成浮层，而不是“一个抽屉里塞四套页签”——后者要把四个抽屉的 DOM
+    搬进新容器，而它们各自的 head / 工具条结构都不一样；
+    省下的只是一次点击，风险却是把四个本来能用的抽屉重挂一遍。
+
+    视觉直接复用聊天头的 .more-menu：同一个 App 里两种弹出菜单
+    不该长得不一样。.cfg-menu 只补定位——.more-menu 原本是 absolute
+    + right:0 给 .more-wrap 用的，左轨这边得靠 JS 算，所以走 fixed。
+
+    入口也没丢：顶栏 ⋯ 菜单里本来就装着全部八个抽屉。
+  -->
+  <div id="cfg-menu" class="more-menu cfg-menu" hidden role="menu" aria-label="设置">
+    <button type="button" role="menuitem" data-cfg-go="presets"><span class="mi">⌗</span>提示词预设</button>
+    <button type="button" role="menuitem" data-cfg-go="regex"><span class="mi">⁂</span>正则规则</button>
+    <button type="button" role="menuitem" data-cfg-go="tools"><span class="mi">⚙</span>工具</button>
+    <button type="button" role="menuitem" data-cfg-go="migration"><span class="mi">⇅</span>迁移</button>
+  </div>
+
+  <!--
+    .stage = 右栏之外的整个宽度：顶栏 + 主区。
+    加这一层是因为左轨要跑满全高（顶栏在它右边，不在它上面）。
+  -->
+  <div class="stage">
+
+  <!--
+    顶栏：安静的一行。
+
+    导航搬去左轨之后，这里不再有九个平铺入口——只剩“我在哪”
+   （这一场的名字）与两个全局动作：命令面板、更多。
+  -->
+  <header class="topbar" id="topnav">
+    <span class="bname">ElecKoi</span>
+    <h3 id="chat-title" class="cname">选择对话开始</h3>
+    <span id="chat-meta" class="hdr-meta hidden"></span>
+    <span class="spacer"></span>
+    <button type="button" id="cmd-open" class="cmd" title="命令面板（Ctrl/⌘ + K）">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.2" cy="7.2" r="4"/><path d="M10.3 10.3 13.4 13.4"/></svg>
+      <span>找点什么</span><span class="k">Ctrl K</span>
+    </button>
+  </header>
 
   <!-- ── 左栏 ─────────────────────────────────────── -->
   <!--
@@ -48,17 +222,15 @@
       之前它们全塞在 ⋯ 菜单里——功能都在，但看不见就等于没有。
       对照示例稿时最刺眼的就是这一处：标签是骨架，菜单是抽屉。
     -->
-    <nav class="ctx-tabs" id="ctx-tabs" aria-label="右栏面板">
-      <!--
-        一级只放「这一场里你会看一眼或改一下的」四个。
-        设一次就不动的那些（预设 / 正则 / 工具 / 迁移）在 ⋯ 菜单里。
-        八个标签挤在 344px 的横带上：排不下、看不清，而且横带每多一行
-        就少一行聊天。二级可以复杂，一级必须干净。
-      -->
-      <button class="ctx-tab" data-drawer="character"><span class="mi">👤</span>角色</button>
-      <button class="ctx-tab" data-drawer="settings"><span class="mi">✳</span>设定库</button>
-      <button class="ctx-tab" data-drawer="board"><span class="mi">▤</span>世界</button>
-      <button class="ctx-tab" data-drawer="variables"><span class="mi">◫</span>变量</button>
+    <!--
+      面板抬头：只显示“当前开的是哪一个”，外加一个收起键。
+
+      原来的四个标签（角色/设定库/世界/变量）已删——它们和左轨上那四个
+      是同一批目标，留着就是在同一屏上摆两套导航，
+      而“两套导航指向同一批内容”正是这一轮要消掉的东西。
+    -->
+    <nav class="panel-head" id="panel-head" aria-label="当前面板">
+      <span class="panel-title" id="panel-title">面板</span>
       <button class="drawer-close ctx-close" title="收起右栏" aria-label="收起右栏">✕</button>
     </nav>
 
@@ -98,9 +270,7 @@
         地点与在场引擎里没字段（不编），有数据的就摆上来。
       -->
       <div id="chat-header" class="chat-header">
-        <h1 class="brand">ElecKoi<span class="tag">m8</span></h1>
-        <h3 id="chat-title">选择对话开始</h3>
-        <span id="chat-meta" class="hdr-meta hidden"></span>
+        <!-- 品牌与「这一场」的名字已搬到顶栏；#chat-title / #chat-meta 两个 id 不变。 -->
         <!--
           黑板列的开关。卡里这一格就是「世界 · 4 条」——
           它既是读数也是入口，所以做成按钮，不只是一行字。
@@ -128,6 +298,7 @@
             <div id="app-more-menu" class="more-menu" hidden>
               <button data-drawer="character"><span class="mi">👤</span>当前角色</button>
               <button data-drawer="settings"><span class="mi">✳</span>设定库</button>
+    <button data-drawer="director"><span class="mi">▦</span>剧情公式</button>
               <button data-drawer="board"><span class="mi">▤</span>世界</button>
               <button data-drawer="variables"><span class="mi">◫</span>变量</button>
               <button data-drawer="presets"><span class="mi">⌗</span>提示词预设</button>
@@ -136,6 +307,11 @@
               <button data-drawer="tools"><span class="mi">⚙</span>工具</button>
               <button data-drawer="migration"><span class="mi">⇅</span>迁移</button>
               <div class="sep"></div>
+              <!--
+                一条界面偏好。它不属于任何抽屉，也不值得为它开一页设置，
+                所以就地放在菜单最后——和「刷新界面」作伴。
+              -->
+              <button id="you-side-toggle"><span class="mi">⇄</span><span id="you-side-label">玩家消息靠右</span></button>
               <button id="reload-link">刷新界面</button>
             </div>
           </div>
@@ -148,6 +324,7 @@
                 结果就是八个入口平权——常用和不常用看起来一样重。
               -->
               <button data-act="persona"><span class="mi">◍</span>本场人设</button>
+              <button data-act="illustrate"><span class="mi">▧</span>补一张场景图</button>
               <button data-act="play-all"><span class="mi">▶</span>连播这场</button>
               <button data-act="export"><span class="mi">↓</span>导出</button>
               <div class="sep"></div>
@@ -160,6 +337,7 @@
                 <div class="more-group">设置（配一次就不动）</div>
                 <button data-act="tts"><span class="mi">◔</span>语音朗读</button>
                 <button data-act="image"><span class="mi">◨</span>出图设置</button>
+                <button data-act="scene"><span class="mi">▧</span>场景插图</button>
                 <div class="more-group">诊断</div>
                 <button data-act="activation"><span class="mi">✳</span>世界书会激活哪些</button>
                 <button data-act="prompt"><span class="mi">⌸</span>发给模型的整段文本</button>
@@ -182,10 +360,22 @@
 
       <div id="messages-container" class="messages">
         <div class="empty">
+          <!-- 空态照规范：图标 / 标题 / 一句为什么。
+               图标用字符而不是图片——这一层只有一行字要撑，不值得多一个请求。 -->
+          <div class="ico">◍</div>
           <div class="empty-title">从左边挑一个角色开始</div>
           <div class="hint">点头像直接开聊；[编辑] 改设定</div>
         </div>
       </div>
+
+      <!--
+        滚到底：只在“已经翻上去了”的时候出现，到底就消失。
+        长对话往回翻之后回底部要一路滚——这是每天都会撞一次的小卡顿；
+        而一个一直在那儿的按钮会变成噪音，所以它是有条件出现的。
+      -->
+      <button type="button" id="scroll-bottom" title="回到最新">
+        <svg class="ri" viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3.4v9.2M4.4 9l3.6 3.6L11.6 9"/></svg>
+      </button>
 
       <!-- 生成状态条已搬到标题行（见 #chat-header） -->
 
@@ -217,17 +407,58 @@
     <div id="drawer-settings" class="drawer hidden">
       <div class="drawer-head">
         <h2>设定库</h2>
+        <button id="settings-cats-btn" class="btn btn-ghost btn-sm" title="管理类目">类目</button>
         <button class="btn btn-ghost btn-sm drawer-close">✕</button>
       </div>
+      <!--
+        工具条只放最常按的那一颗。
+        导入/导出 ST 与启发式分类都是一次性动作，五颗并排会把字挤断
+        （344px 装不下五颗，曾出现「+新 / 建」折成两行），所以收进「⋯」。
+        「刷新」删掉：抽屉每次打开都会重载，它从来不需要被按。
+      -->
       <div class="drawer-toolbar">
         <button id="create-setting-btn" class="btn btn-primary btn-sm">+ 新建</button>
-        <button id="import-st-btn" class="btn btn-sm">导入 ST</button>
-        <button id="refresh-settings-btn" class="btn btn-ghost btn-sm">刷新</button>
-        <span id="settings-count" class="count"></span>
+        <div class="more-toggle">
+          <button id="settings-more-btn" class="btn btn-ghost btn-sm" aria-haspopup="menu" aria-expanded="false" title="更多">⋯</button>
+          <div id="settings-more-menu" class="more-menu" hidden role="menu">
+            <button id="import-st-btn" role="menuitem">导入 ST</button>
+            <button id="export-st-btn" role="menuitem">导出 ST</button>
+            <button id="autocategorize-btn" role="menuitem" title="跑一次启发式分类（只填高置信三类）">自动分类</button>
+          </div>
+        </div>
       </div>
+      <!--
+        106 条不靠翻。
+
+        背景：设定库原本是一整面平铺的卡片，每条铺一段长文——想找一条只能肉眼扫。
+        做法照着 Nora Tavern 的库列表：**先搜，再按「什么时候生效」分组**
+       （它把世界书分成「常驻 / 触发」两栏，不按顺序平铺；而 ST 的预设库只有一个
+        下拉框、一百条靠滚，被它自己标成“别拄”）。
+
+        计数从工具条里挪出来单独一行——原来它和三个按钮挤一行，会折成三行。
+      -->
+      <div class="drawer-filter">
+        <input id="settings-search" type="search" placeholder="搜名字、内容或触发词…" spellcheck="false" autocomplete="off">
+        <select id="settings-groupby" title="分组维度">
+          <option value="trigger">分组：生效方式</option>
+          <option value="category">分组：分类</option>
+          <option value="priority">分组：常用度</option>
+        </select>
+        <select id="settings-sortby" title="组内排序">
+          <option value="order">排序：原始顺序</option>
+          <option value="name">排序：名字</option>
+          <option value="category">排序：分类</option>
+          <option value="recent">排序：最近修改</option>
+        </select>
+      </div>
+      <div id="settings-count" class="drawer-count"></div>
+      <!-- 批量操作条：无选择时 hidden，不占空间 -->
+      <div id="settings-batch-bar" class="settings-batch-bar hidden"></div>
       <div id="settings-list" class="list drawer-body">
         <div class="empty">加载中…</div>
       </div>
+      <!-- 分页条：吸底。settings.js 自己控制 hidden -->
+      <div id="settings-pager" class="settings-pager hidden"></div>
     </div>
 
     <!-- ── 抽屉：变量 ───────────────────────────────── -->
@@ -240,6 +471,36 @@
       黑板是会变的状态（谁在哪、身上有什么、瞒着什么）。两者不在同一个
       引擎里，所以也不共用界面——混着放，用户会分不清改哪个才有用。
     -->
+    <!--
+      剧情公式（「导演」层）。
+
+      名字里的讲究：Mozi 说的「配方」是那个**容器**（世界观 + 角色卡 + 设定图 +
+      剧情公式），而这里是容器里的**一件**。叫「配方」会和 Hana 生态里的
+      Recipe（卡片模板）也撞上——两个都不是它。
+
+      和「设定库」分开：设定库是**已经是什么样**（世界、规则、地理），
+      导演是**接下来会往哪走**（状态约束）。前者的输入是人写的设定，
+      后者是模型一轮轮推出来的数——不在同一个引擎里，也不该挤在一个抽屉。
+
+      进度属于**这一场**，所以这里只读显示；要改去变量抽屉。
+    -->
+    <div id="drawer-director" class="drawer hidden">
+      <div class="drawer-head">
+        <h2>剧情公式</h2>
+        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <div class="drawer-toolbar">
+        <button id="create-director-btn" class="btn btn-primary btn-sm">+ 新建</button>
+        <button id="refresh-directors-btn" class="btn btn-ghost btn-sm">刷新</button>
+        <span id="directors-count" class="count"></span>
+      </div>
+      <div class="drawer-body">
+        <div id="director-bound" class="dir-bound"></div>
+        <div id="directors-list" class="list"><div class="empty">加载中…</div></div>
+        <div id="director-editor" class="panel hidden"></div>
+      </div>
+    </div>
+
     <div id="drawer-variables" class="drawer hidden">
       <div class="drawer-head">
         <h2>变量</h2>
@@ -299,14 +560,21 @@
         <h2>正则规则</h2>
         <button class="btn btn-ghost btn-sm drawer-close">✕</button>
       </div>
+      <!--
+        两个动作都在这条工具条里：“新建”是主操作（实色），
+        “导入”吃 SillyTavern 的 RegexScript 形态（后端 importRules 已支持）。
+
+        “刷新”拿掉——打开抽屉本来就会重载，按钮从没被用过（和预设抽屉
+        那一条是同一个教训）。计数也挪到 body 顶部：工具条是动作位，
+        计数是状态。
+      -->
       <div class="drawer-toolbar">
-        <button id="create-regex-btn" class="btn btn-primary btn-sm">+ 新建</button>
-        <button id="refresh-regex-btn" class="btn btn-ghost btn-sm">刷新</button>
-        <span id="regex-count" class="count"></span>
+        <button id="create-regex-btn" type="button" class="btn btn-primary btn-sm">+ 新建</button>
+        <button id="import-regex-btn" type="button" class="btn btn-sm">导入</button>
       </div>
       <div class="drawer-body">
-        <div id="regex-note" class="drawer-note"></div>
-        <div id="regex-list" class="list">
+        <span id="regex-count" class="regex-count"></span>
+        <div id="regex-list" class="regex-list">
           <div class="empty">加载中…</div>
         </div>
       </div>
@@ -318,17 +586,20 @@
         <h2>提示词预设</h2>
         <button class="btn btn-ghost btn-sm drawer-close">✕</button>
       </div>
+      <!--
+        工具条只留一个动作：“新建”。
+        “刷新”拿掉——打开抽屉、增删改后本来就会自动重载，按钮成了冗余。
+        “计数”从工具条挪到 body 顶部：工具条是动作位，计数是状态，
+        两块东西不能混。
+      -->
       <div class="drawer-toolbar">
         <button id="preset-new-btn" class="btn btn-primary btn-sm">+ 新建</button>
         <button id="preset-duplicate-btn" class="btn btn-sm">复制当前</button>
-        <button id="preset-refresh-btn" class="btn btn-ghost btn-sm">刷新</button>
-        <span id="preset-count" class="count"></span>
       </div>
       <div class="drawer-body">
         <div id="preset-note" class="drawer-note"></div>
-        <div id="preset-list" class="list">
-          <div class="empty">加载中…</div>
-        </div>
+        <div id="preset-count" class="preset-count"></div>
+        <div id="preset-list" class="list"></div>
       </div>
     </div>
 
@@ -338,29 +609,32 @@
         <h2>工具</h2>
         <button class="btn btn-ghost btn-sm drawer-close">✕</button>
       </div>
-
       <!--
-        App 自己的设置放这里：语音朗读与出图引擎都是“配一次就不动”的东西，
-        而它们原来的入口在聊天头的 ⋯ 菜单里——**没开对话就进不去**。
-        工具抽屉不需要对话就能打开，所以它们得在这儿也有一份。
+        结构改成正向因果：组是“因”（开了这一整类才可用），组下的工具是“果”。
+        组关了 → 组下的行自己淡掉（opacity + 删除线），影响面一眼可见。
+
+        App 设置挪到最下面：它们是“配一次就不动”的东西，不跟工具组抢视线。
+
+        “刷新”拿掉（同上）；中间那条工具条也拿掉了——里面除了计数已经没东西。
       -->
-      <div class="panel">
-        <h3>App 设置</h3>
-        <div style="display:flex;gap:6px">
-          <button type="button" id="open-tts-settings" class="btn btn-sm">语音朗读</button>
-          <button type="button" id="open-image-settings" class="btn btn-sm">出图引擎</button>
+      <div class="drawer-body">
+        <span id="tools-count" class="tools-count"></span>
+        <div class="tools-groups-note">
+          开关决定“这一整类工具给不给模型用”。改完要<b>重启 App</b> 才生效。
         </div>
-      </div>
-      <div class="drawer-toolbar">
-        <button id="refresh-tools-btn" class="btn btn-ghost btn-sm">刷新</button>
-        <span id="tools-count" class="count"></span>
-      </div>
-      <div id="tools-list" class="list drawer-body">
-        <div class="empty">加载中…</div>
-      </div>
-      <div class="panel">
-        <h3>工具组</h3>
-        <div id="tool-groups-list" class="tool-groups"></div>
+        <div id="tool-groups-list" class="tool-groups-list"></div>
+
+        <div class="tools-appsec">
+          <div class="tools-appsec-hd">App 设置</div>
+          <div class="tools-appsec-note">
+            这几项<b>配一次就不动</b>；原来只在聊天头的 ⋯ 菜单里，没开对话就进不去。
+          </div>
+          <div class="tools-appsec-btns">
+            <button type="button" id="open-tts-settings" class="btn btn-sm">语音朗读</button>
+            <button type="button" id="open-image-settings" class="btn btn-sm">出图引擎</button>
+            <button type="button" id="open-scene-settings" class="btn btn-sm">场景插图</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -370,43 +644,24 @@
         <h2>迁移</h2>
         <button class="btn btn-ghost btn-sm drawer-close">✕</button>
       </div>
+      <!--
+        主操作都在这条工具条上：导出 / 导入。这两个是这个抽屉唯一的主操作，
+        不该混在别的动作里和“刷新”并排。
+
+        “刷新导出”拿掉（和正则 / 工具抽屉同一个教训）。
+
+        下面正文的顺序：导出记录 → 选中记录的信息（点中才出）→ 导入结果。
+        “跳过已存在的数据”不再常驻——它只在导入时有意义，选完文件之后才问。
+      -->
       <div class="drawer-toolbar">
-        <button id="export-all-btn" class="btn btn-primary btn-sm">导出全部</button>
-        <button id="import-file-btn" class="btn btn-sm">导入文件</button>
-        <button id="refresh-exports-btn" class="btn btn-ghost btn-sm">刷新导出</button>
+        <button id="export-all-btn" type="button" class="btn btn-primary btn-sm">导出全部</button>
+        <button id="import-file-btn" type="button" class="btn btn-sm">导入文件</button>
       </div>
       <div class="drawer-body">
-        <div class="panel">
-          <h3>导出记录</h3>
-          <div id="exports-list" class="exports-list">
-            <div class="empty">暂无导出记录</div>
-          </div>
-        </div>
-        <div class="panel">
-          <h3>导出信息</h3>
-          <div id="export-info" class="export-info hidden">
-            <div class="info-grid">
-              <div class="info-item"><span class="label">角色卡</span><span class="value" id="export-char-count">-</span></div>
-              <div class="info-item"><span class="label">对话</span><span class="value" id="export-conv-count">-</span></div>
-              <div class="info-item"><span class="label">变量</span><span class="value" id="export-var-count">-</span></div>
-              <div class="info-item"><span class="label">设定</span><span class="value" id="export-set-count">-</span></div>
-            </div>
-            <div class="info-actions">
-              <button id="download-export-btn" class="btn btn-primary">下载</button>
-              <button id="copy-export-btn" class="btn">复制 JSON</button>
-            </div>
-          </div>
-        </div>
-        <div class="panel">
-          <h3>导入选项</h3>
-          <div class="field">
-            <label class="checkbox-label">
-              <input type="checkbox" id="skip-existing-check" checked>
-              跳过已存在的数据
-            </label>
-          </div>
-          <div id="import-result" class="result hidden"></div>
-        </div>
+        <span id="exports-count" class="exports-count"></span>
+        <div id="exports-list" class="exports-list"></div>
+        <div id="export-info" class="export-info hidden"></div>
+        <div id="import-result" class="result hidden"></div>
       </div>
     </div>
     <!-- 右栏 · 当前角色（开对话时自动站出；⋯ 菜单可手动切） -->
@@ -427,7 +682,8 @@
       </div>
     </div>
   </main>
-</div>
+  </div><!-- /.stage -->
+</div><!-- /.shell -->
 
 <!-- ── 编辑弹窗（角色 / 设定 / 变量共用） ───────────── -->
 <div id="modal" class="modal hidden">
@@ -439,197 +695,253 @@
     <div class="modal-body">
       <form id="character-form" class="form hidden">
         <input type="hidden" id="f-id">
-        <div class="field"><label>名称 *</label><input type="text" id="f-name" required></div>
-        <div class="field"><label>描述 *</label><textarea id="f-description" rows="3" required></textarea></div>
-        <div class="field"><label>开场白 *</label><textarea id="f-first-mes" rows="3" required></textarea></div>
-        <div class="field"><label>性格</label><textarea id="f-personality" rows="2"></textarea></div>
-        <div class="field"><label>场景</label><textarea id="f-scenario" rows="2"></textarea></div>
-        <div class="field"><label>对话示例</label><textarea id="f-mes-example" rows="3"></textarea></div>
-        <div class="field"><label>系统提示</label><textarea id="f-system-prompt" rows="3"></textarea></div>
-        <div class="field"><label>后处理指令</label><textarea id="f-post-history" rows="2"></textarea></div>
-        <div class="field-row">
-          <div class="field"><label>作者</label><input type="text" id="f-creator"></div>
-          <div class="field"><label>版本</label><input type="text" id="f-version" value="1.0"></div>
-        </div>
-        <div class="field"><label>标签（逗号分隔）</label><input type="text" id="f-tags"></div>
-        <div class="field"><label>备注</label><textarea id="f-notes" rows="2"></textarea></div>
-      </form>
+        <!--
+          13 个字段分三段，每段一个意思：
+            基本（是什么）：名称 / 描述 / 开场白——一开弹窗先填的这三项
+            人格（像不像）：性格 / 场景 / 对话示例——把卡片“像人”的三块
+            进阶（大多数卡不改）：系统提示 / 后处理 / 作者 / 版本 / 标签 / 备注——默认收起
+          折叠是加法，不是减法：字段一个不少，只是不挡路。
 
-      <form id="setting-form" class="form hidden">
-        <div class="field"><label>名称 *</label><input type="text" id="sf-name" required></div>
-        <div class="field">
-          <label>优先级</label>
-          <input type="number" id="sf-priority" value="100" min="0" max="1000">
-        </div>
-        <div class="field"><label>内容 *</label><textarea id="sf-content" rows="5" required></textarea></div>
-        <div class="field">
-          <label>触发类型</label>
-          <select id="sf-trigger-type">
-            <option value="keyword">关键词</option>
-            <option value="regex">正则</option>
-            <option value="always">始终</option>
-            <option value="never">从不</option>
-          </select>
-        </div>
-        <div class="field" id="sf-keywords-field">
-          <label>关键词 <span class="hint">逗号分隔；正则写成 /模式/</span></label>
-          <input type="text" id="sf-keywords">
-        </div>
-        <div class="field">
-          <label>副键逻辑</label>
-          <select id="sf-logic">
-            <option value="and_any">AND · 任一命中</option>
-            <option value="and_all">AND · 全部命中</option>
-            <option value="not_any">NOT ANY · 任一不中</option>
-            <option value="not_all">NOT ALL · 不全中</option>
-          </select>
-        </div>
-        <div class="field">
-          <label class="checkbox-label">
-            <input type="checkbox" id="sf-enabled" checked>
-            启用
-          </label>
-        </div>
-      </form>
-
-      <form id="variable-form" class="form hidden">
-        <div class="field"><label>名称 *</label><input type="text" id="vf-name" required></div>
-        <div class="field-row">
-          <div class="field">
-            <label>类型</label>
-            <select id="vf-type">
-              <option value="text">文本</option>
-              <option value="number">数字</option>
-              <option value="boolean">布尔</option>
-              <option value="object">对象</option>
-            </select>
+          头像与「生成立绘」：原来那个按钮跟“保存 / 导出”平列在页脚，
+          但它改的是头像那块内容。搬到头像旁边，位置与所改的东西就对上了。
+        -->
+        <div class="form-sec open">
+          <div class="fs-head">
+            <span class="fs-t">基本</span>
+            <span class="fs-h">这三个决定“它是什么”</span>
+          </div>
+          <div class="fs-body">
+            <div class="portrait-row">
+              <div class="portrait-slot">
+                <button id="modal-portrait" class="btn btn-sm portrait-btn hidden" type="button">生成立绘</button>
+              </div>
+              <div class="pf">
+                <div class="field"><label>名称 <span class="req">*</span></label><input type="text" id="f-name" required></div>
+                <div class="field"><label>描述</label><textarea id="f-description" rows="3" placeholder="建议填——设定越具体，对话越像样"></textarea></div>
+              </div>
+            </div>
+            <div class="field"><label>开场白</label><textarea id="f-first-mes" rows="3" placeholder="建议填——空了新对话不会自动开场"></textarea></div>
+            <div class="char-ctx-note" id="modal-portrait-note"></div>
           </div>
         </div>
-        <div class="field"><label>默认值</label><input type="text" id="vf-default"></div>
-        <div class="field"><label>描述</label><textarea id="vf-description" rows="2"></textarea></div>
-        <div class="field">
-          <label class="checkbox-label">
-            <input type="checkbox" id="vf-visible" checked>
-            显示
-          </label>
+
+        <div class="form-sec open">
+          <div class="fs-head">
+            <span class="fs-t">人格</span>
+            <span class="fs-h">这三个决定“它像不像”</span>
+          </div>
+          <div class="fs-body">
+            <div class="field"><label>性格</label><textarea id="f-personality" rows="2"></textarea></div>
+            <div class="field"><label>场景</label><textarea id="f-scenario" rows="2"></textarea></div>
+            <div class="field"><label>对话示例</label><textarea id="f-mes-example" rows="3"></textarea></div>
+          </div>
+        </div>
+
+        <div class="form-sec collapsed">
+          <button class="fs-head" type="button">
+            <span class="fs-car">▸</span>
+            <span class="fs-t">进阶</span>
+            <span class="fs-h">大多数卡不用动这里</span>
+            <span class="fs-n">6 项</span>
+          </button>
+          <div class="fs-body">
+            <div class="field"><label>系统提示 <span class="hint">· 会顶掉预设里的主提示</span></label><textarea id="f-system-prompt" rows="3"></textarea></div>
+            <div class="field"><label>后处理指令 <span class="hint">· 拼在对话之后再交给模型</span></label><textarea id="f-post-history" rows="2"></textarea></div>
+            <div class="field-row">
+              <div class="field"><label>作者</label><input type="text" id="f-creator"></div>
+              <div class="field"><label>版本</label><input type="text" id="f-version" value="1.0"></div>
+            </div>
+            <div class="field"><label>标签（逗号分隔）</label><input type="text" id="f-tags"></div>
+            <div class="field"><label>备注</label><textarea id="f-notes" rows="2"></textarea></div>
+          </div>
         </div>
       </form>
+
+      <!--
+        设定 8 字段：
+          是什么：名称 / 内容——一句话说清“它是什么”
+          什么时候上场：触发类型 / 关键词 / 副键逻辑——控制何时入 context
+          进阶：优先级 / 分类 / 启用——少量卡才需要
+      -->
+      <form id="setting-form" class="form hidden">
+        <div class="form-sec open">
+          <div class="fs-head"><span class="fs-t">是什么</span></div>
+          <div class="fs-body">
+            <div class="field"><label>名称 <span class="req">*</span></label><input type="text" id="sf-name" required></div>
+            <div class="field"><label>内容 <span class="req">*</span></label><textarea id="sf-content" rows="5" required></textarea></div>
+          </div>
+        </div>
+        <div class="form-sec open">
+          <div class="fs-head"><span class="fs-t">什么时候上场</span></div>
+          <div class="fs-body">
+            <div class="field">
+              <label>触发类型</label>
+              <select id="sf-trigger-type">
+                <option value="keyword">关键词</option>
+                <option value="regex">正则</option>
+                <option value="always">始终</option>
+                <option value="never">从不</option>
+              </select>
+            </div>
+            <div class="field" id="sf-keywords-field">
+              <label>关键词 <span class="hint">逗号分隔；正则写成 /模式/</span></label>
+              <input type="text" id="sf-keywords">
+            </div>
+            <div class="field">
+              <label>副键逻辑</label>
+              <select id="sf-logic">
+                <option value="and_any">AND · 任一命中</option>
+                <option value="and_all">AND · 全部命中</option>
+                <option value="not_any">NOT ANY · 任一不中</option>
+                <option value="not_all">NOT ALL · 不全中</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="form-sec collapsed">
+          <button class="fs-head" type="button">
+            <span class="fs-car">▸</span><span class="fs-t">进阶</span><span class="fs-n">3 项</span>
+          </button>
+          <div class="fs-body">
+            <div class="field"><label>优先级</label><input type="number" id="sf-priority" value="100" min="0" max="1000"></div>
+            <div class="field"><label>分类 <span class="hint">只存本地，不导出 ST</span></label><input type="text" id="sf-category" placeholder="空 = 未分类"></div>
+            <div class="field"><label class="checkbox-label"><input type="checkbox" id="sf-enabled" checked> 启用</label></div>
+          </div>
+        </div>
+      </form>
+
+      <!--
+        变量 5 字段，2 段：
+          定义：名称 / 类型——“它是什么”
+          值与展示：默认值 / 描述 / 显示——“它是什么值 / 看不看得见”
+      -->
+      <form id="variable-form" class="form hidden">
+        <div class="form-sec open">
+          <div class="fs-head"><span class="fs-t">定义</span></div>
+          <div class="fs-body">
+            <div class="field"><label>名称 <span class="req">*</span></label><input type="text" id="vf-name" required></div>
+            <div class="field-row">
+              <div class="field">
+                <label>类型</label>
+                <select id="vf-type">
+                  <option value="text">文本</option>
+                  <option value="number">数字</option>
+                  <option value="boolean">布尔</option>
+                  <option value="object">对象</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="form-sec open">
+          <div class="fs-head"><span class="fs-t">值与展示</span></div>
+          <div class="fs-body">
+            <div class="field"><label>默认值</label><input type="text" id="vf-default"></div>
+            <div class="field"><label>描述</label><textarea id="vf-description" rows="2"></textarea></div>
+            <div class="field"><label class="checkbox-label"><input type="checkbox" id="vf-visible" checked> 显示</label></div>
+          </div>
+        </div>
+      </form>
+
+      <!--
+        黑板 11 字段：
+          内容：标题 / 内容——“它是什么”
+          什么时候用：活多久 / 什么时候醒 / 关键词——控制何时入 context
+          进阶：可见性 / 排序 / 启用——少量场景才动
+      -->
       <form id="board-form" class="form hidden">
         <input type="hidden" id="bc-id">
-        <div class="field"><label>标题 *</label><input type="text" id="bc-title" placeholder="月台尽头"></div>
-        <div class="field"><label>内容 *</label><textarea id="bc-body" rows="3" placeholder="站台的灯忽明忽暗，风里有铁锈味。"></textarea></div>
-
-        <div class="field-row">
-          <div class="field">
-            <label>活多久</label>
-            <select id="bc-lifespan">
-              <option value="chat">这场（跟随对话）</option>
-              <option value="world">世界级（跨对话）</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>什么时候醒</label>
-            <select id="bc-activation">
-              <option value="constant">一直在</option>
-              <option value="keyword">被提到才醒</option>
-            </select>
+        <div class="form-sec open">
+          <div class="fs-head"><span class="fs-t">内容</span></div>
+          <div class="fs-body">
+            <div class="field"><label>标题 <span class="req">*</span></label><input type="text" id="bc-title" placeholder="月台尽头"></div>
+            <div class="field"><label>内容 <span class="req">*</span></label><textarea id="bc-body" rows="3" placeholder="站台的灯忽明忽暗，风里有铁锈味。"></textarea></div>
           </div>
         </div>
-
-        <div class="field">
-          <label>谁看得见</label>
-          <select id="bc-visible-scope">
-            <option value="public">公开（谁都能读到）</option>
-            <option value="char">只有某个角色</option>
-            <option value="user">只有你（不进模型上下文）</option>
-          </select>
+        <div class="form-sec open">
+          <div class="fs-head"><span class="fs-t">什么时候用</span></div>
+          <div class="fs-body">
+            <div class="field-row">
+              <div class="field">
+                <label>活多久</label>
+                <select id="bc-lifespan">
+                  <option value="chat">这场（跟随对话）</option>
+                  <option value="world">世界级（跨对话）</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>什么时候醒</label>
+                <select id="bc-activation">
+                  <option value="constant">一直在</option>
+                  <option value="keyword">被提到才醒</option>
+                </select>
+              </div>
+            </div>
+            <div class="field" id="bc-keywords-field">
+              <label>关键词（逗号分隔）</label>
+              <input type="text" id="bc-keywords" placeholder="列车, 月台">
+              <p class="hint">扫描文本里出现任一个，这条就上场。大小写不敏感。</p>
+            </div>
+          </div>
         </div>
-        <div class="field hidden" id="bc-visible-char-field">
-          <label>哪个角色</label>
-          <select id="bc-visible-char"><option value="">加载中…</option></select>
-        </div>
-
-        <div class="field" id="bc-keywords-field">
-          <label>关键词（逗号分隔）</label>
-          <input type="text" id="bc-keywords" placeholder="列车, 月台">
-          <p class="hint">扫描文本里出现任一个，这条就上场。大小写不敏感。</p>
-        </div>
-
-        <div class="field-row">
-          <div class="field"><label>排序</label><input type="number" id="bc-order" value="100" step="10"></div>
-          <div class="field">
-            <label class="checkbox-label">
-              <input type="checkbox" id="bc-enabled" checked>
-              启用
-            </label>
+        <div class="form-sec collapsed">
+          <button class="fs-head" type="button">
+            <span class="fs-car">▸</span><span class="fs-t">进阶</span><span class="fs-n">4 项</span>
+          </button>
+          <div class="fs-body">
+            <div class="field">
+              <label>谁看得见</label>
+              <select id="bc-visible-scope">
+                <option value="public">公开（谁都能读到）</option>
+                <option value="char">只有某个角色</option>
+                <option value="user">只有你（不进模型上下文）</option>
+              </select>
+            </div>
+            <div class="field hidden" id="bc-visible-char-field">
+              <label>哪个角色</label>
+              <select id="bc-visible-char"><option value="">加载中…</option></select>
+            </div>
+            <div class="field-row">
+              <div class="field"><label>排序</label><input type="number" id="bc-order" value="100" step="10"></div>
+              <div class="field"><label class="checkbox-label"><input type="checkbox" id="bc-enabled" checked> 启用</label></div>
+            </div>
           </div>
         </div>
       </form>
 
-      <form id="regex-form" class="form hidden">
-        <input type="hidden" id="rf-id">
-        <div class="field"><label>名称 *</label><input type="text" id="rf-name" placeholder="去掉括号注释"></div>
-
-        <div class="field"><label>查找（正则）*</label><input type="text" id="rf-pattern" class="mono" placeholder="（[^）]*）"></div>
-        <div class="field-row">
-          <div class="field"><label>标志（flags）</label><input type="text" id="rf-flags" class="mono" value="g" placeholder="gi"></div>
-          <div class="field"><label>顺序</label><input type="number" id="rf-order" value="0" step="10"></div>
-        </div>
-        <div class="field">
-          <label>替换为</label>
-          <input type="text" id="rf-replacement" class="mono" placeholder="留空 = 删掉命中部分">
-          <p class="hint">支持 $1 $2 捕获组。想插入空行写 \n。</p>
-        </div>
-
-        <div class="field-row">
-          <div class="field">
-            <label>生效范围</label>
-            <select id="rf-scope">
-              <option value="global">所有角色</option>
-              <option value="character">只有某个角色</option>
-              <option value="preset">只有某套预设</option>
-            </select>
-          </div>
-          <div class="field hidden" id="rf-scope-id-field">
-            <label>哪一个</label>
-            <select id="rf-scope-id"><option value="">加载中…</option></select>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>作用面</label>
-          <div class="checkbox-row">
-            <label class="checkbox-label"><input type="checkbox" id="rf-surface-prompt" checked> 发请求前</label>
-            <label class="checkbox-label"><input type="checkbox" id="rf-surface-display"> 显示时</label>
-            <label class="checkbox-label"><input type="checkbox" id="rf-surface-stored"> 存储时（也会改用户输入）</label>
-          </div>
-          <p class="hint">可多选。只勾「显示时」不会动发给模型的内容；只勾「发请求前」不影响你看到的气泡。引擎内部用 ST 的三个老开关（promptOnly / markdownOnly / runOnEdit）表达这三件事，保存时自动同步——不必两边都填。</p>
-        </div>
-
-        <div class="field">
-          <label class="checkbox-label"><input type="checkbox" id="rf-enabled" checked> 启用</label>
-        </div>
-
-        <div class="panel">
-          <h3>试一下</h3>
-          <div class="field">
-            <label>拿一段文本过一遍这条规则</label>
-            <textarea id="rf-test-input" rows="3" placeholder="填你真会遇到的文本，例如：她笑了（这是旁白）"></textarea>
-          </div>
-          <button type="button" id="rf-test-btn" class="btn btn-sm">跑一遍</button>
-          <div id="rf-test-output" class="test-out hidden"></div>
-        </div>
-      </form>
+      <!--
+        正则编辑表单已从共用 #modal 拆到独立的 #regex-modal（文件后部）。
+        共用弹窗装不下“左表单 + 右试一下”的分栏——它的 .modal-body 是单列的。
+        字段 id 保持不变（rf-* 前缀），保存 / 取消 / 关闭按钮也仍在下面那个
+        modal-footer 里，但只在共用 #modal 显示时属于它。正则走自己的
+        modal-footer（#regex-modal-footer）。
+      -->
 
     </div>
+    <!--
+      页脚重新排：
+        · 「删除」放在最左，弱化成危险色——它现在跟“保存 / 导出”并列在右，
+          等于把一个高危动作当成常规操作。
+        · 「导出」与「ST」本质是同一件事的两个输出格式，合成一个下拉，
+          标签写清“导出为 JSON” / “导出为 ST 角色卡（PNG）”。
+        · 右侧「取消 / 保存」：这是大多数弹窗共有的节奏（标题栏的 ✕ 已能关，
+          所以 character-existing 分支会隐藏「取消」）。非 character 表单一律开「取消」。
+        · 「生成立绘」不再住页脚——它改的是头像那块内容，搬到头像旁边了。
+    -->
     <div class="modal-footer">
-      <button id="modal-portrait" class="btn hidden">生成立绘</button>
-      <button id="modal-save" class="btn btn-primary">保存</button>
-      <button id="modal-export-json" class="btn">导出</button>
-      <button id="modal-export-st" class="btn hidden">ST</button>
-      <button id="modal-delete" class="btn btn-sm danger hidden">删除</button>
+      <button id="modal-delete" class="btn btn-sm danger hidden" type="button">删除</button>
+      <span class="sp"></span>
+      <div id="modal-export-wrap" class="export-wrap hidden">
+        <button id="modal-export-toggle" class="btn" type="button" aria-haspopup="menu" aria-expanded="false">导出 ⌄</button>
+        <div id="modal-export-menu" class="export-menu hidden" role="menu">
+          <div class="em-lb">这张卡</div>
+          <button id="modal-export-json" class="em-item" type="button">导出为 JSON</button>
+          <button id="modal-export-st" class="em-item hidden" type="button">导出为 ST 角色卡（PNG）</button>
+        </div>
+      </div>
+      <button id="modal-cancel" class="btn" type="button">取消</button>
+      <button id="modal-save" class="btn btn-primary" type="button">保存</button>
     </div>
-    <div class="char-ctx-note" id="modal-portrait-note"></div>
   </div>
 </div>
 
@@ -638,6 +950,11 @@
   用户要的那个开关：图可以走宿主供应商，也可以走本机 ComfyUI。
   两条路的代价不一样（本机那条要把工作流与提示词节点填对），
   所以面板要把“各自缺什么”分开展示——而不是一个笼统的“不可用”。
+
+  2026-09-28 改造：
+    · 状态条提到最上（.modal-health）——体检结果是主角
+    · 供应商单选卡（.tts-prov）——只展开当前这一家
+    · 底部按钮改成 取消 / 保存 右对齐
 -->
 <div id="image-modal" class="modal hidden">
   <div class="modal-content tts-content">
@@ -647,11 +964,22 @@
     </div>
     <div class="modal-body">
 
+      <!-- 体检条：● + 一句人话 + 一句细节 + 一个直接动作 -->
+      <div id="image-health" class="modal-health">
+        <span class="mh-dot"></span>
+        <div class="mh-text">
+          <div class="mh-title">还没体检</div>
+          <div class="mh-sub">打开面板会自动探测一次——没配好会说明缺哪一步</div>
+        </div>
+        <div class="mh-act">
+          <button type="button" id="image-retest" class="btn btn-sm">重测</button>
+        </div>
+      </div>
+
       <section class="tts-sec">
         <h3>用哪条路出图</h3>
         <div id="image-backends" class="tts-providers"></div>
         <div id="image-hint" class="hint"></div>
-        <div id="image-engines" class="tts-status">还没体检</div>
       </section>
 
       <section class="tts-sec" id="image-comfy-box">
@@ -662,19 +990,135 @@
             <input type="text" id="image-workflow" placeholder="例：我的立绘.json">
             <button type="button" id="image-list-workflows" class="btn btn-sm">列出有哪些</button>
           </div>
+          <div id="image-workflow-out" class="hint"></div>
         </div>
         <div class="field">
-          <label>提示词写进哪个节点（节点号.输入名，例 6.text）</label>
+          <label>提示词写进哪个节点</label>
           <input type="text" id="image-prompt-target" placeholder="6.text">
+          <div class="hint">格式是 <code>节点号.输入名</code>——在 ComfyUI 里点那个正提示词框就能看到编号。没人猜得出来。</div>
         </div>
-        <div id="image-workflow-out" class="hint"></div>
+      </section>
+    </div>
+    <div class="modal-footer right-align">
+      <button id="image-cancel" class="btn">取消</button>
+      <button id="image-save" class="btn btn-primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 场景插图设置 ────────────────────────────────── -->
+<!--
+  三个开关，两个字段。默认关，因为它是花钱的动作。
+  面板只有一个任务：让人知道「现在到底会不会自动出图」——
+  enabled 与 mode 分开是因为后者是「开关里的开关」，
+  两个状态都要可见，避免「开了却没生效」的迷惑。
+
+  2026-09-28 改造：
+    · 状态条提到最上（.modal-health）——让人一打开就看到「会自动出图」
+    · 总闸单独一节，副标题说清「关掉后手动补一张也不行」
+    · 模式改成两选一卡片（select 换 radio），两个状态都可见
+    · 底部按钮改成 取消 / 保存 右对齐
+-->
+<div id="scene-modal" class="modal hidden">
+  <div class="modal-content tts-content">
+    <div class="modal-header">
+      <h2>场景插图</h2>
+      <button id="scene-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- 体检条：让人一眼看到「现在到底会不会自动出图」 -->
+      <div id="scene-health" class="modal-health">
+        <span class="mh-dot"></span>
+        <div class="mh-text">
+          <div class="mh-title">未启用</div>
+          <div class="mh-sub">总闸关着——不会自动出图，手动补一张也不行</div>
+        </div>
+      </div>
+
+      <section class="tts-sec">
+        <h3>总闸</h3>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="scene-enabled">
+            <span>启用场景插图</span>
+          </label>
+          <div class="hint">关掉后什么都不出——<b>手动补一张也不行</b>。这是总闸，不是「自动开关」。</div>
+        </div>
       </section>
 
-      <div id="image-status" class="tts-status"></div>
+      <section class="tts-sec">
+        <h3>模式</h3>
+        <!-- 两个选项都要可见；select 会让「off」选项被隐藏在有下拉里 -->
+        <div id="scene-mode" class="scene-modes">
+          <label class="scene-mode on">
+            <input type="radio" name="scene-mode" value="marker" checked>
+            <span class="sm-name">marker <span class="sm-tag">模型写 [场景] 时自动出图</span></span>
+            <div class="sm-sub">主动权在模型那边——它觉得这一幕值得画，就写个标记。</div>
+          </label>
+          <label class="scene-mode">
+            <input type="radio" name="scene-mode" value="off">
+            <span class="sm-name">off <span class="sm-tag">不出自动图</span></span>
+            <div class="sm-sub">手动补一张仍然可用——所以这个不是「关掉场景插图」。</div>
+          </label>
+        </div>
+        <div class="scene-mode-note">
+          <b>为什么模式总闸要分开</b>：总闸关 = 彻底不用这个功能；模式 off = 不出自动图，但你想画还是能画。
+          这两个状态在旧界面上是混在一起的，于是经常出现「明明开了却没生效」。
+        </div>
+      </section>
+
+      <section class="tts-sec">
+        <h3>画什么</h3>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="scene-character-ref" checked>
+            <span>提示词里带上角色的描述与性格</span>
+          </label>
+          <div class="hint">带上之后人物长得像卡里写的；不带就只有场景，人靠模型随便想。</div>
+        </div>
+        <div class="field">
+          <label>自定义风格（不填用默认水彩风）</label>
+          <input type="text" id="scene-style" placeholder="例：宫崎动画风格、水彩画风…">
+        </div>
+      </section>
     </div>
-    <div class="modal-footer">
-      <button id="image-save" class="btn btn-primary">保存</button>
-      <button id="image-cancel" class="btn">关闭</button>
+    <div class="modal-footer right-align">
+      <button id="scene-cancel" class="btn">取消</button>
+      <button id="scene-save" class="btn btn-primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 手动补一张场景图 ───────────────────────────── -->
+<!--
+  为什么单独一个弹窗，而不是塞进 #scene-modal：
+  那个是**全局配置**（什么条件下自动出图），这个是**这一场**的动作
+  （现在就把这一幕画进对话）。两件事挤一个面板，用户会分不清点哪个。
+
+  后端那条 POST /conversations/:id/illustrate 早就写好了（plan 2.6），
+  而设置面板上写着「保留手动补一张入口」——这里就是那个入口。
+  一个有文案、没按钮的能力，用户只会以为是自己没找到。
+-->
+<div id="illustrate-modal" class="modal hidden">
+  <div class="modal-content tts-content">
+    <div class="modal-header">
+      <h2>补一张场景图</h2>
+      <button id="illustrate-close" class="btn btn-ghost btn-sm" type="button">✕</button>
+    </div>
+    <div class="modal-body">
+      <section class="tts-sec">
+        <div class="field">
+          <label>这一幕想画什么</label>
+          <textarea id="illustrate-scene" rows="4" spellcheck="false" placeholder="例：黄昏的车站，她靠在铁栏上回头，风把围巾吹起来"></textarea>
+        </div>
+        <div class="hint">描得具体一点，图就更接近你脑子里的那一幕。外貌不编——按角色卡里的描述来。</div>
+      </section>
+      <div id="illustrate-status" class="tts-status"></div>
+    </div>
+    <div class="modal-footer right-align">
+      <button id="illustrate-cancel" class="btn" type="button">关闭</button>
+      <button id="illustrate-go" class="btn btn-primary" type="button">画一张</button>
     </div>
   </div>
 </div>
@@ -686,6 +1130,14 @@
   让人填完之后**立刻知道自己通没通**——而不是去聊天里点一条才会遇到错。
   因此底部那行状态比上面的输入框重要。
 -->
+<!--
+  2026-09-28 改造：
+    · 状态条提到最上（.modal-health）——让人填完立刻知道自己通没通
+    · Azure 与 OpenAI 不再同时铺开——单选卡 + 选中才展开
+    · 声音表分两段：上段是这场对话里的角色（自动列），下段是按名字匹配（手动加）
+    · 匹配预览：让用户看见自己加的名字到底能不能命中
+    · 底部按钮改成 取消 / 保存 右对齐
+-->
 <div id="tts-modal" class="modal hidden">
   <div class="modal-content tts-content">
     <div class="modal-header">
@@ -693,6 +1145,18 @@
       <button id="tts-close" class="btn btn-ghost btn-sm">✕</button>
     </div>
     <div class="modal-body">
+
+      <!-- 体检条：● + 一句人话 + 一句细节 + 一个直接动作 -->
+      <div id="tts-health" class="modal-health">
+        <span class="mh-dot"></span>
+        <div class="mh-text">
+          <div class="mh-title">还没配好</div>
+          <div class="mh-sub">填好凭据按「试听」，那行字就是体检报告</div>
+        </div>
+        <div class="mh-act">
+          <button type="button" id="tts-preview-top" class="btn btn-sm">试听</button>
+        </div>
+      </div>
 
       <section class="tts-sec">
         <h3>用哪家的声音</h3>
@@ -710,9 +1174,10 @@
           <div class="field">
             <label>key</label>
             <input type="password" id="tts-azure-key" placeholder="留空 = 不改动已存的">
+            <div class="hint">已存的 key 不会回显。要换就在上面填新的；想清掉，勾下面这个。</div>
             <label class="checkbox-label hidden">
               <input type="checkbox" id="tts-azure-clear">
-              清掉已存的 key
+              <span>清掉已存的 key</span>
             </label>
           </div>
         </div>
@@ -732,24 +1197,25 @@
           <div class="field">
             <label>key（本机服务多半留空）</label>
             <input type="password" id="tts-openai-key" placeholder="留空 = 不改动已存的">
+            <div class="hint">已存的 key 不会回显。要换就在上面填新的；想清掉，勾下面这个。</div>
             <label class="checkbox-label hidden">
               <input type="checkbox" id="tts-openai-clear">
-              清掉已存的 key
+              <span>清掉已存的 key</span>
             </label>
           </div>
         </div>
       </section>
 
       <section class="tts-sec">
-        <h3>声音</h3>
+        <h3>声音与语速</h3>
         <div class="field-row">
           <div class="field">
-            <label>默认声音（没分配角色的用它）</label>
+            <label>默认声音（没匹配到的用它）</label>
             <select id="tts-voice"></select>
           </div>
           <div class="field">
-            <label>语速（可留空，例 -10%）</label>
-            <input type="text" id="tts-rate" placeholder="留空 = 供应商默认">
+            <label>语速</label>
+            <input type="text" id="tts-rate" placeholder="-10%">
           </div>
         </div>
         <div class="field-row">
@@ -759,22 +1225,53 @@
           </div>
           <button type="button" id="tts-preview" class="btn btn-sm">试听</button>
         </div>
+        <div class="hint">语速留空 = 用供应商默认。想慢一点写 <code>-10%</code>，快一点写 <code>+20%</code>。</div>
       </section>
 
       <!--
-        按角色分配声音：群聊里两个人一个嗓子很出戏。
-        只列**这场对话里有的**角色——一个角色库几十张卡全铺出来，这面板就成了名单墙。
+        声音表分两段——两段联动完全不同：
+          上段（这场对话里的角色）：自动列的，换对话就变
+          下段（按名字匹配）：手写的，一直在
+        合成一张表就看不见这个差别。
       -->
       <section class="tts-sec">
-        <h3>按角色分配声音 <span class="hint">这场对话里的角色</span></h3>
-        <div id="tts-voice-map" class="tts-voice-map"></div>
-      </section>
+        <h3>谁用什么声音</h3>
 
-      <div id="tts-status" class="tts-status"></div>
+        <div id="tts-voices-auto" class="vm-group">
+          <div class="vm-g-head">
+            <b>这场对话里的角色</b>
+            <span class="vm-g-note" id="tts-voices-auto-note">自动列出来，不用手填</span>
+          </div>
+          <div id="tts-voices-auto-list"></div>
+        </div>
+
+        <div id="tts-voices-manual" class="vm-group">
+          <div class="vm-g-head">
+            <b>按名字匹配</b>
+            <span class="vm-g-note" id="tts-voices-manual-note">你自己加的——旁白、世界书里的人、别的卡</span>
+          </div>
+          <div id="tts-voices-manual-list"></div>
+          <button type="button" id="tts-voice-add" class="btn btn-sm" style="margin-top: 8px;">＋ 加一条</button>
+        </div>
+
+        <!--
+          匹配预览：这张卡里最该做的东西。
+          关键词匹配的正确性没法靠脑子推——你得看见它到底抓到了谁。
+          「我明明加了老城主怎么没生效」会变成最常见的困惑，预览就是解药。
+        -->
+        <div class="vm-match-demo">
+          <div class="vm-md-label">匹配预览 · 这段话里出现了什么</div>
+          <div class="vm-md-text">
+            <textarea id="tts-match-text" rows="2" placeholder="输入一句你会遇到的真实台词——例：薇拉抬起头，远处老城主的灯还亮着。"></textarea>
+          </div>
+          <div id="tts-match-preview" class="vm-md-result"></div>
+          <div class="vm-md-hint">只填名字的一部分也行——「薇拉」能匹配到「薇拉·霜语」。<b>「云」这种单字关键词会匹配所有人</b>，所以能看见预览就自己看着办。</div>
+        </div>
+      </section>
     </div>
-    <div class="modal-footer">
+    <div class="modal-footer right-align">
+      <button id="tts-cancel" class="btn">取消</button>
       <button id="tts-save" class="btn btn-primary">保存</button>
-      <button id="tts-cancel" class="btn">关闭</button>
     </div>
   </div>
 </div>
@@ -789,18 +1286,28 @@
     <div class="modal-body">
       <div id="import-preview" class="import-preview"></div>
     </div>
-    <div class="modal-footer">
-      <button id="import-confirm" class="btn btn-primary">导入</button>
-      <button id="import-cancel" class="btn">取消</button>
+    <div class="modal-footer right-align">
+      <button id="import-cancel" class="btn" type="button">取消</button>
+      <button id="import-confirm" class="btn btn-primary" type="button">导入</button>
     </div>
   </div>
 </div>
 
 <!-- ── AI 生成：连网检索资料，生成卡 + 世界书 ──────── -->
 <!--
-  三段式：需求 / 过程 / 结果。第三段是审查台：
-  逐条看一眼再决定进不进卡库。没出处的内容**不会出现在这里**——
-  它们在核对那一步就被删掉了，只在过程区留一个数字。
+  三阶段推进：需求 / 过程 / 结果。
+  之前这三段同时常驻——刚打开就能看到“过程”和“结果”两个空段，
+  它们其实是为“还没发生的事”占位。现在改成“按状态推进”：
+    idle（未跑）：整屏给那一个问题 + 示例当引子 + 参数
+    running：进度条 + 分步日志（每步做了啥 + 花多久），结果段让位
+    done：状态栏给结果，按“一张卡的样子”展示，不只显示 JSON
+
+  体检条提到最上——语音、出图、场景、现在生成，四处都这么排，
+  它就成了一条一致的语言：用户一眼就知道“这地方在告诉我能不能用”。
+
+  结果段展示方式：描述 / 性格 / 开场白 + 顺带生成的世界书条目列表。
+  用户要做的是判断“这张卡像不像我要的”，那就得按卡的样子给他看，
+  而不是把 JSON 抛回去让他自己 parse。
 -->
 <div id="gen-modal" class="modal hidden">
   <div class="modal-content gen-content">
@@ -810,12 +1317,31 @@
     </div>
     <div class="modal-body">
 
-      <section class="gen-sec">
-        <h3>要一个什么样的角色</h3>
-        <div class="field">
-          <input type="text" id="gen-query" placeholder="例：初音未来 / 蒸汽朋克世界的钟表匠">
+      <!-- 体检条：提到最上，复用 .modal-health（与语音 / 出图 / 场景同一套语言） -->
+      <div id="gen-sources" class="modal-health">
+        <span class="mh-dot"></span>
+        <div class="mh-text">
+          <div class="mh-title">还没体检</div>
+          <div class="mh-sub">打开弹窗会自动探测一次——没配好会说明缺哪一步</div>
         </div>
-        <div class="field-row">
+        <div class="mh-act">
+          <button type="button" id="gen-retest" class="btn btn-sm">重测</button>
+        </div>
+      </div>
+
+      <!-- 阶段一：还没跑——整屏就一个问题 -->
+      <div id="gen-phase-idle" class="gen-phase">
+        <div class="bigq">
+          <div class="field" style="margin-bottom:0">
+            <label>要一个什么样的角色</label>
+            <input type="text" id="gen-query" placeholder="例：初音未来 / 蒸汽朋克世界的钟表匠">
+          </div>
+          <div class="bigq-examples">
+            <b>初音未来</b><b>北境的女铁匠</b><b>维多利亚侦探</b>
+          </div>
+          <div class="hint bigq-hint">写得越具体，出来的卡越像你要的。参考素材是从你自己的角色卡和设定库里找的——不会凭空编。</div>
+        </div>
+        <div class="field-row gen-params">
           <div class="field">
             <label>每个来源取几份材料</label>
             <input type="number" id="gen-docs" value="3" min="1" max="5">
@@ -827,30 +1353,51 @@
             </label>
           </div>
         </div>
-        <div id="gen-sources" class="gen-sources">还没体检</div>
-      </section>
+      </div>
 
-      <section class="gen-sec">
-        <h3>过程</h3>
-        <div id="gen-progress" class="gen-progress">还没开始</div>
-        <div id="gen-notes" class="gen-notes"></div>
-      </section>
+      <!-- 阶段二：正在跑——进度 + 分步日志 -->
+      <div id="gen-phase-running" class="gen-phase hidden">
+        <div class="gen-prog">
+          <div class="gp-bar"><i id="gen-prog-fill"></i></div>
+          <div class="gp-tx">
+            <span id="gen-prog-title" class="gp-t1">已提交</span>
+            <span id="gen-prog-sub" class="gp-t2">等待第一个进度信号…</span>
+            <span id="gen-prog-eta" class="gp-n">约 20 秒</span>
+          </div>
+        </div>
+        <div id="gen-notes" class="gen-log"></div>
+      </div>
 
-      <section class="gen-sec">
-        <h3>结果 <span class="hint" id="gen-hint"></span></h3>
+      <!-- 阶段三：出结果——按卡的样子展示，不是 JSON -->
+      <div id="gen-phase-done" class="gen-phase hidden">
+        <div class="gen-hint" id="gen-hint"></div>
         <div id="gen-result" class="gen-result"></div>
-      </section>
+      </div>
 
     </div>
     <div class="modal-footer">
-      <button id="gen-submit" class="btn btn-primary">开始生成</button>
-      <button id="gen-save" class="btn btn-primary hidden">写进角色卡</button>
-      <button id="gen-discard" class="btn">丢掉</button>
+      <button id="gen-discard" class="btn" type="button">丢掉</button>
+      <span class="sp"></span>
+      <button id="gen-submit" class="btn btn-primary" type="button">开始生成</button>
+      <button id="gen-retry" class="btn hidden" type="button">再来一次</button>
+      <button id="gen-save" class="btn btn-primary hidden" type="button">写进角色库</button>
     </div>
   </div>
 </div>
 
 <!-- ── 新对话 ─────────────────────────────────────── -->
+<!--
+  选择角色：原来那个 <select multiple size="6"> 是原生多选——
+  要按住 Ctrl 才点得中第二个，触屏上根本点不了，而且选中没有任何视觉反馈。
+
+  换成卡片点选（与角色抽屉同一套语言），每张卡右边直接显示“N 场”
+  或“还没开过”——**那个数字才是选卡时真正要看的**：
+    1 场 → 直接续
+    0 场 → 开新场
+    多条 → 弹选择器
+
+  字段 id 保留（conv-user-name / conv-persona），后端接口不改。
+-->
 <div id="new-conv-modal" class="modal hidden">
   <div class="modal-content">
     <div class="modal-header">
@@ -860,9 +1407,8 @@
     <div class="modal-body">
       <div class="field">
         <label>选择角色</label>
-        <select id="conv-character-select" multiple size="6">
-          <option value="">加载中…</option>
-        </select>
+        <div id="conv-character-picks" class="conv-picks"></div>
+        <div class="hint" style="margin-top:6px">点一下选中。右边的数字是这张卡已经开过几场——一眼看出该续哪张。</div>
       </div>
       <div class="field">
         <label>我的称呼 <span class="hint">留空 = 沿用这张卡上一场</span></label>
@@ -873,9 +1419,9 @@
         <textarea id="conv-persona" rows="2" placeholder="你是谁、在故事里是什么身份"></textarea>
       </div>
     </div>
-    <div class="modal-footer">
-      <button id="new-conv-confirm" class="btn btn-primary">创建</button>
-      <button id="new-conv-cancel" class="btn">取消</button>
+    <div class="modal-footer right-align">
+      <button id="new-conv-cancel" class="btn" type="button">取消</button>
+      <button id="new-conv-confirm" class="btn btn-primary" type="button">创建</button>
     </div>
   </div>
 </div>
@@ -890,9 +1436,9 @@
     <div class="modal-body">
       <div id="conv-picker-list" class="picker-list"></div>
     </div>
-    <div class="modal-footer">
-      <button id="conv-picker-new" class="btn btn-primary">开新对话</button>
-      <button id="conv-picker-cancel" class="btn">取消</button>
+    <div class="modal-footer right-align">
+      <button id="conv-picker-cancel" class="btn" type="button">取消</button>
+      <button id="conv-picker-new" class="btn btn-primary" type="button">开新对话</button>
     </div>
   </div>
 </div>
@@ -902,11 +1448,18 @@
   <div class="modal-content">
     <div class="modal-header">
       <h2>本场人设</h2>
-  <div class="hint" style="margin:-4px 0 10px">只影响当前这一场；开新场时会从这张卡的最近一场带过来。</div>
       <button id="persona-close" class="btn btn-ghost btn-sm">✕</button>
     </div>
     <div class="modal-body">
       <form id="persona-form" class="form">
+        <!--
+          hint 从前版本里挤在 h2 与 ✕ 之间的“标题栏里”，
+          而且带着 style="margin:-4px 0 10px" 这种负边距硬凑位置。
+          搬回 body 第一行：它是对下面表单的提示，不是标题的修饰。
+        -->
+        <div class="field persona-hint-field">
+          <div class="hint">只影响当前这一场；开新场时会从这张卡的最近一场带过来。</div>
+        </div>
         <div class="field">
           <label>我的称呼</label>
           <input type="text" id="pf-user-name" placeholder="User">
@@ -919,62 +1472,226 @@
         </div>
       </form>
     </div>
-    <div class="modal-footer">
-      <button id="persona-save" class="btn btn-primary">保存</button>
-      <button id="persona-cancel" class="btn">取消</button>
+    <div class="modal-footer right-align">
+      <button id="persona-cancel" class="btn" type="button">取消</button>
+      <button id="persona-save" class="btn btn-primary" type="button">保存</button>
     </div>
   </div>
 </div>
 
 <!-- ── 预览（激活 / 组装） ────────────────────────── -->
+<!--
+  预设那批已经把「预设预览」并进编辑弹窗的只读模式了（openPresetEditor(id, {readonly:true})）——
+  那个弹窗改完就只剩「看一下激活了哪些设定」这一个用途，所以标题从「预览」改为「这次发了什么」。
+  「刷新」按钮（第八个「刷新」）同时拿掉：这个弹窗本身就是即时拼一次的，没有“上次状态”可刷。
+-->
 <div id="preview-modal" class="modal hidden">
   <div class="modal-content modal-wide">
     <div class="modal-header">
-      <h2 id="preview-title">预览</h2>
+      <h2 id="preview-title">这次发了什么</h2>
       <button id="preview-close" class="btn btn-ghost btn-sm">✕</button>
     </div>
     <div class="modal-body">
       <div id="preview-body" class="preview-body"></div>
     </div>
-    <div class="modal-footer">
-      <button id="preview-refresh" class="btn">刷新</button>
-      <button id="preview-ok" class="btn btn-primary">知道了</button>
+    <div class="modal-footer right-align">
+      <button id="preview-ok" class="btn btn-primary" type="button">知道了</button>
     </div>
   </div>
 </div>
 
-<!-- ── 预设编辑器 ──────────────────────────────── -->
+<!-- ── 预设编辑器（全屏） ────────────────────────────
+  编辑要同时看三样东西：块结构、拼出来的 prompt、名称与采样。
+  抽屉 344px 装不下其中任何两样，所以弹窗盖住整个 App 视口：
+  左边 420px 定宽管结构，右边剩下的全给 prompt。
+
+  “预览”不再单独弹窗——预览就是编辑的只读模式（隐藏保存与块操作），
+  避免两套重复实现。 -->
 <div id="preset-editor-modal" class="modal hidden">
-  <div class="modal-content">
-    <div class="modal-header">
+  <div class="modal-content modal-fullscreen">
+    <!-- 顶部条：名字 + 只读标记 + 取消/保存 -->
+    <div class="pe-hd">
       <h2 id="preset-editor-title">编辑预设</h2>
-      <button id="preset-editor-close" class="btn btn-ghost btn-sm">✕</button>
+      <span id="pe-readonly-badge" class="pe-readonly-badge hidden">只读预览</span>
+      <span class="pe-hd-right">
+        <button id="pe-cancel" type="button" class="btn btn-sm">取消</button>
+        <button id="pe-save" type="button" class="btn btn-primary btn-sm">保存</button>
+      </span>
+      <button id="preset-editor-close" type="button" class="btn btn-ghost btn-sm pe-hd-close">✕</button>
     </div>
-    <div class="modal-body">
-      <form id="preset-form" class="form">
+    <div class="pe-body">
+      <!-- 左：结构（名称 / 描述 / 系统区 / 插话区 / 采样） -->
+      <div class="pe-left">
         <input type="hidden" id="pe-id">
-        <div class="field"><label>名称 *</label><input type="text" id="pe-name"></div>
-        <div class="field"><label>说明</label><input type="text" id="pe-description" placeholder="这套预设做什么用"></div>
-        <div class="field-row">
-          <div class="field"><label>温度</label><input type="number" id="pe-temperature" min="0" max="2" step="0.1" value="0.8"></div>
-          <div class="field"><label>最大 tokens</label><input type="number" id="pe-max-tokens" min="1" step="100" value="1000"></div>
+        <div class="pe-field"><label>名称 *</label><input type="text" id="pe-name"></div>
+        <div class="pe-field"><label>说明</label><input type="text" id="pe-description" placeholder="这套预设做什么用"></div>
+
+        <!-- 采样：温度与最大 tokens。它跟块是两回事（块管拼什么，采样管拼完后怎么采样），
+             但不能拆到另一个区——都是同一套预设的参数。 -->
+        <div class="pe-samp">
+          <div class="pe-samp-t">采样</div>
+          <div class="pe-samp-row">
+            <div class="pe-field"><label>温度</label><input type="number" id="pe-temperature" min="0" max="2" step="0.1" value="0.8"></div>
+            <div class="pe-field"><label>最大 tokens</label><input type="number" id="pe-max-tokens" min="1" step="100" value="1000"></div>
+          </div>
         </div>
-        <div class="field">
-          <label>块（从上到下即进 prompt 的顺序）</label>
-          <div id="pe-blocks" class="pe-blocks"></div>
-          <p class="hint">顺序即拼接顺序。世界书若配了锚点（at_depth 等），位置由锚点决定，不在这里。</p>
+
+        <!-- 块按 position 分区：系统区拼进 systemPrompt，插话区按 depth 插消息流。
+             两个区的规则不同，不能平铺在一列里——分区才能看出区别。 -->
+        <div id="pe-blocks" class="pe-blocks"></div>
+      </div>
+      <!-- 右：实时预览。改一下立刻变，不用关弹窗再看。 -->
+      <div class="pe-right">
+        <div class="pe-live-hd">
+          <span class="pe-live-tag"><span class="pe-live-dot"></span>实时</span>
+          <span>拼出来的 systemPrompt</span>
+          <span id="pe-preview-count" class="pe-live-count">— 字</span>
         </div>
-      </form>
-    </div>
-    <div class="modal-footer">
-      <button id="pe-save" class="btn btn-primary">保存</button>
-      <button id="pe-cancel" class="btn">取消</button>
+        <pre id="pe-preview" class="pe-preview">…</pre>
+      </div>
     </div>
   </div>
 </div>
 
 <input type="file" id="file-input" multiple accept=".json,.png" style="display:none">
 <input type="file" id="st-import-input" accept=".json" style="display:none">
+<!--
+  正则编辑弹窗（独立）。
+
+  共用 #modal 的 .modal-body 是单列的，装不下“左表单 + 右试一下”的分栏。
+  而且两个弹窗的保存 / 取消按钮不能共享：共用 modal 里那个 #modal-save
+  绑的是当前 currentForm（角色 / 设定 / 变量 / 世界 / 正则 五种），
+  正则弹窗自己需要一个独立的保存（#regex-modal-save）与关闭，
+  不靠“先把 kind 设成 regex 再去点共用按钮”这种中间态。
+
+  字段 id 保持 rf-* 前缀不变——仓库的 dom.js / 回归测试都认这一堆 id。
+-->
+<div id="regex-modal" class="modal hidden">
+  <div class="modal-content modal-fullscreen regex-modal-content">
+    <div class="pe-hd">
+      <h2 id="regex-modal-title">新建规则</h2>
+      <span class="pe-hd-right">
+        <button id="regex-modal-cancel" type="button" class="btn btn-sm">取消</button>
+        <button id="regex-modal-save" type="button" class="btn btn-primary btn-sm">保存</button>
+      </span>
+      <button id="regex-modal-close" type="button" class="btn btn-ghost btn-sm pe-hd-close">✕</button>
+    </div>
+    <div class="pe-body regex-modal-body">
+      <!-- 左：表单，定宽 400px。字段按“匹配—替换—作用面—作用域—顺序”排，
+           因为“它替换什么”和“它在哪个阶段替换”是两件不同的事，不能交错。 -->
+      <div class="pe-left regex-form-left">
+        <form id="regex-form" class="form" onsubmit="return false">
+          <input type="hidden" id="rf-id">
+
+          <div class="pe-field">
+            <label>名称</label>
+            <input type="text" id="rf-name" placeholder="去掉括号注释">
+          </div>
+
+          <div class="rf-row2">
+            <div class="pe-field">
+              <label>匹配（pattern）</label>
+              <input type="text" id="rf-pattern" class="mono" placeholder="（[^）]*）">
+            </div>
+            <div class="pe-field rf-flags-field">
+              <label>flags</label>
+              <input type="text" id="rf-flags" class="mono" value="g" placeholder="g">
+            </div>
+          </div>
+
+          <div class="pe-field">
+            <label>替换成</label>
+            <input type="text" id="rf-replacement" class="mono" placeholder="留空 = 删掉命中部分">
+            <p class="hint">留空 = 删掉匹配到的内容。可用 <code>$1</code> 引用捕获组。</p>
+          </div>
+
+          <div class="rf-sect">
+            <div class="rf-sect-t">作用面</div>
+            <div class="rf-sect-note">同一段文本有三个时刻，规则可以只作用在其中几个。这三个开关是<b>互相独立</b>的。</div>
+            <div class="rf-surf">
+              <label>
+                <input type="checkbox" id="rf-surface-prompt" checked>
+                <span class="rf-surf-tx">
+                  <span class="rf-surf-name">发请求前</span>
+                  <span class="rf-surf-desc">送进模型之前替换。<code>prompt</code></span>
+                </span>
+              </label>
+              <label>
+                <input type="checkbox" id="rf-surface-display">
+                <span class="rf-surf-tx">
+                  <span class="rf-surf-name">显示前</span>
+                  <span class="rf-surf-desc">只是看着舒服，模型收到的还是原文。<code>display</code></span>
+                </span>
+              </label>
+              <label>
+                <input type="checkbox" id="rf-surface-stored">
+                <span class="rf-surf-tx">
+                  <span class="rf-surf-name">存入前</span>
+                  <span class="rf-surf-desc"><b>会改掉存档本身</b>——关掉它之前的文字也变了，找不回来。<code>stored</code></span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="rf-sect">
+            <div class="rf-sect-t">作用域</div>
+            <div class="rf-scope">
+              <label>
+                <input type="radio" name="rf-scope-radio" value="global" checked>
+                全部对话
+                <span class="rf-scope-id">global</span>
+              </label>
+              <label>
+                <input type="radio" name="rf-scope-radio" value="preset">
+                某一套预设
+                <span class="rf-scope-id">preset</span>
+              </label>
+              <label>
+                <input type="radio" name="rf-scope-radio" value="character">
+                某一角色卡
+                <span class="rf-scope-id">character</span>
+              </label>
+            </div>
+            <div class="pe-field hidden" id="rf-scope-id-field">
+              <label>哪一个</label>
+              <select id="rf-scope-id"><option value="">加载中…</option></select>
+            </div>
+          </div>
+
+          <div class="rf-sect">
+            <div class="rf-sect-t">顺序</div>
+            <div class="pe-field">
+              <input type="number" id="rf-order" value="0" step="10">
+              <p class="hint">多条规则同时命中时，按这个数字从小到大依次应用——<b>顺序不同，结果可能不同</b>。</p>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- 右：试一下——边改边重算，不点按钮。 -->
+      <div class="regex-try">
+        <div class="regex-try-hd">
+          <span class="regex-try-live">● 实时</span>
+          <span>试一下（边改边看）</span>
+        </div>
+        <textarea id="rf-test-input" class="regex-try-src" rows="5"
+          placeholder="填你真会遇到的文本，例如：她笑了（这是旁白）">薇拉抬头。（她在想什么？）「你来了。」
+「我等了很久。」（其实只等了一刻钟。）</textarea>
+        <div class="regex-try-hd" style="margin-top:8px">
+          <span>替换后</span>
+          <span id="rf-test-hit" class="regex-try-hit"></span>
+        </div>
+        <div id="rf-test-output" class="regex-try-out"></div>
+        <div id="rf-test-error" class="regex-try-err hidden"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 正则导入（吃 SillyTavern 的 RegexScript 形态）。独立 file input：
+     不能复用 #migration-file-input——那个绑的是导入“备份 JSON”，不是规则数组。 -->
+<input type="file" id="import-regex-input" accept=".json" style="display:none">
+
 <!--
   备份导入专用。以前它借用了 #file-input（角色卡那个）：于是“导入备份”弹的是
   卡片文件框，选中的备份还会被卡片导入器接手；而真正的迁移导入函数
@@ -983,5 +1700,62 @@
 <input type="file" id="migration-file-input" accept=".json" style="display:none">
 
 <script type="module" src="./assets/modules/main.js"></script>
+<!--
+  两个新浮层（2026-09-27 重设计 · 方向 A）。
+
+  命令面板为什么是必需的而不是加菜：左轨把导航搬成了图标，
+  而“想不起哪个图标叫什么”的那一下依然会发生——面板就是那个出口。
+  它同时也是九个入口之外的快路径（打“设定”就跳设定库）。
+-->
+<div id="bg-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>背景</h2>
+      <button id="bg-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="bg-drop" id="bg-drop" role="button" tabindex="0" title="点一下选图，或把图拖进来">
+        <div id="bg-preview" class="bg-preview"></div>
+      </div>
+      <input type="file" id="bg-file" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
+
+      <div class="bg-row">
+        <label for="bg-veil">遮罩</label>
+        <input type="range" id="bg-veil" min="0.75" max="0.99" step="0.01" value="0.78">
+        <span class="bg-val" id="bg-veil-val">0.78</span>
+      </div>
+      <div class="bg-row">
+        <label for="bg-blur">模糊</label>
+        <input type="range" id="bg-blur" min="0" max="24" step="1" value="0">
+        <span class="bg-val" id="bg-blur-val">0 px</span>
+      </div>
+      <p class="hint" id="bg-hint">
+        遮罩就是铺在图上的一层纸。自定义背景一进来，所有颜色的对比度就不再有任何保证，
+        所以这层不能关到底——它保的是字能不能读，而不是好不好看。
+      </p>
+    </div>
+    <div class="modal-footer">
+      <!--
+        前面 3 个按钮都是“关”字（去掉背景 / 选一张图 / 关闭），
+        前两个其实不是“关”，而是对当前背景的两个相反动作（清除 / 换图）。
+        而标题栏那个 ✕ 才是真正的“关”。三个按钮同位置、同一个意思，是冗余。
+      -->
+      <button id="bg-clear" class="btn" type="button">去掉背景</button>
+      <span class="sp"></span>
+      <button id="bg-pick" class="btn btn-primary" type="button">选一张图</button>
+    </div>
+  </div>
+</div>
+
+<div id="cmd-modal" class="modal hidden">
+  <div class="modal-content cmd-content">
+    <div class="cmd-bar">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="7.2" cy="7.2" r="4"/><path d="M10.3 10.3 13.4 13.4"/></svg>
+      <input type="text" id="cmd-input" placeholder="去哪里？（对话 / 角色 / 设定库 / 世界 / 变量 / 预设 / 正则 / 工具 / 迁移 / 背景）" autocomplete="off" spellcheck="false">
+      <span class="cmd-esc">Esc</span>
+    </div>
+    <div id="cmd-list" class="cmd-list"></div>
+  </div>
+</div>
 </body>
 </html>

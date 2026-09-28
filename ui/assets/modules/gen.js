@@ -30,12 +30,45 @@ function stopPoll() {
   if (timer) { clearTimeout(timer); timer = null; }
 }
 
+// ── 三阶段切换 ────────────────────────────────────
+//
+// 之前三个阶段同时常驻（没跑就能看到两个空段），现在改成按状态推进：
+//   idle：只给那一个问题（大输入 + 示例 + 参数）
+//   running：进度条 + 分步日志，其他阶段让位
+//   done：结果占屏（按“一张卡的样子”展示），需求区与进度区隐去
+//
+// 为什么不删 DOM：三个阶段各自绑定了自己的控件（gen-query / gen-notes /
+// gen-result……），删了就回不来了。用 hidden 切换既保留了控件，又只把
+// 当前阶段摆在用户面前。
+const PHASE = {
+  idle: "gen-phase-idle",
+  running: "gen-phase-running",
+  done: "gen-phase-done"
+};
+
+function setPhase(phase) {
+  for (const p of Object.values(PHASE)) $(p)?.classList.add("hidden");
+  $(PHASE[phase])?.classList.remove("hidden");
+
+  // 页脚按钮按阶段切：
+  //   idle：开始生成（主）
+  //   running：隐藏开始（避免重复提交），保留丢掉（取消）
+  //   done：隐藏开始，显示“再来一次”与“写进角色库”（主）
+  const submit = $("gen-submit");
+  const retry = $("gen-retry");
+  const save = $("gen-save");
+  submit?.classList.toggle("hidden", phase !== "idle");
+  retry?.classList.toggle("hidden", phase !== "done");
+  save?.classList.toggle("hidden", phase !== "done");
+}
+
 // ── 打开 / 关闭 ─────────────────────────────────────────
 
 export function openGen() {
   const modal = $("gen-modal");
   if (!modal) { toast("生成台没装上（缺 #gen-modal）", "error"); return; }
   modal.classList.remove("hidden");
+  setPhase("idle");
   setText("gen-hint", "");
   const q = $("gen-query");
   q?.focus();
@@ -50,24 +83,58 @@ export function closeGen() {
 
 // ── 来源体检 ────────────────────────────────────────────
 
+// 体检条提到最上、形式与语音/出图/场景一致：● + 一句人话 + 一句细节 + 一个「重测」。
+// 之前那一排小圆点堆在页面底部「每个来源取几份材料」旁边——它回答的是“能不能用”，
+// 属于“能不能开始”级别的信息，不是参数级别的，不该跟参数抢位置。
 async function loadSources() {
   const box = $("gen-sources");
   if (!box) return;
-  box.innerHTML = '<span class="gen-src-loading">体检中…</span>';
+  box.innerHTML = `
+    <span class="mh-dot"></span>
+    <div class="mh-text">
+      <div class="mh-title">体检中</div>
+      <div class="mh-sub">向服务器要一份来源探活报告……</div>
+    </div>`;
   try {
     const res = await apiFetch("gen/sources");
     const list = (res.data || res)?.sources || [];
-    box.innerHTML = list.map((s) => `
-      <span class="gen-src ${s.ok ? "ok" : "bad"}" title="${escapeHtml(s.note || "")}">
-        ${s.ok ? "●" : "○"} ${escapeHtml(s.label || s.id)}${s.ok ? ` · ${s.ms}ms` : " · 不通"}
-      </span>`).join("");
+    const okCount = list.filter((s) => s.ok).length;
     const dead = list.filter((s) => !s.ok);
-    if (dead.length > 0) {
-      const first = dead[0];
-      box.innerHTML += `<div class="gen-src-note">${escapeHtml(first.label)}：${escapeHtml(first.note || "不可达")}</div>`;
-    }
+    const allOk = dead.length === 0;
+    const noneOk = okCount === 0;
+
+    // 状态开关与现有 .modal-health 对齐：默认未体检、全通过 → .is-ok，有失败 → .is-bad
+    box.classList.toggle("is-ok", !allOk === false && !noneOk);
+    box.classList.toggle("is-bad", noneOk);
+
+    // 一句人话：能 / 部分能 / 全不通；一句细节：具体到哪几条 + 大概多少 ms
+    const t1 = noneOk ? "都通不了" : (allOk ? "都能用" : `通 ${okCount}/${list.length} 条`);
+    const t2 = list.length
+      ? list.map((s) => `${s.ok ? "●" : "○"} ${s.label || s.id}${s.ok ? ` · ${s.ms}ms` : " · 不通"}`).join("　")
+      : "没拿到来源列表";
+    box.innerHTML = `
+      <span class="mh-dot"></span>
+      <div class="mh-text">
+        <div class="mh-title">${escapeHtml(t1)}</div>
+        <div class="mh-sub">${escapeHtml(t2)}</div>
+      </div>
+      <div class="mh-act">
+        <button type="button" id="gen-retest" class="btn btn-sm">重测</button>
+      </div>`;
+    // 重绑「重测」：innerHTML 重绘后旧 button 没了，得重新抓
+    $("gen-retest")?.addEventListener("click", () => void loadSources());
   } catch (e) {
-    box.innerHTML = `<span class="gen-src bad">○ 体检失败：${escapeHtml(friendlyError(e))}</span>`;
+    box.classList.add("is-bad");
+    box.innerHTML = `
+      <span class="mh-dot"></span>
+      <div class="mh-text">
+        <div class="mh-title">体检失败</div>
+        <div class="mh-sub">${escapeHtml(friendlyError(e))}</div>
+      </div>
+      <div class="mh-act">
+        <button type="button" id="gen-retest" class="btn btn-sm">重测</button>
+      </div>`;
+    $("gen-retest")?.addEventListener("click", () => void loadSources());
   }
 }
 
@@ -80,13 +147,14 @@ export async function submitGen() {
 
   busy = true;
   job = null;
+  setPhase("running");
   const submit = $("gen-submit");
   if (submit) submit.disabled = true;
-  $("gen-save")?.classList.add("hidden");
   setText("gen-result", "");
-  setText("gen-notes", "");
   setText("gen-hint", "");
-  setText("gen-progress", "提交中…");
+  const gnEl = $("gen-notes");
+  if (gnEl) gnEl.innerHTML = "";
+  setProgress({ title: "提交中…", sub: "服务端接到任务，开始拉取参考素材。" });
 
   try {
     const res = await apiFetch("gen/jobs", {
@@ -99,12 +167,12 @@ export async function submitGen() {
     });
     const data = res.data || res;
     if (!data?.id) throw new Error("没拿到任务 id");
-    setText("gen-progress", "已提交，正在检索…");
+    setProgress({ title: "已提交", sub: "等待第一个进度信号……" });
     poll(data.id, 0);
   } catch (e) {
     busy = false;
     if (submit) submit.disabled = false;
-    setText("gen-progress", "提交失败");
+    setPhase("idle");
     toast("提交失败: " + friendlyError(e), "error");
   }
 }
@@ -130,20 +198,24 @@ function poll(id, n) {
       if (submit) submit.disabled = false;
 
       if (snap.state === "done") renderResult(snap);
-      else setText("gen-progress", "失败：" + (snap.error || "未知原因"));
+      else {
+        setPhase("idle");
+        toast("生成失败：" + (snap.error || "未知原因"), "error");
+      }
     } catch (e) {
       busy = false;
       const submit = $("gen-submit");
       if (submit) submit.disabled = false;
-      setText("gen-progress", "轮询失败：" + friendlyError(e));
+      setPhase("idle");
+      toast("轮询失败：" + friendlyError(e), "error");
     }
   }, POLL_MS);
 }
 
-// ── 渲染：过程 ──────────────────────────────────────────
+// ── 渲染：过程（进度条 + 分步日志）─────────────────────
 
 const PHASE_LABEL = {
-  searching: "检索中",
+  searching: "检索参考素材",
   extracting: "抽取事实",
   composing: "组装卡与世界书",
   verifying: "核对出处",
@@ -151,15 +223,55 @@ const PHASE_LABEL = {
   failed: "失败"
 };
 
+const PHASE_STEP = {
+  searching: 1,
+  extracting: 2,
+  composing: 3,
+  verifying: 4,
+  done: 5
+};
+
+// 进度条只报当前那一步，分步日志列完每一步。
+// 一次要跑几十秒的生成，最难受的不是等，是不知道在等什么。
+// 所以日志里每一步都要有：它做了什么、花了多久。
+function setProgress({ title, sub, step, total, eta }) {
+  const t1 = $("gen-prog-title");
+  const t2 = $("gen-prog-sub");
+  const etaEl = $("gen-prog-eta");
+  if (t1) t1.textContent = title || "";
+  if (t2) t2.textContent = sub || "";
+  if (etaEl) etaEl.textContent = eta || "";
+  const fill = $("gen-prog-fill");
+  if (fill) {
+    const pct = total ? Math.min(100, Math.round((step / total) * 100)) : 0;
+    fill.style.width = pct + "%";
+  }
+}
+
 function renderProgress(snap) {
-  setText("gen-progress", `${PHASE_LABEL[snap.phase] || snap.phase} · ${snap.detail || ""}`);
+  const step = PHASE_STEP[snap.phase] || 0;
+  const title = PHASE_LABEL[snap.phase] || snap.phase;
+  const sub = snap.detail || "";
+  setProgress({ title, sub, step, total: 5, eta: "约 30 秒" });
+
   const notes = Array.isArray(snap.notes) ? snap.notes : [];
-  if (notes.length === 0) return;
-  $("gen-notes").innerHTML = notes.map((n) => `
-    <div class="gen-note ${n.ok ? "" : "bad"}">
-      ${n.ok ? "✓" : "✕"} ${escapeHtml(n.label || n.source)}
-      ${n.ok ? `取了 ${n.count ?? 0} 份` : escapeHtml(n.note || "失败")}
-    </div>`).join("");
+  if (notes.length === 0) {
+    const gnEl = $("gen-notes");
+  if (gnEl) gnEl.innerHTML = "";
+    return;
+  }
+  $("gen-notes").innerHTML = notes.map((n) => {
+    const done = !!n.ok;
+    // 时长字段：后端可能给 ms / duration / took_ms，都接一下；拿不到就写……
+    const ms = n.ms ?? n.duration ?? n.took_ms;
+    const msText = typeof ms === "number" ? (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`) : "……";
+    return `
+      <div class="glr ${done ? "done" : "bad"}">
+        <span class="glr-dot"></span>
+        <span class="glr-tx">${escapeHtml(n.label || n.source)}${n.ok ? (n.count != null ? ` · 取了 ${n.count} 份` : "") : escapeHtml(n.note || "失败")}</span>
+        <span class="glr-ms">${msText}</span>
+      </div>`;
+  }).join("");
 }
 
 // ── 渲染：结果（审查台）─────────────────────────────────
@@ -198,6 +310,8 @@ function renderResult(snap) {
       </a>
     </div>`).join("");
 
+  // 世界书条目：卡片里列出名字与一句内容，默认全选、点一下可取消。
+  // 不再把整块 JSON 抛回去——用户要做的是“判断像不像”，不是“解析 JSON”。
   const entriesHtml = entries.map((e) => `
     <label class="gen-entry">
       <input type="checkbox" class="gen-entry-ck" data-i="${e._i}" checked>
@@ -216,12 +330,12 @@ function renderResult(snap) {
       ${card.scenario ? `<div class="gen-card-line"><b>场景</b>${escapeHtml(card.scenario)}</div>` : ""}
       ${(card.tags || []).length ? `<div class="gen-card-tags">${card.tags.map((t) => `<i>${escapeHtml(t)}</i>`).join("")}</div>` : ""}
     </div>
-    ${entries.length ? `<div class="gen-sub">世界书条目（点一下取消）</div>${entriesHtml}` : ""}
+    ${entries.length ? `<div class="gen-sub">顺带生成的世界书 · ${entries.length} 条（点一下取消）</div>${entriesHtml}` : ""}
     ${facts.length ? `<div class="gen-sub">用到的资料</div>${factsHtml}` : ""}
   `;
 
-  $("gen-save")?.classList.remove("hidden");
-  $("gen-submit")?.classList.add("hidden");
+  // 阶段推进到 done：需求与进度都让位，结果占屏
+  setPhase("done");
 }
 
 // ── 落库 ────────────────────────────────────────────────
@@ -277,9 +391,7 @@ export function discardGen() {
   setText("gen-result", "");
   setText("gen-notes", "");
   setText("gen-hint", "");
-  setText("gen-progress", "已丢掉，可以重新开始");
-  $("gen-save")?.classList.add("hidden");
-  $("gen-submit")?.classList.remove("hidden");
+  setPhase("idle");
   const submit = $("gen-submit");
   if (submit) submit.disabled = false;
 }
@@ -295,12 +407,29 @@ export async function discardGenConfirmed() {
   return true;
 }
 
+/** 再来一次：重用上次那句 query，直接重提。 */
+export async function retryGen() {
+  if (busy) return;
+  // 回到 idle 相后，输入框还在，query 保留不变；直接 submit 就重新跑一遍
+  discardGen();
+  const q = $("gen-query");
+  if (q) q.focus();
+}
+
 /** 主视图收到左栏的 gen-open 时调用。 */
 export function bindGen() {
   $("gen-close")?.addEventListener("click", closeGen);
   $("gen-submit")?.addEventListener("click", () => void submitGen());
   $("gen-save")?.addEventListener("click", () => void saveGen());
   $("gen-discard")?.addEventListener("click", () => { void discardGenConfirmed(); });
+  $("gen-retry")?.addEventListener("click", () => void retryGen());
+  // 示例：点一下就填进 query 框，不直接提交——用户可能还想改几个字。
+  $("gen-phase-idle")?.querySelectorAll(".bigq-examples b").forEach(b => {
+    b.addEventListener("click", () => {
+      const q = $("gen-query");
+      if (q) { q.value = b.textContent.trim(); q.focus(); }
+    });
+  });
   $("gen-modal")?.addEventListener("click", (e) => {
     if (e.target === $("gen-modal")) closeGen();
   });

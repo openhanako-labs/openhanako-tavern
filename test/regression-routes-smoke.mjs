@@ -45,7 +45,10 @@ const { registerToolRoutes } = await import("../lib/tools/routes.js");
 const { registerMigrationRoutes } = await import("../lib/migration/routes.js");
 const { registerGenRoutes } = await import("../lib/gen/routes.js");
 const { registerMediaRoutes } = await import("../lib/media/routes.js");
+const { registerIllustrationRoutes } = await import("../lib/illustration/routes.js");
 const { registerTtsRoutes } = await import("../lib/tts/routes.js");
+const { DirectorRepo } = await import("../lib/director/repo.js");
+const { registerDirectorRoutes } = await import("../lib/director/routes.js");
 const { registerBoardRoutes } = await import("../lib/board/routes.js");
 const { registerRegexRoutes } = await import("../lib/regex/routes.js");
 
@@ -95,6 +98,7 @@ const varRepo = new VariableRepo(tmp); await varRepo.init();
 const presetRepo = new PresetRepo(tmp); await presetRepo.init();
 const boardRepo = new BoardRepo(tmp); await boardRepo.init();
 const regexRepo = new RegexRepo(tmp); await regexRepo.init();
+const directorRepo = new DirectorRepo(tmp); await directorRepo.init();
 
 const apps = {
   characters: makeApp(),
@@ -108,7 +112,9 @@ const apps = {
   migration: makeApp(),
   gen: makeApp(),
   media: makeApp(),
-  tts: makeApp()
+  illustration: makeApp(),
+  tts: makeApp(),
+  director: makeApp()
 };
 
 // 假 llm。生成路由需要它，而**不能因为麻烦就跳过这一段**——
@@ -144,7 +150,7 @@ const fakeLlm = {
 
 registerCharacterRoutes(apps.characters, charRepo, transfer, setRepo);
 registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo);
-registerSettingRoutes(apps.settings, setRepo, convRepo);
+registerSettingRoutes(apps.settings, setRepo, convRepo, null, charRepo);
 registerVariableRoutes(apps.variables, varRepo, convRepo, charRepo);
 registerPresetRoutes(apps.presets, presetRepo);
 registerToolRoutes(apps.tools, {});
@@ -155,6 +161,8 @@ registerGenRoutes(apps.gen, { llm: fakeLlm, net: null });
 // 出图：这里只验「路由注册与可达」，真调用形状在 regression-media-portrait。
 // sdk 给 null —— status 会诚实地报「没提供 sdk.media」。
 registerMediaRoutes(apps.media, { sdk: null, characterRepo: charRepo, transfer, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "eleckoi-smoke-")) });
+// 场景插图：sdk 给 null，config 与 latest 路由不依赖 sdk，能照验「注册与可达」。
+registerIllustrationRoutes(apps.illustration, { sdk: null, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "eleckoi-smoke-")), conversationRepo: convRepo, characterRepo: charRepo });
 // 语音合成：sdk 与 dataDir 都给 null → 两条服务路由会诚实地报“未就绪”，
 // 而 /tts/providers 不依赖它们，照样能答。
 registerTtsRoutes(apps.tts, { sdk: null, dataDir: null });
@@ -162,6 +170,7 @@ registerTtsRoutes(apps.tts, { sdk: null, dataDir: null });
 // 这里注册它们只是为了让下面那张表是**完整的九张脸**。
 registerBoardRoutes(apps.board, boardRepo);
 registerRegexRoutes(apps.regex, regexRepo);
+registerDirectorRoutes(apps.director, directorRepo);
 
 // ── ① 路由表精确对照 ──
 const EXPECTED = {
@@ -179,6 +188,8 @@ const EXPECTED = {
     // 路由表对照就是为了逼人在这里多想一秒：加路由是有后果的，
     // 它同时意味着界面得有出口、测试得有覆盖。
     "PATCH /conversations/:id/participants",
+    // 换绑/解绑导演配方。只改绑定，不碰进度——进度是这一场自己的。
+    "PATCH /conversations/:id/director",
     // 这一场的自动轮换开关（场景属性，不是全局设置）
     "PUT /conversations/:id/rotation",
     "DELETE /conversations/:id",
@@ -203,7 +214,11 @@ const EXPECTED = {
     "GET /settings", "GET /settings/:id", "POST /settings", "PUT /settings/:id",
     "DELETE /settings/:id", "PUT /settings/:id/toggle", "POST /settings/import",
     "POST /settings/active", "POST /settings/test", "POST /settings/inject",
-    "POST /settings/import-st", "POST /settings/import-character-book"
+    "POST /settings/import-st", "POST /settings/import-character-book",
+    "POST /settings/autocategorize",
+    "GET /settings/cast-candidates",
+    // 与 import-st 对称的那一半：世界书得进得来、也出得去
+    "GET /settings/export-st"
   ],
   variables: [
     "GET /variables", "GET /variables/:id", "POST /variables", "PUT /variables/:id",
@@ -220,6 +235,15 @@ const EXPECTED = {
   board: [
     "GET /board/cells", "GET /board/visible", "POST /board/cells",
     "PUT /board/cells/:id", "PUT /board/cells/:id/toggle", "DELETE /board/cells/:id"
+  ],
+  director: [
+    "GET /directors", "GET /directors/:id", "POST /directors",
+    "PUT /directors/:id", "DELETE /directors/:id",
+    // 试算：不落盘、不碰对话，只回答「按现在这份配方这一轮会怎么走」。
+    // 没有它，作者改完规则只能开一场真对话去试——试错的代价高到没人愿意试。
+    "POST /directors/:id/simulate",
+    // 草稿校验：新建时还没有 id，而那时候最需要知道「写对了没有」
+    "POST /directors/validate"
   ],
   regex: [
     "GET /regex-rules", "GET /regex-rules/:id", "POST /regex-rules/test",
@@ -240,7 +264,14 @@ const EXPECTED = {
   ],
   media: [
     "GET /media/status", "POST /media/portrait",
-    "GET /media/engines", "GET /media/config", "PUT /media/config", "GET /media/workflows"
+    "GET /media/engines", "GET /media/config", "PUT /media/config", "GET /media/workflows",
+    // 图片台账（第 1 批）
+    "GET /media/index", "GET /media/index/:id", "GET /media/:id"
+  ],
+  illustration: [
+    "GET /illustration/config", "PUT /illustration/config",
+    "POST /conversations/:id/illustrate",
+    "GET /conversations/:id/illustration/latest"
   ],
   tts: [
     "GET /tts/providers", "GET /tts/config", "PUT /tts/config",
@@ -402,6 +433,31 @@ await okAsync("conversations：预设跟随对话，挂上就真的进 prompt", 
     body: { text: "看看。" }
   }), "preview back");
   assert.ok(!back.data.systemPrompt.includes(MARK), "取消之后预设还在");
+});
+
+// 场景插图（第 2 批）：
+//   · /illustration/config：默认关，能 PUT 修改
+//   · /illustration/latest：空对话返回空
+//   · /conversations/:id/illustrate：缺 scene 报 400
+//
+//   sdk 给 null 时，真实出图路径会返回错误（不是断言失败），
+//   但 config/latest 不依赖 sdk，能完整走通。
+await okAsync("illustration：config 与 latest 能打通，缺 scene 报 400", async () => {
+  const c1 = healthy(await request(apps.illustration, "GET", "/illustration/config"), "GET /illustration/config");
+  assert.strictEqual(c1.data.enabled, false, "默认 enabled=false");
+  assert.strictEqual(c1.data.autoTriggerActive, false, "默认 autoTriggerActive=false");
+
+  healthy(await request(apps.illustration, "GET", `/conversations/${convId}/illustration/latest`),
+    "GET /illustration/latest");
+
+  const bad = await request(apps.illustration, "POST", `/conversations/${convId}/illustrate`, { body: {} });
+  assert.strictEqual(bad.status, 400, `缺 scene 应 400，实为 ${bad.status}`);
+
+  const c2 = healthy(await request(apps.illustration, "PUT", "/illustration/config", {
+    body: { enabled: true, mode: "marker" }
+  }), "PUT /illustration/config");
+  assert.strictEqual(c2.data.enabled, true);
+  assert.strictEqual(c2.data.autoTriggerActive, true, "开启后 autoTriggerActive=true");
 });
 
 // 设定库

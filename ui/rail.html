@@ -30,9 +30,13 @@ body {
   background: transparent; color: var(--t);
   font: 11.5px/1.5 system-ui, -apple-system, "Segoe UI", "PingFang SC", sans-serif;
 }
+/*
+  标题全是中文——`text-transform: uppercase` 一个像素都不起作用，
+  是从某个英文模板抄来的残留。删掉，别让人以为这里本该是大写。
+*/
 h2 {
   font-size: 11px; font-weight: 700; letter-spacing: .05em;
-  text-transform: uppercase; color: var(--tm);
+  color: var(--tm);
   margin: 12px 2px 6px; display: flex; align-items: center; gap: 6px;
 }
 h2:first-child { margin-top: 0; }
@@ -55,9 +59,12 @@ h2 .act:hover { opacity: .7; }
 }
 .item:hover { background: var(--card); }
 .item.on { background: var(--card); box-shadow: inset 2px 0 0 var(--ac); }
-.item img, .item .ph {
-  width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+.item img.ava, .item .ph {
+  width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0;
   object-fit: cover; background: var(--card);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 600; color: var(--tm);
+  line-height: 1;
 }
 .item .bd { flex: 1; min-width: 0; }
 .item .nm {
@@ -74,13 +81,49 @@ h2 .act:hover { opacity: .7; }
   background: var(--ok); box-shadow: 0 0 0 3px rgba(90,158,111,.16);
 }
 
-.foot { display: flex; gap: 5px; margin-top: 10px; }
-.foot button {
-  flex: 1; font-size: 11px; padding: 5px 4px; font-family: inherit;
-  border: .5px solid var(--line); border-radius: 7px;
-  background: var(--card); color: var(--ac); cursor: pointer;
+/*
+  页脚从四个按钮收成 2 + 「⋯」。
+  宿主给这一列的宽度是窄的（约 230px），四个按钮挤一行必然折行——
+  「✧ AI 生成卡与世界书」十个字塞进一格，压到别个按钮只能一字一行。
+
+  分法：两个高频的并排（新对话·主色 / 新角色），两个低频的收进「⋯」。
+  低频指的是：导入卡是搬家时偶尔用一次，AI 生成是想不出角色时试一次——
+  都值得有入口，但不值得各占一行宽度。
+*/
+.foot {
+  display: flex; gap: 6px; margin-top: 11px; align-items: center;
 }
-.foot button:hover { background: var(--ac); color: #fff; border-color: var(--ac); }
+.foot button {
+  flex: 1 1 0; min-width: 0; font-size: 11.5px; padding: 7px 4px; font-family: inherit;
+  border: .5px solid var(--line); border-radius: 8px;
+  background: transparent; color: var(--tm); cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.foot button:hover { background: var(--card); color: var(--ac); border-color: var(--ac); }
+.foot .p {
+  background: var(--ac); color: #fff; border-color: var(--ac);
+}
+.foot .p:hover { color: #fff; opacity: .92; }
+.foot .more {
+  flex: 0 0 36px; font-size: 13px; padding: 5px 4px; line-height: 1;
+}
+
+.moremenu {
+  margin-top: 6px; border: .5px solid var(--line); border-radius: 8px;
+  overflow: hidden; background: var(--card);
+}
+.moremenu.hidden { display: none; }
+.moremenu button {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  font: inherit; font-size: 11.5px; padding: 7px 10px;
+  border: none; border-top: .5px solid var(--line);
+  background: transparent; color: var(--tm); cursor: pointer; text-align: left;
+}
+.moremenu button:first-child { border-top: none; }
+.moremenu button:hover { background: rgba(224,138,60,.10); color: var(--ac); }
+.moremenu .mnote {
+  margin-left: auto; font-size: 10px; opacity: .7;
+}
 .empty { color: var(--tm); font-size: 11px; padding: 10px 4px; line-height: 1.6; }
 .err { color: var(--bad); font-size: 11px; padding: 8px 4px; word-break: break-all; }
 </style>
@@ -88,13 +131,26 @@ h2 .act:hover { opacity: .7; }
 <body>
   <input id="q" type="search" placeholder="搜索角色 / 对话…">
   <div id="chars"></div>
-  <h2>最近对话 <span class="n" id="conv-n"></span><span class="act" id="conv-refresh" title="刷新">↻</span></h2>
+  <!--
+    原本这里挂着一个 ↻（#conv-refresh）。它是第九个「刷新」：
+    七个抽屉 + 一个预览弹窗 + 这里，全绑 load*。但左栏是宿主的面板——
+    打开就加载、切回来会重载，它从来没有需要手按的时刻。
+  -->
+  <h2>最近对话 <span class="n" id="conv-n"></span></h2>
   <div id="convs"></div>
   <div class="foot">
-    <button id="rail-import" title="导入角色卡（.json / ST 卡）">导入角色卡</button>
-    <button id="new-conv">+ 新对话</button>
-    <button id="new-char">+ 角色</button>
-    <button id="gen-open" title="联网检索资料，生成一张卡 + 一套世界书">✧ AI 生成卡与世界书</button>
+    <button id="new-conv" class="primary" title="开一场新对话">+ 新对话</button>
+    <button id="new-char" title="新建一张角色卡">+ 角色</button>
+    <button id="rail-more" class="more" type="button" title="更多" aria-expanded="false">⋯</button>
+  </div>
+  <!--
+    两个低频动作收进「⋯」。
+    导入卡：偶尔搬家时用一次；AI 生成：想不出角色时试一次。
+    保持 rail-import / gen-open 的原 id，rail.js 里那两处绑定不用改。
+  -->
+  <div id="rail-more-menu" class="moremenu hidden" role="menu">
+    <button id="rail-import" type="button" title="导入角色卡（.json / ST 卡）">⤓ 导入角色卡<span class="mnote">.json / ST 卡</span></button>
+    <button id="gen-open" type="button" title="联网检索资料，生成一张卡 + 一套世界书">✧ AI 生成一张卡<span class="mnote">含世界书</span></button>
   </div>
   <script type="module" src="./assets/rail.js"></script>
 </body>

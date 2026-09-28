@@ -23,13 +23,24 @@ export const dom = {
 
   settingsListEl: document.getElementById("settings-list"),
   settingsCountEl: document.getElementById("settings-count"),
+  // ── 设定库 2.0（分页 / 分组维度 / 排序 / 批量条 / 类目按钮）──
+  settingsPagerEl: document.getElementById("settings-pager"),
+  settingsBatchBarEl: document.getElementById("settings-batch-bar"),
+  settingsGroupBy: document.getElementById("settings-groupby"),
+  settingsSortBy: document.getElementById("settings-sortby"),
+  settingsCatsBtn: document.getElementById("settings-cats-btn"),
+  settingsAutocategorizeBtn: document.getElementById("autocategorize-btn"),
+  createSettingBtn: document.getElementById("create-setting-btn"),
+  importStBtn: document.getElementById("import-st-btn"),
+  exportStBtn: document.getElementById("export-st-btn"),
+  settingsSearch: document.getElementById("settings-search"),
+  priorityPickerEl: null,
 
   variablesListEl: document.getElementById("variables-list"),
   variablesCountEl: document.getElementById("variables-count"),
   convVarsListEl: document.getElementById("conv-vars-list"),
   convVarsCountEl: document.getElementById("conv-vars-count"),
 
-  toolsListEl: document.getElementById("tools-list"),
   toolsCountEl: document.getElementById("tools-count"),
   toolGroupsEl: document.getElementById("tool-groups-list"),
 
@@ -41,7 +52,8 @@ export const dom = {
   // 正则规则
   regexListEl: document.getElementById("regex-list"),
   regexCountEl: document.getElementById("regex-count"),
-  regexNoteEl: document.getElementById("regex-note"),
+  regexModalEl: document.getElementById("regex-modal"),
+  importRegexInput: document.getElementById("import-regex-input"),
 
   // 预设
   presetListEl: document.getElementById("preset-list"),
@@ -66,6 +78,7 @@ export const DRAWERS = {
   // 注：**没有 board**。世界不是抽屉，而是聊天左边一条可折叠的常驻栏
   //（#board-col）。shell.openDrawer("board") 会转去做开关，
   // 所以顶栏与 ⋯ 菜单里原有的入口照旧能用。
+  director: document.getElementById("drawer-director"),
   variables: document.getElementById("drawer-variables"),
   presets: document.getElementById("drawer-presets"),
   regex: document.getElementById("drawer-regex"),
@@ -111,5 +124,18 @@ export function showEditForm(kind) {
   }
   const target = byKind[kind] ? document.getElementById(byKind[kind]) : null;
   target?.classList.remove("hidden");
+
+  // 页脚切换：
+  //   · character 表单的页脚由 openCharacterEditor 管（编辑已有卡时：删除 + 导出；
+  //     新建时：只有取消 / 保存）——所以那里不改。
+  //   · 非 character（setting / variable / board）一律「取消 / 保存」右对齐；
+  //     导出只对角色卡有意义，对它们隐藏。
+  //   · regex 已经走自己的弹窗与页脚（#regex-modal），这里不改。
+  if (kind && kind !== "character") {
+    document.getElementById("modal-delete")?.classList.add("hidden");
+    document.getElementById("modal-export-wrap")?.classList.add("hidden");
+    document.getElementById("modal-cancel")?.classList.remove("hidden");
+  }
+
   return !!target;
 }

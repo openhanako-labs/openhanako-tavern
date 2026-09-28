@@ -17,6 +17,15 @@ import { onNavigation, askRailRefresh, setActiveConv, railAlive } from "./nav-bu
 let openDrawerName = null;
 
 /**
+ * 「设置」这一格收着哪几个抽屉。
+ *
+ * 左轨合并（预设 / 正则 / 工具 / 迁移 → 设置）：四项各占一格是在用
+ * 一等位置放三等入口。但**抽屉本身一个没动**——openDrawer 照旧按
+ * 名字开，少的只是一个入口。顶栏 ⋯ 菜单里那八个也原样还在。
+ */
+const CFG_DRAWERS = ["presets", "regex", "tools", "migration"];
+
+/**
  * 黑板列开着吗。
  *
  * 世界不是抽屉了：它常驻在聊天左边（卡里的形状），
@@ -42,10 +51,41 @@ export function toggleBoardColumn(force) {
   return open;
 }
 
-/** 高亮跟着当前面板走——面板可以来自顶栏、⋯ 菜单或开聊时自动站出。 */
+/**
+ * 右栏面板的名字。抬头上的字就取这里。
+ *
+ * 为什么要抬头：左轨搬到左边之后，右栏只剩“从右边滑出来的一条”，
+ * 不写名字就不知道开的是哪一个；而原来的四个标签（与左轨重复）已删，
+ * 不能靠“哪颗标签亮着”来认路了。
+ */
+const PANEL_TITLES = {
+  character: "角色",
+  settings: "设定库",
+  director: "剧情公式",
+  variables: "变量",
+  presets: "提示词预设",
+  regex: "正则规则",
+  tools: "工具",
+  migration: "迁移"
+};
+
+/** 面板抬头：跟着 openDrawerName 走。 */
+function syncPanelTitle() {
+  const el = document.getElementById("panel-title");
+  if (!el) return;
+  el.textContent = openDrawerName ? (PANEL_TITLES[openDrawerName] || openDrawerName) : "";
+}
+
+/**
+ * 高亮跟着当前面板走。
+ *
+ * 选择器从「#ctx-tabs .ctx-tab, #topnav .topnav-item」改成「#apprail .rail-item」：
+ * 2026-09-27 重设计把两套导航合成了一套，#ctx-tabs 与 .topnav-item 已不存在。
+ * 换言之——这里原本要找两份、现在只有一份，**数量少了是目的，不是遗漏**。
+ */
 function syncTabs() {
   const boardOn = boardColumnOpen();
-  document.querySelectorAll("#ctx-tabs .ctx-tab, #topnav .topnav-item").forEach((btn) => {
+  document.querySelectorAll("#apprail .rail-item").forEach((btn) => {
     const key = btn.dataset.drawer || (btn.id === "topnav-chat" ? "chat" : null);
     let on = false;
     // 「对话」= 右栏没开面板。黑板列开不开不影响它——聊天区一直在。
@@ -53,9 +93,43 @@ function syncTabs() {
     // 「世界」也不看 openDrawerName：黑板列与右栏是**两列**，可以同时开着
     //（开一场对话会自动站出角色面板，那时世界列常常还开着）。
     else if (key === "board") on = boardOn;
+    // 「设置」是四个低频入口的合集：里面任意一个开着，它就亮。
+    else if (btn.id === "cfg-open") on = CFG_DRAWERS.includes(openDrawerName);
     else on = !!openDrawerName && key === openDrawerName;
     btn.classList.toggle("on", on);
   });
+  syncPanelTitle();
+  syncRailBadges();
+}
+
+/**
+ * 左轨角标：世界有几格。
+ *
+ * 数据源与顶栏那颗「世界 N 格」按钮**同一个**（state.boardWorld + state.boardChat）——
+ * 两处显示同一个事实，就必须读同一个来源，否则迟早一个说 3 一个说 0。
+ *
+ * 三条：
+ *   ① 认不出来（boardChat 还不是数组）→ 整颗不渲染。挂「0」会被读成
+ *      「这一场真的没有格子」，而真相是「还没拉到」。
+ *   ② 0 格也不渲染 —— 一个永远写着 0 的徽标是噪音。
+ *   ③ 幂等：重复调用只是重写同一颗，不叠加。
+ */
+function syncRailBadges() {
+  const btn = document.querySelector('#apprail .rail-item[data-drawer="board"]');
+  if (!btn) return;
+  const known = Array.isArray(state.boardChat);
+  const cells = (state.boardWorld?.length || 0) + (state.boardChat?.length || 0);
+  let badge = btn.querySelector(".rail-badge");
+  if (!known || cells === 0) {
+    badge?.remove();
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement("i");
+    badge.className = "rail-badge";
+    btn.appendChild(badge);
+  }
+  badge.textContent = String(cells);
 }
 
 // ── 侧栏折叠 ──────────────────────────────────────────
@@ -130,6 +204,9 @@ export async function openDrawer(name, opts = {}) {
     if (name === "settings") {
       const { loadSettings } = await import("./settings.js");
       await loadSettings();
+    } else if (name === "director") {
+      const { loadDirectors } = await import("./director.js");
+      await loadDirectors();
     } else if (name === "variables") {
       const { loadVariables } = await import("./variables.js");
       await loadVariables();
@@ -164,6 +241,31 @@ export function closeDrawer() {
 
 export function currentDrawer() {
   return openDrawerName;
+}
+
+/**
+ * 「设置」浮层。
+ *
+ * 位置实时算，而不是 CSS 里定死：左轨会被收起来（--rail-w 从 66 变 46），
+ * 按钮的坐标是活的。先显示再量高度——hidden 时 offsetHeight 是 0。
+ */
+function toggleCfgMenu() {
+  const menu = document.getElementById("cfg-menu");
+  const btn = document.getElementById("cfg-open");
+  if (!menu || !btn) return;
+  if (!menu.hidden) { closeCfgMenu(); return; }
+  menu.hidden = false;
+  const r = btn.getBoundingClientRect();
+  // 底部留出菜单自身的高度，别让它从窗口下沿掉出去
+  menu.style.top = `${Math.min(r.top, window.innerHeight - menu.offsetHeight - 12)}px`;
+  menu.style.left = `${r.right + 8}px`;
+  btn.setAttribute("aria-expanded", "true");
+}
+
+function closeCfgMenu() {
+  const menu = document.getElementById("cfg-menu");
+  if (menu) menu.hidden = true;
+  document.getElementById("cfg-open")?.setAttribute("aria-expanded", "false");
 }
 
 // ── 点角色卡 = 开聊 ───────────────────────────────────
@@ -289,6 +391,13 @@ export function bindShell() {
 
   restoreSidebar();
 
+  // 首屏就把高亮算一次。
+  //
+  // 以前没人叫它：只有 openDrawer / toggleBoardColumn / 开聊时才会跑，
+  // 而首屏默认状态（右栏没开、黑板列关着）恰好就是“对话高亮”，
+  // 于是看上去像正常——直到导航搬到左轨，这一条空得刺眼。
+  syncTabs();
+
   // 早先这里绑过#sidebar-collapse / #sidebar-expand 两个按钮——
   // 页内侧栏删了之后它们就不存在了，只剩下 dom.js 里两个 null 与这里两行死引用。
   // Ctrl/Cmd+B 快捷键还在（见 main.js），那是现在唯一的收/展方式。
@@ -307,25 +416,70 @@ export function bindShell() {
     });
   });
 
-  // 顶栏入口：点当前那个 = 收起（与 ⋯ 菜单一致）。
-  // 卡里那一排就是这个手感——再点一次回到“只有对话”。
-  document.querySelectorAll("#topnav button[data-drawer]").forEach(btn => {
+  // 左轨入口：点当前那个 = 收起（与 ⋯ 菜单一致）。
+  // 摸法上，再点一次回到“只有对话”。
+  document.querySelectorAll("#apprail button[data-drawer]").forEach(btn => {
     btn.addEventListener("click", () => openDrawer(btn.dataset.drawer));
   });
   document.getElementById("topnav-chat")?.addEventListener("click", () => closeDrawer());
 
+  // 「设置」：不直接开抽屉，先弹一列（四项低频配置）。
+  // 菜单不能待在 nav 里——那是 overflow-y:auto 的列，绝对定位会被裁掉；
+  // 也没有可靠的定位祖先，所以走 fixed、坐标由 JS 算。
+  document.getElementById("cfg-open")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleCfgMenu();
+  });
+  document.querySelectorAll("#cfg-menu [data-cfg-go]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      closeCfgMenu();
+      openDrawer(btn.dataset.cfgGo);
+    });
+  });
+  document.addEventListener("click", (e) => {
+    const menu = document.getElementById("cfg-menu");
+    if (menu && !menu.hidden && !menu.contains(e.target) && !e.target.closest("#cfg-open")) closeCfgMenu();
+  });
+
+  // 收起键。只改一个变量：--rail-w 本来就是外壳的列宽，
+  // 而 .shell 上挂着 grid-template-columns 的 transition，动画是白送的。
+  const foldBtn = document.getElementById("rail-fold");
+  const applyFold = (folded) => {
+    dom.shellEl?.classList.toggle("rail-folded", folded);
+    if (foldBtn) {
+      foldBtn.setAttribute("aria-expanded", String(!folded));
+      foldBtn.title = folded ? "展开导航" : "收起导航";
+    }
+    try { localStorage.setItem("eleckoi:rail-folded", folded ? "1" : "0"); } catch { /* 隐私模式写不了 */ }
+  };
+  foldBtn?.addEventListener("click", () => {
+    applyFold(!dom.shellEl?.classList.contains("rail-folded"));
+  });
+  // 记住上次的选择：收起是「窄屏 / 想专心读」的长期偏好，不是一次性动作。
+  try { if (localStorage.getItem("eleckoi:rail-folded") === "1") applyFold(true); } catch { /* ignore */ }
+
+  // 玩家消息靠左 / 靠右。
+  //
+  // 存 localStorage 而不是单开一页设置：它是一条改一次就不再动的视觉
+  // 偏好，为它多一层入口不划算。默认靠右（现状），靠左时才由 CSS 补
+  // 一个头像——右边还知道是自己打的（输入框在右下），搬到左边就没这
+  // 个隐含提示了。
+  const applyYouSide = (left) => {
+    document.querySelector(".messages")?.classList.toggle("you-left", left);
+    const label = document.getElementById("you-side-label");
+    if (label) label.textContent = left ? "玩家消息靠左" : "玩家消息靠右";
+    try { localStorage.setItem("eleckoi:you-left", left ? "1" : "0"); } catch { /* 隐私模式 */ }
+  };
+  document.getElementById("you-side-toggle")?.addEventListener("click", () => {
+    applyYouSide(!document.querySelector(".messages")?.classList.contains("you-left"));
+  });
+  try { if (localStorage.getItem("eleckoi:you-left") === "1") applyYouSide(true); } catch { /* ignore */ }
+
   // 标题行那颗「世界 N 格」：既是读数也是开关
   document.getElementById("board-toggle")?.addEventListener("click", () => toggleBoardColumn());
 
-  // 右栏标签条：点标签切面板。点当前标签不做事——
-  // “同名再点=收起”是给 ⋯ 菜单的，放在标签条上算误触。
-  document.querySelectorAll("#ctx-tabs .ctx-tab").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const name = btn.dataset.drawer;
-      if (!name || openDrawerName === name) return;
-      openDrawer(name, { reload: true });
-    });
-  });
+  // （右栏标签条的绑定已删：四个标签和左轨重复，2026-09-27 一并去了。
+  //   收起右栏现在有面板抬头右上角那个 ✕，左轨同名入口再点一次也能收。）
 
   // 点别处收起顶栏菜单
   document.addEventListener("click", (e) => {
@@ -340,6 +494,8 @@ export function bindShell() {
   });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
+    // 浮层比抽屉浅一层，先收它——不然一次 Esc 关掉两层反而是惊吓。
+    if (!document.getElementById("cfg-menu")?.hidden) { closeCfgMenu(); return; }
     if (openDrawerName) closeDrawer();
   });
 

@@ -266,7 +266,11 @@ await testAsync("同名条目不重复导入", async () => {
   const second = await repo.importSettings(settings);
 
   assert.equal(second.added, 0);
-  assert.equal(second.skipped.length, 1);
+  // 2026-09-27 判重从「名字」改成「身份」（源 + 原始 id，退了用内容指纹）。
+  // 同一份内容重导：认出来、刷新，而不是当作全新的再塞一条——也不是
+  // 「看到了但什么都不做」。计入 updated，不再计入 skipped。
+  assert.equal(second.updated, 1);
+  assert.equal(second.skipped.length, 0);
   assert.equal((await repo.list()).length, 1);
 });
 

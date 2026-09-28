@@ -13,7 +13,15 @@ import { execFileSync } from "node:child_process";
 // ROOT 从脚本位置推导（test/ 的上一级），不写死绝对路径——
 // 这份快照会在 apps/ 与备份目录之间搬来搬去，写死就找不到。
 const ROOT = path.resolve(import.meta.dirname, "..");
-const SKIP = new Set([".git", "node_modules", "_recovery"]);
+/*
+ * vendor：第三方产物，不进这套检查。
+ *
+ * 两个理由，第二个更硬：
+ *   ① 它 1.2MB，每次全量扫都是白耗；
+ *   ② 它被压缩过，那些“行首才算 export”的写法本来就不适用于压缩代码——
+ *      而我们不该为了迎合一个检查器去要求第三方改代码。
+ */
+const SKIP = new Set([".git", "node_modules", "_recovery", "vendor"]);
 
 function* walk(d) {
   for (const e of fs.readdirSync(d, { withFileTypes: true })) {
@@ -32,7 +40,14 @@ function exportsOf(abs, depth = 0) {
   // 注意 function 与名字之间可能有 *（生成器）：export async function* readX
   for (const m of src.matchAll(/^export\s+(?:async\s+)?(?:function\*?|class)\s+(\w+)/gm)) names.add(m[1]);
   for (const m of src.matchAll(/^export\s+(?:const|let|var)\s+(\w+)/gm)) names.add(m[1]);
-  for (const m of src.matchAll(/^export\s*\{([^}]*)\}/gm)) {
+  /*
+   * `export { a as b }` 不要求行首。
+   *
+   * 原来写的是 `^export\s*\{`——那假设了「导出语句自己占一行」，
+   * 而**打包器压出来的代码不占**（所有导出挤在文件最后一行里）。
+   * 判据不该因为代码长得难看就失效。
+   */
+  for (const m of src.matchAll(/export\s*\{([^}]*)\}/g)) {
     for (const part of m[1].split(",")) {
       const seg = part.split(/\bas\b/);
       names.add((seg[1] || seg[0]).trim());

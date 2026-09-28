@@ -7,6 +7,16 @@
 //
 // 安全：先转义 HTML，再按规则注入标签。不允许原始 HTML 直接通过。
 
+/**
+ * 对白判据：引号配对。纯本地，不要求模型标任何东西。
+ *
+ * 开头 `&quot;` 那一路是直引号——它走到这里已经被 esc() 转过，
+ * 所以按实体配对；也正因为转过了，才不会误伤正文里的 & < >。
+ * 四种引号都排除换行：跨段配对几乎总是误判（一段的收尾引号
+ * 配上下一段的开头引号）。
+ */
+const SAY_RE = /(「[^」\n]*」|『[^』\n]*』|“[^”\n]*”|&quot;[^\n]*?&quot;)/g;
+
 /** HTML 转义。 */
 function esc(s) {
   return String(s)
@@ -21,11 +31,11 @@ function esc(s) {
  * 渲染 Markdown 子集为 HTML。
  *
  * @param {string} text
- * @param {{ allowHtml?: boolean, breaks?: boolean }} [opts]
+ * @param {{ allowHtml?: boolean, breaks?: boolean, dialogue?: boolean }} [opts]
  * @returns {string} HTML 片段
  */
 export function renderMarkdown(text, opts = {}) {
-  const { breaks = true } = opts;
+  const { breaks = true, dialogue = false } = opts;
   if (typeof text !== "string" || !text) return "";
 
   // 1. 先切出代码块（避免块内内容被其他规则改写）
@@ -38,6 +48,10 @@ export function renderMarkdown(text, opts = {}) {
 
   // 2. 转义
   src = esc(src);
+
+  // 2.5 对白标记。必须在转义之后、所有行内规则之前：
+  //     此刻文本里已经没有裸的 < > &，插标签是安全的。
+  if (dialogue) src = src.replace(SAY_RE, '<span class="say">$1</span>');
 
   // 3. 行内代码
   src = src.replace(/`([^`\n]+)`/g, (_m, code) => `<code>${code}</code>`);

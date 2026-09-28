@@ -16,6 +16,7 @@ const { registerTtsRoutes } = await import("../lib/tts/routes.js");
 const { synthesize, makeFetch } = await import("../lib/tts/service.js");
 const { buildRequest, xmlEscape, clampText, PROVIDERS, DEFAULT_PROVIDER } = await import("../lib/tts/providers.js");
 const { readConfig, mergeConfig, publicConfig, readiness } = await import("../lib/tts/config.js");
+const { resolveVoice, previewMatches } = await import("../lib/tts/match.js");
 
 let pass = 0, fail = 0;
 async function okAsync(name, fn) {
@@ -331,6 +332,149 @@ await okAsync("⑳ /tts/speak 带 characterId → 用那个角色的声音；不
   // 配置读回里要能看到分配表（而它是公开形状，本来就不含密钥）
   const cfgBack = await request(app, "GET", "/tts/config");
   assert.strictEqual(cfgBack.data.voices["char-a"], "zh-CN-YunxiNeural");
+});
+
+// ── 五级匹配：characterId → speaker 全等 → speaker 包含 → 全局 → 供应商默认 ──
+//
+// 五级顺序是这一整次改动的核心：以前只有 characterId 一级，
+// 现在扩成五级以支持「按名字关键词匹配」——世界书里的人、旁白、别的对话
+// 里的角色都能分到声音。顺序错了整件事就没意义。
+
+await okAsync("㉑ resolveVoice 五级顺序：charId > speaker 全等 > speaker 包含 > 全局 > 供应商默认", () => {
+  const cfg = {
+    provider: "azure",
+    voice: "zh-CN-XiaoxiaoNeural",
+    voices: {
+      "char-a": "zh-CN-YunxiNeural",
+      "老城主": "zh-CN-YunjianNeural",
+      "云": "zh-CN-YunxiNeural"
+    }
+  };
+
+  // 1. characterId 精确
+  const r1 = resolveVoice(cfg, { characterId: "char-a", speaker: "老城主" });
+  assert.strictEqual(r1.voice, "zh-CN-YunxiNeural");
+  assert.strictEqual(r1.voiceSource, "caller");
+  assert.strictEqual(r1.voiceMatch, "charId", "charId 该优先于 speaker");
+
+  // 2. speaker 全等
+  const r2 = resolveVoice(cfg, { characterId: "char-不存在", speaker: "老城主" });
+  assert.strictEqual(r2.voice, "zh-CN-YunjianNeural");
+  assert.strictEqual(r2.voiceSource, "caller");
+  assert.strictEqual(r2.voiceMatch, "speakerExact");
+
+  // 3. speaker 包含
+  const r3 = resolveVoice(cfg, { characterId: "char-不存在", speaker: "老城主·某某的助手" });
+  assert.strictEqual(r3.voice, "zh-CN-YunjianNeural");
+  assert.strictEqual(r3.voiceSource, "caller");
+  assert.strictEqual(r3.voiceMatch, "speakerContains");
+  assert.strictEqual(r3.matchedKey, "老城主");
+
+  // 4. 全局 voice
+  const r4 = resolveVoice(cfg, { characterId: "", speaker: "" });
+  assert.strictEqual(r4.voice, "zh-CN-XiaoxiaoNeural");
+  assert.strictEqual(r4.voiceSource, "global");
+  assert.strictEqual(r4.voiceMatch, "global");
+
+  // 5. 供应商默认（cfg.voice 为空才走得到）
+  const r5 = resolveVoice({ ...cfg, voice: "" }, { characterId: "", speaker: "" });
+  assert.strictEqual(r5.voice, "zh-CN-XiaoxiaoNeural");
+  assert.strictEqual(r5.voiceSource, "default");
+  assert.strictEqual(r5.voiceMatch, "provider");
+
+  // openai 的默认
+  const r6 = resolveVoice({ ...cfg, voice: "", provider: "openai" }, { characterId: "", speaker: "" });
+  assert.strictEqual(r6.voice, "alloy");
+});
+
+await okAsync("㉒ contains 匹配先长后短：「老城主」排在「城」与「老」前面", () => {
+  const cfg = {
+    provider: "azure", voice: "",
+    voices: {
+      "城": "zh-CN-YunyangNeural",
+      "老城主": "zh-CN-YunjianNeural",
+      "老": "zh-CN-YunxiNeural"
+    }
+  };
+  // speaker 里带「老城主」但不是精确匹配（后接字），走 contains 分支
+  const r = resolveVoice(cfg, { speaker: "老城主·某某" });
+  assert.strictEqual(r.voice, "zh-CN-YunjianNeural", "长名字应该赢——「云」能匹配所有人的代价要能靠先长后短缓解");
+  assert.strictEqual(r.voiceMatch, "speakerContains");
+  assert.strictEqual(r.matchedKey, "老城主");
+});
+
+await okAsync("㉓ charId 优先：即便 charId 的 key 长得像名字、speaker 命中另一条，charId 也赢", () => {
+  const cfg = {
+    provider: "azure", voice: "",
+    voices: {
+      "老城主": "zh-CN-YunjianNeural",
+      "id-123": "zh-CN-YunxiNeural"
+    }
+  };
+  const r = resolveVoice(cfg, { characterId: "id-123", speaker: "老城主" });
+  assert.strictEqual(r.voice, "zh-CN-YunxiNeural");
+  assert.strictEqual(r.voiceMatch, "charId");
+});
+
+await okAsync("㉔ HTTP：/tts/speak 收 speaker，响应带 voiceMatch 明细", async () => {
+  const app = makeApp();
+  const sdk = { network: { fetch: fakeFetch() } };
+  const dir = path.join(tmp, "voice-match");
+  registerTtsRoutes(app, { sdk, dataDir: dir });
+
+  await request(app, "PUT", "/tts/config", {
+    body: {
+      provider: "azure",
+      voice: "zh-CN-XiaoxiaoNeural",
+      azure: { region: "eastasia", key: "k" },
+      voices: {
+        "char-a": "zh-CN-YunxiNeural",
+        "老城主": "zh-CN-YunjianNeural"
+      }
+    }
+  });
+
+  const a = await request(app, "POST", "/tts/speak", { body: { text: "甲说", characterId: "char-a" } });
+  assert.strictEqual(a.data.voice, "zh-CN-YunxiNeural");
+  assert.strictEqual(a.data.voiceMatch, "charId");
+
+  const b = await request(app, "POST", "/tts/speak", { body: { text: "乙说", speaker: "老城主" } });
+  assert.strictEqual(b.data.voice, "zh-CN-YunjianNeural");
+  assert.strictEqual(b.data.voiceMatch, "speakerExact");
+  assert.strictEqual(b.data.speaker, "老城主", "响应里带回 speaker");
+
+  const c = await request(app, "POST", "/tts/speak", { body: { text: "丙说", speaker: "老城主·某某" } });
+  assert.strictEqual(c.data.voice, "zh-CN-YunjianNeural");
+  assert.strictEqual(c.data.voiceMatch, "speakerContains");
+
+  const d = await request(app, "POST", "/tts/speak", { body: { text: "旁白" } });
+  assert.strictEqual(d.data.voice, "zh-CN-XiaoxiaoNeural");
+  assert.strictEqual(d.data.voiceSource, "global");
+  assert.strictEqual(d.data.voiceMatch, "global");
+});
+
+await okAsync("㉕ previewMatches：找出文本里所有 voices key 的命中位置，先长后短", () => {
+  const voices = {
+    "薇拉": "zh-CN-XiaoxiaoNeural",
+    "老城主": "zh-CN-YunjianNeural",
+    "云": "zh-CN-YunxiNeural"
+  };
+  const text = "薇拉抬起头，远处老城主的灯还亮着。";
+  const hits = previewMatches(text, voices);
+  assert.ok(hits.length >= 2, "至少该命中薇拉与老城主");
+  assert.strictEqual(hits[0].key, "薇拉");
+  assert.strictEqual(hits[0].voice, "zh-CN-XiaoxiaoNeural");
+  assert.strictEqual(hits[0].start, 0);
+  assert.strictEqual(hits[0].end, 2);
+  const lc = hits.find((h) => h.key === "老城主");
+  assert.ok(lc, "老城主该被找到");
+  assert.strictEqual(lc.start, 8);
+  assert.strictEqual(lc.end, 11);
+
+  // 边界：空文本 / 空 voices / 无匹配
+  assert.deepStrictEqual(previewMatches("", voices), []);
+  assert.deepStrictEqual(previewMatches("薇拉", {}), []);
+  assert.deepStrictEqual(previewMatches("你好", voices), []);
 });
 
 console.log(`\n${fail === 0 ? "✅" : "❌"} 语音合成：${pass} 过 / ${fail} 败\n`);

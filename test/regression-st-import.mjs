@@ -112,6 +112,43 @@ ok("entries 是对象（key 为 uid）→ 按 uid 排序，不按对象的键序
   assert.deepStrictEqual(list.map((s) => s.content), ["第一", "第二", "第三"]);
 });
 
+// ── order：批量导入要还原 ST 的 prompt 顺序 ────────────────
+//
+// ST 那边进 prompt 的顺序是 `(a,b) => b.order - a.order`（大的先，world-info.js:88），
+// 而我们的 entrySortKey 是**升序**（小的先）——方向相反。
+// 所以批量导入必须**先按 ST 的 order 降序排一遍再编号**，
+// 否则用户排好的顺序会被“创建顺序”（uid）顶掉，而且哪一步都不报错。
+ok("批量导入按 ST 的 order 降序编号（不是创建顺序）", () => {
+  const wb = {
+    entries: [
+      { uid: 1, comment: "最先建的", key: ["ka"], content: "甲", order: 100 },
+      { uid: 2, comment: "最后建的但排最前", key: ["kb"], content: "乙", order: 300 },
+      { uid: 3, comment: "中间", key: ["kc"], content: "丙", order: 200 }
+    ]
+  };
+  const list = stWorldBookToSettings(wb);
+  assert.deepStrictEqual(list.map((s) => s.content), ["乙", "丙", "甲"],
+    "ST 里 order 大的先进 prompt → 我们的 order（升序）要还原它");
+  assert.deepStrictEqual(list.map((s) => s.order), [1, 2, 3]);
+});
+
+// 缺 order 时按默认 100，且保持原顺序（排序是稳定的）
+ok("没有 order 字段时保持原顺序（默认 100）", () => {
+  const wb = { entries: [
+    { uid: 1, key: ["a"], content: "甲" },
+    { uid: 2, key: ["b"], content: "乙" },
+    { uid: 3, key: ["c"], content: "丙" }
+  ] };
+  assert.deepStrictEqual(stWorldBookToSettings(wb).map((s) => s.content), ["甲", "乙", "丙"]);
+});
+
+// 单条转换仍然尊重条目自己的 order。
+// 这条曾经被我判成“不可能走到”——测试当场纠正了那个判断。
+ok("单条转换 stEntryToSetting 尊重 entry.order", () => {
+  assert.strictEqual(stEntryToSetting({ uid: 1, key: ["a"], content: "c", order: 150 }).order, 150);
+  assert.strictEqual(stEntryToSetting({ uid: 1, key: ["a"], content: "c" }).order, 100);
+});
+
 ok("单条坏数据不中断整批（坏的那条跳过）", () => {
   const wb = { entries: [{ uid: 1, key: ["a"], content: "好" }, null, { uid: 3, key: ["c"], content: "也好" }] };
   const list = stWorldBookToSettings(wb);
