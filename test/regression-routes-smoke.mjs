@@ -188,8 +188,11 @@ const EXPECTED = {
     // 路由表对照就是为了逼人在这里多想一秒：加路由是有后果的，
     // 它同时意味着界面得有出口、测试得有覆盖。
     "PATCH /conversations/:id/participants",
-    // 换绑/解绑导演配方。只改绑定，不碰进度——进度是这一场自己的。
+    // 换绑/解绑导演公式。只改绑定，不碰进度——进度是这一场自己的。
     "PATCH /conversations/:id/director",
+    // 绑多条公式（2026-09-28）。单值入口内部转调它；
+    // 保留旧路由是为了不破已有的前端与调用方。
+    "PATCH /conversations/:id/directors",
     // 这一场的自动轮换开关（场景属性，不是全局设置）
     "PUT /conversations/:id/rotation",
     "DELETE /conversations/:id",
