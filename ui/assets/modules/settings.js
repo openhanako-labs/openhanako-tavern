@@ -19,6 +19,8 @@ import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, friendlyError
 import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
 import { settingBucket, SETTING_SECTIONS, keywordsAreLive } from "./setting-buckets.js";
+import { foldKey, readFolded } from "./settings-fold.js";
+import { emptyHtml, errHtml } from "./drawer-state.js";
 // settings-cats.js 通过 CustomEvent 通信，避免循环依赖
 
 /** 每页多少条。方案文档定死 10。 */
@@ -84,13 +86,13 @@ const SORT_BY = {
   recent:   { label: "最近修改", fn: (a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")) }
 };
 
-/** 折叠状态的 localStorage key。方案要求带维度，避免切维度时折叠状态互相污染。 */
-const foldKey = (dim, groupKey) => `eleckoi:settings-folded:${dim}:${groupKey}`;
-
-/** 读一个折叠值。没有记录默认 false（展开）。 */
+/**
+ * 折叠状态的读写。key 的构造收在 settings-fold.js 里——
+ * 那里解释了为什么必须 String() 化（常驻组的 key 是数字 0，
+ * 而 dataset 读回来是字符串，两端不对齐就会「点了没反应」）。
+ */
 function isFolded(dim, groupKey) {
-  try { return localStorage.getItem(foldKey(dim, groupKey)) === "1"; }
-  catch { return false; }
+  return readFolded(groupKey, dim, (k) => localStorage.getItem(k));
 }
 
 /** 翻转折叠状态。返回新值。 */
@@ -155,6 +157,10 @@ export async function loadSettings() {
     renderSettings(list);
   } catch (e) {
     console.error("[Settings] load failed:", e);
+    // 错误态：分清是谁的错（不是“加载失败”四个字了事）
+    if (dom.settingsListEl) {
+      dom.settingsListEl.innerHTML = errHtml("没能读到设定库", "连接宿主 App 服务失败：" + friendlyError(e) + "。这不是你的数据出了问题。");
+    }
     toast("加载失败: " + friendlyError(e), "error");
   }
 }
@@ -209,16 +215,26 @@ export function renderSettings(list) {
   }
 
   if (raw.length === 0) {
-    dom.settingsListEl.innerHTML =
-      '<div class="empty">暂无设定<br><span class="hint">可新建，或从 ST 世界书导入</span></div>';
+    // 空态写“没有的是什么” + 这个功能是干什么的（docs/spec-drawer.md 第四节）
+    dom.settingsListEl.innerHTML = emptyHtml({
+      ico: "▤",
+      title: "还没有设定",
+      desc: "设定是一段按条件进入上下文的世界资料——常驻的每轮都在，带触发词的说到才进。也可以从 SillyTavern 的世界书导入。",
+      action: "+ 新建一条",
+      act: "new"
+    });
+    dom.settingsListEl.querySelector('[data-act="new"]')?.addEventListener("click", () => openSettingEditor(null));
     dom.settingsListEl.nextElementSibling?.classList.add("hidden");
     renderPager(0, 1);
     return;
   }
   if (shown.length === 0) {
-    dom.settingsListEl.innerHTML =
-      `<div class="empty">没有匹配「${escapeHtml(q)}」的条目<br>`
-      + '<span class="hint">搜的是名字、内容与触发词</span></div>';
+    // 搜不到不是“空”，是“没命中”——文案要区分开
+    dom.settingsListEl.innerHTML = emptyHtml({
+      ico: "⌕",
+      title: `没有匹配「${q}」的条目`,
+      desc: "搜的是名字、正文与触发词。换个短一点的词试试。"
+    });
     renderPager(0, 1);
     return;
   }
@@ -353,7 +369,9 @@ function pagedTotalPages(sections) {
 function renderSection(g, folded, cardList) {
   const headCls = `section-head${folded ? " folded" : ""}`;
   const headArrow = folded ? "▸" : "▾";
-  const head = `<div class="${headCls}" data-key="${escapeHtml(g.key)}" data-act="toggle-fold">
+  // String() 不能省：g.key 可能是数字 0，而 escapeHtml(0) 返回空串（它用 !str 判空），
+  // 那样抬头的 data-key 会是空的，折叠读写两端对不上。
+  const head = `<div class="${headCls}" data-key="${escapeHtml(String(g.key))}" data-act="toggle-fold">
     <span class="section-arrow">${headArrow}</span>
     <span class="section-title">${escapeHtml(g.title)}</span>
     <span class="section-hint">${escapeHtml(g.hint || "")}</span>
@@ -400,7 +418,7 @@ function renderCard(s, showOwner) {
   const catName = String(s?.category || "").trim();
   const catBadge = catName
     ? `<span class="setting-cat-badge" data-act="pick-category" title="点击改分类">${escapeHtml(catName)}</span>`
-    : `<span class="setting-cat-badge empty" data-act="pick-category" title="点击选分类">＋分类</span>`;
+    : `<span class="setting-cat-badge is-empty" data-act="pick-category" title="点击选分类">＋分类</span>`;
 
   // 常用度徽章：只在 priority != 100 时画
   const priority = Number(s?.priority ?? 100);
@@ -414,7 +432,7 @@ function renderCard(s, showOwner) {
                    : `P${priority}`;
         return `<span class="setting-priority-badge ${tier}" data-act="pick-priority" title="点击改常用度">${escapeHtml(label)}</span>`;
       })()
-    : `<span class="setting-priority-badge empty" data-act="pick-priority" title="点击标常用度">＋常用度</span>`;
+    : `<span class="setting-priority-badge is-empty" data-act="pick-priority" title="点击标常用度">＋常用度</span>`;
 
   const metaParts = [];
   if (showOwner) metaParts.push(badge);

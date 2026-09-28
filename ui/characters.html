@@ -455,7 +455,7 @@
       <!-- 批量操作条：无选择时 hidden，不占空间 -->
       <div id="settings-batch-bar" class="settings-batch-bar hidden"></div>
       <div id="settings-list" class="list drawer-body">
-        <div class="empty">加载中…</div>
+        <div class="d-skel"><div class="d-skel-bar w46"></div><div class="d-skel-bar w82"></div><div class="d-skel-bar w64"></div></div>
       </div>
       <!-- 分页条：吸底。settings.js 自己控制 hidden -->
       <div id="settings-pager" class="settings-pager hidden"></div>
@@ -491,12 +491,15 @@
       </div>
       <div class="drawer-toolbar">
         <button id="create-director-btn" class="btn btn-primary btn-sm">+ 新建</button>
-        <button id="refresh-directors-btn" class="btn btn-ghost btn-sm">刷新</button>
-        <span id="directors-count" class="count"></span>
       </div>
+      <!--
+        计数从工具条挪出来单独一行（基准 5 · docs/spec-drawer.md 第三节）。
+        “刷新”拿掉：打开抽屉与增删改后本来就会自动重载，它从来不需要被按。
+      -->
+      <div id="directors-count" class="drawer-count"></div>
       <div class="drawer-body">
         <div id="director-bound" class="dir-bound"></div>
-        <div id="directors-list" class="list"><div class="empty">加载中…</div></div>
+        <div id="directors-list" class="list"><div class="d-skel"><div class="d-skel-bar w46"></div><div class="d-skel-bar w82"></div><div class="d-skel-bar w64"></div></div></div>
         <div id="director-editor" class="panel hidden"></div>
       </div>
     </div>
@@ -508,11 +511,11 @@
       </div>
       <div class="drawer-toolbar">
         <button id="create-variable-btn" class="btn btn-primary btn-sm">+ 新建</button>
-        <button id="refresh-variables-btn" class="btn btn-ghost btn-sm">刷新</button>
-        <span id="variables-count" class="count"></span>
       </div>
+      <!-- 计数单独一行；“刷新”拿掉（同基准 5 · 第三节） -->
+      <div id="variables-count" class="drawer-count"></div>
       <div id="variables-list" class="list drawer-body">
-        <div class="empty">加载中…</div>
+        <div class="d-skel"><div class="d-skel-bar w46"></div><div class="d-skel-bar w82"></div><div class="d-skel-bar w64"></div></div>
       </div>
 
       <!--
@@ -575,7 +578,7 @@
       <div class="drawer-body">
         <span id="regex-count" class="regex-count"></span>
         <div id="regex-list" class="regex-list">
-          <div class="empty">加载中…</div>
+          <div class="d-skel"><div class="d-skel-bar w46"></div><div class="d-skel-bar w82"></div><div class="d-skel-bar w64"></div></div>
         </div>
       </div>
     </div>

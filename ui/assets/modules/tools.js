@@ -9,6 +9,7 @@
 import { apiFetch, toast, escapeHtml, extractArray, friendlyError } from "./core.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
+import { emptyHtml } from "./drawer-state.js";
 
 /**
  * 拉工具列表与组开关并渲染。
@@ -82,7 +83,12 @@ export function renderToolGroups(groups) {
   }
 
   if (arr.length === 0 && byGroup.size === 0) {
-    el.innerHTML = "";
+    // 空态：工具清单是后端注册的，正常不会空——真空了要能看出是“没拉到”
+    el.innerHTML = emptyHtml({
+      ico: "⚒",
+      title: "没读到工具清单",
+      desc: "工具由 App 启动时注册。这份清单为空说明后端没回数据，不是你没开——重启 App 后再看。"
+    });
     if (dom.toolsCountEl) dom.toolsCountEl.textContent = "";
     return;
   }

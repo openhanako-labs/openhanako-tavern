@@ -309,10 +309,21 @@ export function formatTime(isoStr) {
   return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 }
 
+/**
+ * HTML 转义。
+ *
+ * 注意守卫写成 `str == null || str === ""` 而不是 `!str`：
+ * 数字 0 是合法取值（分组 key、计数、索引都会用到），
+ * 但 `!0` 为真 —— 用 `!str` 会让 0 被当成“空”而返回空串，
+ * 调用方拿到空字符串后当空值用，往往要很久以后才暴露。
+ * false / NaN 仍然返回空串，保持原有行为不变。
+ */
 export function escapeHtml(str) {
-  if (!str) return "";
+  if (str == null || str === "") return "";
+  if (typeof str === "number" && !Number.isFinite(str)) return "";
+  if (str === false) return "";
   const div = document.createElement("div");
-  div.textContent = str;
+  div.textContent = String(str);
   return div.innerHTML;
 }
 

@@ -8,6 +8,7 @@
 import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, friendlyError } from "./core.js";
 import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
+import { emptyHtml, errHtml } from "./drawer-state.js";
 
 const TYPES = ["string", "number", "boolean", "object", "array"];
 
@@ -22,6 +23,10 @@ export async function loadVariables() {
     await loadConvValues();
   } catch (e) {
     console.error("[Variables] load failed:", e);
+    // 错误态：分清是谁的错（不是“加载失败”四个字了事）
+    if (dom.variablesListEl) {
+      dom.variablesListEl.innerHTML = errHtml("没能读到变量", "连接宿主 App 服务失败：" + friendlyError(e) + "。这不是你的数据出了问题。");
+    }
     toast("加载失败: " + friendlyError(e), "error");
   }
 }
@@ -35,8 +40,15 @@ export function renderVariables(list) {
     dom.variablesCountEl.textContent = arr.length > 0 ? `${arr.length} 个` : "";
   }
   if (arr.length === 0) {
-    dom.variablesListEl.innerHTML =
-      '<div class="empty">还没有定义<br><span class="hint">定义决定叫什么、什么类型；值在下面「这一场」里</span></div>';
+    // 空态写“没有的是什么” + 这个功能是干什么的（docs/spec-drawer.md 第四节）
+    dom.variablesListEl.innerHTML = emptyHtml({
+      ico: "{}",
+      title: "还没有变量定义",
+      desc: "定义决定叫什么、什么类型；值在下面「这一场」里，由对话里的 {{setvar}} 写进去。",
+      action: "+ 新建一个",
+      act: "new"
+    });
+    dom.variablesListEl.querySelector('[data-act="new"]')?.addEventListener("click", () => openVariableEditor(null));
     return;
   }
 

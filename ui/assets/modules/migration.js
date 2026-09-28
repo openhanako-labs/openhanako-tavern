@@ -14,6 +14,7 @@
 import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, friendlyError } from "./core.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
+import { emptyHtml } from "./drawer-state.js";
 
 /** 选中的导出名（点中才出信息） */
 let selectedExportName = null;
@@ -94,7 +95,15 @@ export function renderExports(list) {
   const arr = Array.isArray(list) ? list : [];
 
   if (arr.length === 0) {
-    el.innerHTML = '<div class="empty">暂无导出文件<br><span class="hint">点「导出全部」生成一份</span></div>';
+    // 空态写“没有的是什么” + 这个功能是干什么的（docs/spec-drawer.md 第四节）
+    el.innerHTML = emptyHtml({
+      ico: "⇩",
+      title: "还没有导出文件",
+      desc: "导出会把角色卡、对话、设定这些打包成一份 JSON——用来备份，或搬到另一台机器。",
+      action: "导出全部",
+      act: "export-all"
+    });
+    el.querySelector('[data-act="export-all"]')?.addEventListener("click", exportAll);
     if (dom.exportInfoEl) dom.exportInfoEl.classList.add("hidden");
     return;
   }

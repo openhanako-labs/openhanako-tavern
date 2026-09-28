@@ -4936,23 +4936,39 @@ main.ctx-open #panel-head { display: flex; }
   color: var(--fg);
 }
 
-/* 抽屉计数徽章：显示条目数量 */
+/*
+ * 抽屉计数行。
+ *
+ * 历史上这个类是「标题旁的徽章」（inline-flex + 琥珀底 + 圆角），
+ * 但基准 5 把它定为「独占一行的状态文字」——所以底和圆角全部去掉。
+ * 设定库曾经把它当整行用，徽章底被铺成一条横贯抽屉的橙带；
+ * 当时靠 #settings-count 单独覆盖修的，现在收进基类，所有抽屉一致。
+ *
+ * 空的时候整行不占位（调用方会把 textContent 置空）。
+ */
 .drawer-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-radius: 9px;
+  display: block;
+  padding: 8px 13px 6px;
+  background: transparent;
+  color: var(--fg-muted);
   font-size: 11px;
-  font-weight: 600;
-  flex-shrink: 0;
+  font-weight: 400;
+  line-height: 1.4;
+  min-width: 0;
+  height: auto;
+  border-radius: 0;
 }
+.drawer-count:empty { display: none; }
 
-/* 抽屉过滤栏：搜索框 + 排序下拉 */
+/*
+ * 设定库的计数行是**独占一行**的（#settings-count 在 .drawer-filter 之后），
+ * 不是挂在标题旁边的徽章 —— 于是上面那颗 inline-flex 的圆角底
+ * 被当成整行背景铺开，成了一条横贯抽屉的橙带；空着的时候尤其像渲染坏了。
+ *
+ * 基准 5 已把「一行小字」的写法收进 .drawer-count 基类，
+ * 这里不再单独覆盖——保留这条注释是为了记下当初的成因。
+ */
+#settings-count:empty { display: none; }
 .drawer-filter {
   display: flex;
   align-items: center;
@@ -5498,19 +5514,81 @@ main.ctx-open #panel-head { display: flex; }
   transition: transform var(--t) var(--ease);
 }
 
+/*
+ * 徽章（分类 / 常用度）。
+ *
+ * ══ 一个类名冲突的教训 ══
+ *
+ * settings.js 把「还没选分类」的徽章写成 class="setting-cat-badge empty"。
+ * 而 .empty 是**全局空态占位类**——它有 padding: 42px 20px。
+ * 两者一撞，一个本该 18px 高的徽章被撑成 105px 的方块，
+ * 整张卡片的高度随之失控（实测：卡片 196px 里 meta 那一行独占 105px）。
+ *
+ * 为什么一直没被发现：check-css-wiring 只问「类名在 CSS 里出现过吗」，
+ * .empty 当然出现过——于是这个「借用」在检查器眼里完全正常。
+ *
+ * 修法有两条：
+ *   ① 改 JS 里的类名（setting-cat-badge 的 empty 变体另起一个名）；
+ *   ② 在这里把 .empty 的样式按徽章的实际需要覆盖掉。
+ * 选 ① —— 借用别的组件的类名当状态修饰符，本身就是错误来源；
+ * 而 ② 只是把它盖住，下一个 .empty 的改动又会漏进来。
+ * 所以 JS 那边改成了 .is-empty（见 settings.js 同批改动），
+ * 这里保留一份旧名的兜底，防止有地方漏改。
+ */
+.setting-cat-badge,
 .setting-priority-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 999px;
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 10.5px;
+  line-height: 1.6;
   cursor: pointer;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--fg);
-  transition: background var(--t) var(--ease), border-color var(--t) var(--ease);
+  border: 1px solid transparent;
+  background: var(--sunken);
+  color: var(--fg-muted);
+  transition: background var(--t) var(--ease), border-color var(--t) var(--ease), color var(--t) var(--ease);
 }
+
+.setting-cat-badge:hover,
+.setting-priority-badge:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* 空态（还没选）：虚线边，读起来像「待填」而不是「已定」 */
+.setting-cat-badge.is-empty,
+.setting-priority-badge.is-empty,
+.setting-cat-badge.empty,
+.setting-priority-badge.empty {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: transparent;
+  color: var(--fg-muted);
+  opacity: .8;
+  /* 兜底：万一还有地方漏改成 .is-empty，至少不让 .empty 的 42px 内边距生效 */
+  padding: 1px 7px;
+  font-size: 10.5px;
+  line-height: 1.6;
+  text-align: left;
+  flex-direction: row;
+  gap: 0;
+}
+
+/* 常用度的三档：核心 / 常用 / 冷门。只染「核心」——三档都染等于都没染。 */
+.setting-priority-badge.core {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+
+.setting-priority-badge.common {
+  background: var(--sunken);
+  color: var(--fg-dim);
+}
+
+.setting-priority-badge.rare { opacity: .8; }
 
 .setting-priority-badge:hover {
   border-color: var(--accent-line);
@@ -5757,6 +5835,38 @@ main.ctx-open #panel-head { display: flex; }
   color: var(--fg);
   word-break: break-word;}
 .setting-section {margin-bottom: 14px;}
+
+/*
+ * 分组抬头（常驻 / 触发）。
+ *
+ * 原本 .section-head **一条规则都没有** —— 只有它的四个子元素各自有样式。
+ * 而 .section-hint 写着 flex: 1，那是「把后面的计数推到右边」的写法，
+ * 前提是父级为 flex。父级没写，于是它在 display:block 下完全不起作用：
+ * 「▾常驻每轮都在上下文里64」四个元素顺排成一串，读不出层级。
+ *
+ * 这是「子元素有样式就以为父级也有」的典型——覆盖检查器只看类名出现过没有，
+ * 父级缺席它照样绿。
+ */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 7px 3px 6px;
+  /* 吸顶：106 条要滚很久，滚到第 40 条时还知道自己在哪一组 */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+}
+
+.section-head .section-title { flex: none; }
+.section-head .section-hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.section-head .section-n { flex: none; }
+
+/* 折叠态：抬头本身就是开关，点一下折起来 */
+.section-head { cursor: pointer; user-select: none; }
+.section-head:hover .section-title { color: var(--accent); }
+.setting-section.folded { margin-bottom: 6px; }
 .section-title {font-size: 12px; font-weight: 600; color: var(--fg);}
 .section-hint {flex: 1; font-size: 11px; color: var(--fg-muted);}
 .section-n {font-size: 11px; color: var(--fg-muted); font-variant-numeric: tabular-nums;}
@@ -5799,7 +5909,15 @@ main.ctx-open #panel-head { display: flex; }
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 5px;
+  /* 顶部不留内边距：sticky 只粘到「内边距盒」的顶边，
+     容器若有 padding-top，那一条带子不在抬头的覆盖范围内——
+     卡片会从抬头头顶那 12px 里穿过去（真机截图里的「有部分没被挡住」）。
+     纵向内边距改由各 section 自己承担，横向与底部照旧。 */
+  padding: 0 16px 12px;
 }
+
+/* 顶部呼吸感回到第一个分组身上——它随内容滚动，不会形成泄漏带 */
+#settings-list > .setting-section:first-child { padding-top: 12px; }
 
 #settings-list .setting-card {
   display: flex;
@@ -5911,4 +6029,105 @@ main.ctx-open #panel-head { display: flex; }
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(224, 138, 60, .22);
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 抽屉公共三态（基准 5 · docs/spec-drawer.md 第四节）
+ *
+ * 为什么要有这一组：
+ *   七个抽屉的空容器原来都写着「加载中…」——数据回来了但确实没有，
+ *   也说“加载中”，用户会一直等。三态必须分开，因为它们的
+ *   “下一步”不一样：加载 = 等一下；空 = 你还没建；错 = 出事了。
+ *
+ * 命名：预设抽屉最早做对（.preset-skel / .preset-empty / .preset-err），
+ *   这里把它提升为公共类 d- 前缀。旧类名保留作兜底，新代码用公共类。
+ * ══════════════════════════════════════════════════════════════ */
+
+/* ── 加载态：骨架条，不是转圈 ──────────────────────────────
+   转圈只说明“我在忙”；骨架条还告诉你“将要出现的是什么东西”。 */
+.d-skel {
+  padding: 10px 2px;
+  border-top: 1px solid var(--border);
+}
+.d-skel:first-child { border-top: none; }
+.d-skel-bar {
+  height: 10px;
+  border-radius: 5px;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--sunken) 37%, var(--surface-2) 63%);
+  background-size: 400% 100%;
+  animation: d-skel-sh 1.4s ease infinite;
+}
+.d-skel-bar:last-child { margin-bottom: 0; }
+.d-skel-bar.w40 { width: 40%; }
+.d-skel-bar.w46 { width: 46%; }
+.d-skel-bar.w64 { width: 64%; }
+.d-skel-bar.w82 { width: 82%; }
+@keyframes d-skel-sh {
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+/* 尊重“减少动态效果”——骨架条退成静态色块 */
+@media (prefers-reduced-motion: reduce) {
+  .d-skel-bar { animation: none; background: var(--sunken); }
+}
+
+/* ── 空态：图标 / 标题 / 解释 / 动作 ─────────────────────────
+   空态是用户第一次打开时**唯一的说明书**，
+   所以写“这个功能是干什么的”，不是“暂无数据”。 */
+.d-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  padding: 34px 18px;
+  text-align: center;
+}
+.d-state-ico {
+  font-size: 22px;
+  opacity: .5;
+  line-height: 1;
+}
+.d-state-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--fg);
+}
+.d-state-desc {
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  line-height: 1.7;
+  max-width: 240px;
+}
+.d-state-go {
+  margin-top: 2px;
+  font: inherit;
+  font-size: 11.5px;
+  padding: 5px 13px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+  transition: border-color var(--t) var(--ease), background var(--t) var(--ease);
+}
+.d-state-go:hover { border-color: var(--accent-line); background: var(--accent-soft); }
+
+/* ── 错误态：标题 / 原因 ───────────────────────────────────
+   分清是“谁”出的事。“读不到数据”和“数据坏了”是两个完全不同的坏消息，
+   前者重试就行，后者要去翻备份。 */
+.d-err {
+  margin: 12px 2px;
+  padding: 11px 13px;
+  border-radius: 9px;
+  border: 1px solid rgba(194, 90, 78, .35);
+  background: rgba(194, 90, 78, .07);
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.d-err b {
+  display: block;
+  margin-bottom: 3px;
+  font-weight: 600;
 }

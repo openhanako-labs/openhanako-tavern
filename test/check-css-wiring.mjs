@@ -51,6 +51,17 @@ const CSS = join(UI, "assets", "characters.css");
  *   `.private`  ← board.js:76 `{ text: "只有你", cls: "private" }`（字段传参，非 class 属性）
  *   以上四类的**反向守门**见下文 assertExemptionRegistered：
  *   如果哪一天 JS 里不再引用它们，脚本会报错——说明豁免过期了。
+ *
+ * 2026-09-28 再补 4 条 —— 同一种成因（模板/字段里拼出来的类名），
+ * 只是当时写在别的文件、没被这一轮之前的扫描碰到：
+ *   `.core` / `.common` / `.rare`
+ *        ← settings.js:29-31 `PRIORITY_TIERS = { 300: { cls: "core" }, … }`，
+ *          再由 409-411 行按优先级选一个拼进 class。
+ *          （同一批还有 `.tier-core` 这种前缀拼接，那是 `tier-${…}`，
+ *           扫描器的「插值前字面量」那条已能取到 `tier-`，故不在此列。）
+ *   `.section-head`
+ *        ← settings.js:354 `const headCls = \`section-head${folded ? " folded" : ""}\``。
+ *          它整个是变量（不是 `class="…"` 字面量），静态扫不到。
  */
 const DYNAMIC_CLASSES = [
   "user", "assistant", "system",                    // chat.js 消息气泡角色
@@ -58,6 +69,8 @@ const DYNAMIC_CLASSES = [
   "mine",           // settings.js 设置卡「本人」标记
   "is-disabled",    // regex.js 规则行「停用」状态
   "private",        // board.js 黑板「仅本人」标签
+  "core", "common", "rare",   // settings.js 常用度三档（PRIORITY_TIERS.cls）
+  "section-head",   // settings.js 分组抬头（整个是变量 headCls）
 ];
 
 let pass = 0;

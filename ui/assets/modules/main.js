@@ -15,8 +15,8 @@ import { bindShell, toggleSidebar } from "./shell.js";
 import { bindPresets } from "./presets.js";
 import { loadSettings, renderSettings, openSettingEditor, saveSetting, deleteSetting, toggleSetting, handleSettingAction, importSTWorldBook, exportSTWorldBook, handleSTImport, updateTriggerFields, runAutocategorize, view as settingsView } from "./settings.js";
 import { openCatsModal } from "./settings-cats.js";
-import { loadDirectors, newDirector } from "./director.js";
-import { loadVariables, renderVariables, openVariableEditor, saveVariable, deleteVariable, handleVariableAction, testReplace } from "./variables.js";
+import { newDirector } from "./director.js";
+import { renderVariables, openVariableEditor, saveVariable, deleteVariable, handleVariableAction, testReplace } from "./variables.js";
 import { loadTools, renderToolGroups } from "./tools.js";
 import { importFile, handleMigrationFile, loadExports, renderExports, downloadExportFile, deleteExportFile, copyExport, formatFileSize, exportAll } from "./migration.js";
 import { saveBoardCell, deleteBoardCell, bindBoard } from "./board.js";
@@ -98,14 +98,15 @@ document.getElementById("settings-sortby")?.addEventListener("change", (e) => {
   renderSettings(state.settingList);
 });
 document.getElementById("create-director-btn")?.addEventListener("click", newDirector);
-document.getElementById("refresh-directors-btn")?.addEventListener("click", loadDirectors);
+// 「刷新」按钮已按基准 5 拿掉：打开抽屉与增删改后本来就会自动重载，
+// 它从来不需要被按（docs/spec-drawer.md 第三节·毛病 1）。
 
 // 设定库搜索：改一个字就重渲染。106 条重排不卡，不必防抖。
 // 重渲染用的是内存里那份 state.settingList——不重拉网络。
 document.getElementById("settings-search")?.addEventListener("input", () => renderSettings(state.settingList));
 
 document.getElementById("create-variable-btn")?.addEventListener("click", () => openVariableEditor(null));
-document.getElementById("refresh-variables-btn")?.addEventListener("click", loadVariables);
+// 「刷新」按钮已按基准 5 拿掉（同上）。
 document.getElementById("test-replace-btn")?.addEventListener("click", testReplace);
 
 document.getElementById("export-all-btn")?.addEventListener("click", exportAll);
