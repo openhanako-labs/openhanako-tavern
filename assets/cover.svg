@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" role="img" aria-label="ElecKoi Tavern">
+  <defs>
+    <!-- 背景：深靛蓝径向，右下更深 -->
+    <radialGradient id="cv_bg" cx="38%" cy="42%" r="80%">
+      <stop offset="0" stop-color="#223152"/>
+      <stop offset="0.55" stop-color="#141d2e"/>
+      <stop offset="1" stop-color="#080c15"/>
+    </radialGradient>
+    <!-- 光柱：从左上角斜射入 -->
+    <linearGradient id="cv_beam" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#bcd0ff" stop-opacity="0.75"/>
+      <stop offset="0.35" stop-color="#94b3f0" stop-opacity="0.38"/>
+      <stop offset="0.85" stop-color="#5c70a6" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#3a4770" stop-opacity="0"/>
+    </linearGradient>
+    <!-- 卡片：冷白蓝 -->
+    <linearGradient id="cv_card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#a5c4f0" stop-opacity="0.22"/>
+    </linearGradient>
+    <!-- 中央柔光 -->
+    <radialGradient id="cv_glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#c8daff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#c8daff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 底色 -->
+  <rect width="320" height="180" fill="url(#cv_bg)"/>
+
+  <!-- 中央柔光晕 -->
+  <ellipse cx="100" cy="90" rx="120" ry="80" fill="url(#cv_glow)"/>
+
+  <!-- 光柱：从顶部偏左斜入，向下展开 -->
+  <path d="M44 0 L88 0 L140 180 L8 180 Z" fill="url(#cv_beam)"/>
+
+  <!-- 四张半透明卡：横向散布，越靠右越淡 -->
+  <g transform="translate(60 34) rotate(-14 12 18)">
+    <rect width="24" height="36" rx="2.2" fill="url(#cv_card)" stroke="#e8f2ff" stroke-opacity="0.5" stroke-width="0.55"/>
+  </g>
+  <g transform="translate(112 58) rotate(9 12 18)">
+    <rect width="24" height="36" rx="2.2" fill="url(#cv_card)" stroke="#f0f7ff" stroke-opacity="0.65" stroke-width="0.55"/>
+  </g>
+  <g transform="translate(168 46) rotate(-6 12 18)">
+    <rect width="24" height="36" rx="2.2" fill="url(#cv_card)" stroke="#f5faff" stroke-opacity="0.78" stroke-width="0.55"/>
+  </g>
+  <g transform="translate(220 72) rotate(4 12 18)">
+    <rect width="24" height="36" rx="2.2" fill="url(#cv_card)" stroke="#f8fcff" stroke-opacity="0.9" stroke-width="0.6"/>
+  </g>
+</svg>

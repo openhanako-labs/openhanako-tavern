@@ -4,6 +4,9 @@ _recovery/
 node_modules/
 *.log
 
+# 宿主侧布局配置的备份快照（调试时从宿主目录抄出来的，不是 App 源码）
+host-backups/
+
 
 # 提交消息的临时文件（写完就删，别进仓库）
 MSG*

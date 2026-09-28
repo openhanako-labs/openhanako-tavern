@@ -6429,6 +6429,18 @@ main.ctx-open #panel-head { display: flex; }
      · roomy   —— 抽屉开着时左轨收窄，因为抽屉是实打实占宽的 */
 .shell.no-rail { --rail-w: 0px; }
 .shell.no-rail #apprail { display: none; }
+/*
+ * no-rail 时修正列模板。
+ *
+ * 病根：左轨被 display:none 后不再是网格项，剩下的 .stage 会被自动排进
+ * **第一列**，而第一列宽正是 var(--rail-w)（no-rail 时 =0px）——
+ * 于是 .stage 被压成“内容最小宽”，整块主区缩到最左边，看起来像
+ * 「内容消失，只剩背景」。
+ *
+ * 修法：no-rail 下把两列并成一列，让单剩下的 .stage 拿到全部宽度。
+ * 不依赖 --rail-w，也不动 .stage 自己的样式。
+ */
+.shell.no-rail { grid-template-columns: minmax(0, 1fr); }
 .shell.roomy { --rail-w: 46px; }
 
 /* ── ⑪ 自定义背景层（#app-bg / has-app-bg）───────────────

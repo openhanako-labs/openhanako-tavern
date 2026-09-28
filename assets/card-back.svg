@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ElecKoi Tavern card back">
+  <defs>
+    <radialGradient id="cb_bg" cx="50%" cy="50%" r="75%">
+      <stop offset="0" stop-color="#1b2540"/>
+      <stop offset="1" stop-color="#080c15"/>
+    </radialGradient>
+    <linearGradient id="cb_card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9e6ff" stop-opacity="0.38"/>
+      <stop offset="1" stop-color="#6a87b8" stop-opacity="0.2"/>
+    </linearGradient>
+    <linearGradient id="cb_glow" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#c8daff" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#c8daff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="url(#cb_bg)"/>
+
+  <!-- 中央柔光 -->
+  <ellipse cx="32" cy="32" rx="24" ry="18" fill="url(#cb_glow)"/>
+
+  <!-- 三张错位叠放的卡（背面朝外） -->
+  <g transform="translate(16 22) rotate(-9 14 18)">
+    <rect width="28" height="36" rx="2" fill="url(#cb_card)" stroke="#c8daff" stroke-opacity="0.35" stroke-width="0.5"/>
+  </g>
+  <g transform="translate(20 18) rotate(-2 14 18)">
+    <rect width="28" height="36" rx="2" fill="url(#cb_card)" stroke="#e8f2ff" stroke-opacity="0.5" stroke-width="0.5"/>
+  </g>
+  <g transform="translate(24 24) rotate(6 14 18)">
+    <rect width="28" height="36" rx="2" fill="url(#cb_card)" stroke="#f5faff" stroke-opacity="0.7" stroke-width="0.55"/>
+    <!-- 顶卡中央的极细分隔线，暗示"卡背" -->
+    <line x1="14" y1="10" x2="14" y2="26" stroke="#f5faff" stroke-opacity="0.18" stroke-width="0.4"/>
+  </g>
+</svg>

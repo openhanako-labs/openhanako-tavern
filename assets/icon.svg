@@ -1,19 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="ElecKoi Tavern">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1d2634"/>
-      <stop offset="1" stop-color="#0d1117"/>
+    <!-- 背景：深靛蓝径向 -->
+    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+      <stop offset="0" stop-color="#243050"/>
+      <stop offset="0.5" stop-color="#141c2e"/>
+      <stop offset="1" stop-color="#070a12"/>
+    </radialGradient>
+
+    <!-- 光柱：多层，带微紫，底部渐隐 -->
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d6e4ff" stop-opacity="0.85"/>
+      <stop offset="0.15" stop-color="#b0c8ff" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#7f9ce0" stop-opacity="0.3"/>
+      <stop offset="0.85" stop-color="#4a5a88" stop-opacity="0.1"/>
+      <stop offset="1" stop-color="#2a3558" stop-opacity="0"/>
     </linearGradient>
+
+    <!-- 光柱边缘光晕（更柔和） -->
+    <linearGradient id="beamHalo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a8c4ff" stop-opacity="0.35"/>
+      <stop offset="0.6" stop-color="#7a95d8" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#4a5a88" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- 羊皮纸卡片填充 -->
+    <linearGradient id="parchment" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f5ead0" stop-opacity="0.72"/>
+      <stop offset="0.5" stop-color="#e8d5b0" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#c8b088" stop-opacity="0.5"/>
+    </linearGradient>
+
+    <!-- 卡片边缘暖光 -->
+    <linearGradient id="cardEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe6b0" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#d09858" stop-opacity="0.4"/>
+    </linearGradient>
+
+    <!-- 纸张纹理（feTurbulence 制造水彩颗粒感） -->
+    <filter id="paperGrain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4"/>
+      <feColorMatrix values="0 0 0 0 0.95  0 0 0 0 0.9  0 0 0 0 0.75  0 0 0 0.08 0"/>
+      <feComposite in2="SourceGraphic" operator="in"/>
+    </filter>
+
+    <!-- 光晕柔化 -->
+    <filter id="softGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="0.6"/>
+    </filter>
   </defs>
-  <rect width="64" height="64" rx="14" fill="url(#g)"/>
-  <!-- 小房子：一间酒馆 -->
-  <path d="M14 34 L32 20 L50 34 V50 H14 Z" fill="#e8b764" opacity="0.92"/>
-  <path d="M14 34 L32 20 L50 34 V50 H14 Z" fill="none" stroke="#f2f5fa" stroke-width="1.6" stroke-linejoin="round"/>
-  <!-- 门与窗 -->
-  <rect x="27" y="40" width="10" height="10" rx="1.4" fill="#1d2634"/>
-  <rect x="19" y="37" width="6" height="6" rx="1" fill="#1d2634" opacity="0.75"/>
-  <rect x="39" y="37" width="6" height="6" rx="1" fill="#1d2634" opacity="0.75"/>
-  <!-- 烟 -->
-  <circle cx="42" cy="17" r="2.6" fill="#8b98ad" opacity="0.55"/>
-  <circle cx="45" cy="12" r="2" fill="#8b98ad" opacity="0.35"/>
+
+  <!-- 底色 -->
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+
+  <!-- 光柱外围光晕（更宽、更淡） -->
+  <path d="M24 0 L40 0 L48 62 L16 62 Z" fill="url(#beamHalo)"/>
+
+  <!-- 光柱主体 -->
+  <path d="M28 0 L36 0 L44 62 L20 62 Z" fill="url(#beam)"/>
+
+  <!-- 光柱中央的高光条 -->
+  <path d="M30 0 L34 0 L36 62 L28 62 Z" fill="#f0f6ff" fill-opacity="0.15"/>
+
+  <!-- 光柱里的尘埃微粒 -->
+  <g fill="#ffe6b0">
+    <circle cx="31" cy="10" r="0.4" opacity="0.7"/>
+    <circle cx="33.5" cy="18" r="0.3" opacity="0.5"/>
+    <circle cx="30.5" cy="24" r="0.35" opacity="0.6"/>
+    <circle cx="34" cy="30" r="0.25" opacity="0.4"/>
+    <circle cx="32" cy="38" r="0.3" opacity="0.5"/>
+    <circle cx="33" cy="46" r="0.35" opacity="0.55"/>
+    <circle cx="31" cy="52" r="0.25" opacity="0.35"/>
+  </g>
+
+  <!-- 三张羊皮纸卡（带手绘内部内容） -->
+  <!-- 第一张：兜帽身影 -->
+  <g transform="translate(20 12) rotate(-16 9 11)">
+    <rect width="18" height="22" rx="1.8" fill="url(#parchment)" stroke="url(#cardEdge)" stroke-opacity="0.7" stroke-width="0.55"/>
+    <!-- 纸张纹理 -->
+    <rect width="18" height="22" rx="1.8" filter="url(#paperGrain)" opacity="0.4"/>
+    <!-- 兜帽身影轮廓（简化） -->
+    <g stroke="#5a3a1a" stroke-width="0.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.55">
+      <path d="M6 14 Q7 8 9 8 Q11 8 12 14 L12 18 L6 18 Z"/>
+      <path d="M6.5 18 L6 20 M11.5 18 L12 20"/>
+    </g>
+  </g>
+
+  <!-- 第二张：持灯笼身影 -->
+  <g transform="translate(25 25) rotate(8 9 11)">
+    <rect width="18" height="22" rx="1.8" fill="url(#parchment)" stroke="url(#cardEdge)" stroke-opacity="0.85" stroke-width="0.6"/>
+    <rect width="18" height="22" rx="1.8" filter="url(#paperGrain)" opacity="0.4"/>
+    <!-- 持灯笼身影 -->
+    <g stroke="#5a3a1a" stroke-width="0.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.6">
+      <circle cx="8" cy="9" r="1.2"/>
+      <path d="M8 10 L8 16 M8 12 L5 15 M8 12 L11 14"/>
+      <!-- 灯笼 -->
+      <path d="M11 14 L11.5 15.5 L10.5 15.5 Z" fill="#d09858" fill-opacity="0.5"/>
+      <circle cx="11" cy="14" r="0.8" fill="#ffe6b0" fill-opacity="0.7"/>
+    </g>
+  </g>
+
+  <!-- 第三张：盔甲身影 -->
+  <g transform="translate(21 39) rotate(-5 9 11)">
+    <rect width="18" height="22" rx="1.8" fill="url(#parchment)" stroke="url(#cardEdge)" stroke-opacity="0.95" stroke-width="0.65"/>
+    <rect width="18" height="22" rx="1.8" filter="url(#paperGrain)" opacity="0.4"/>
+    <!-- 盔甲身影 -->
+    <g stroke="#5a3a1a" stroke-width="0.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.65">
+      <circle cx="9" cy="9" r="1.4"/>
+      <path d="M6 12 L12 12 L12 18 L10 18 L10 20 M6 12 L6 20 M6 12 L4 16 M12 12 L14 16"/>
+      <!-- 剑柄 -->
+      <line x1="14" y1="16" x2="16" y2="14" stroke-width="0.6"/>
+    </g>
+  </g>
+
+  <!-- 底部柔和阴影 -->
+  <ellipse cx="32" cy="60" rx="18" ry="2" fill="#000" fill-opacity="0.25" filter="url(#softGlow)"/>
 </svg>
