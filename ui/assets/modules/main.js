@@ -15,7 +15,7 @@ import { bindShell, toggleSidebar } from "./shell.js";
 import { bindPresets } from "./presets.js";
 import { loadSettings, renderSettings, openSettingEditor, saveSetting, deleteSetting, toggleSetting, handleSettingAction, importSTWorldBook, exportSTWorldBook, handleSTImport, updateTriggerFields, runAutocategorize, view as settingsView } from "./settings.js";
 import { openCatsModal } from "./settings-cats.js";
-import { newDirector } from "./director.js";
+import { newDirector, saveDirector, closeDirectorEditor, deleteEditingDirector, simulateDirector } from "./director.js";
 import { renderVariables, openVariableEditor, saveVariable, deleteVariable, handleVariableAction, testReplace } from "./variables.js";
 import { loadTools, renderToolGroups } from "./tools.js";
 import { importFile, handleMigrationFile, loadExports, renderExports, downloadExportFile, deleteExportFile, copyExport, formatFileSize, exportAll } from "./migration.js";
@@ -100,6 +100,14 @@ document.getElementById("settings-sortby")?.addEventListener("change", (e) => {
 document.getElementById("create-director-btn")?.addEventListener("click", newDirector);
 // 「刷新」按钮已按基准 5 拿掉：打开抽屉与增删改后本来就会自动重载，
 // 它从来不需要被按（docs/spec-drawer.md 第三节·毛病 1）。
+
+// 公式编辑器弹窗（基准 5 · 样张「丙」）。
+// 弹窗元素是静态的，只绑一次——不再随列表重绘重建。
+document.getElementById("dir-save")?.addEventListener("click", saveDirector);
+document.getElementById("dir-cancel")?.addEventListener("click", closeDirectorEditor);
+document.getElementById("director-editor-close")?.addEventListener("click", closeDirectorEditor);
+document.getElementById("dir-del")?.addEventListener("click", deleteEditingDirector);
+document.getElementById("dir-sim")?.addEventListener("click", simulateDirector);
 
 // 设定库搜索：改一个字就重渲染。106 条重排不卡，不必防抖。
 // 重渲染用的是内存里那份 state.settingList——不重拉网络。

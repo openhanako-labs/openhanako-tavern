@@ -5742,13 +5742,80 @@ main.ctx-open #panel-head { display: flex; }
 
 .dir-editor-host:focus-within { border-color: var(--accent); }
 
-.row { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+/* ── 公式编辑器弹窗（基准 5 · 样张「丙」）──────────────────
+   编辑器从抽屉搬进全宽弹窗：抽屉只有 344px，而公式的字段是嵌套的
+   （state 是对象、rules 是数组），vanilla-jsoneditor 的树模式每层
+   缩进吃掉 20px，三层就折成一行一个字。
 
-.row .nm { font-size: 13px; font-weight: 500; flex: 0 0 74px; }
+   布局：顶部一条（名字 + 取消/保存）、中间 JSON 吃满剩余高度、
+   底部一条（试算 / 删除）。与预设编辑器（.pe-*）同一套走法。 */
+.de-hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+/* 标题与右侧按钮高度不同（22 vs 28），align-items:center 下各自居中——
+   顶部差 3px 是正常的，不是错位。 */
+.de-hd h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.de-hd-right { margin-left: auto; display: flex; gap: 6px; }
 
-.row:first-child { border-top: none; }
+.de-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  overflow-y: auto;
+}
 
-.row:hover { background: rgba(224,138,60,.05); }
+.de-name { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.de-name label { font-size: 11.5px; color: var(--fg-muted); flex: 0 0 auto; }
+.de-name input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--fg);
+}
+.de-name input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(224, 138, 60, .18);
+}
+
+/* JSON 区：占满剩余高度。弹窗里给得比抽屉里高得多——这就是搬过来的理由。 */
+.de-json { flex: 1; min-height: 0; display: flex; }
+.de-json .dir-editor-host {
+  flex: 1;
+  height: auto;
+  min-height: 320px;
+}
+
+.de-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 弹窗里的校验/试算区不再要上边距——.de-body 的 gap 已经在管间距 */
+.de-body .dir-check { margin-top: 0; }
+.de-body .dir-sim { margin-top: 0; }
+
+/* 注：.row / .row .nm / .row:first-child / .row:hover 四条已删（2026-09-28）。
+   它们原本只服务于公式编辑器那一小段就地展开的 HTML；
+   编辑器搬进弹窗后（基准 5 · 样张「丙」），那段 HTML 不再存在。
+   删掉是为了不让检查器的死规则数默默长上去——
+   死规则和缺样式是一对：一个类“写了但没人用”，就很可能另有一个
+   “用了但没写”。 */
 
 /* ══ 恢复（定向第二遍，2026-09-28）══
    上一遍为避免灌进样张样式，要求「块的类必须全是 App 用过的」；
@@ -5785,6 +5852,9 @@ main.ctx-open #panel-head { display: flex; }
 .dir-k { color: var(--fg-muted); }
 .dir-prog { color: var(--fg-dim); font-variant-numeric: tabular-nums; }
 .dir-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   padding: 8px 10px;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
@@ -5792,6 +5862,50 @@ main.ctx-open #panel-head { display: flex; }
 }
 .dir-item:hover { background: var(--surface-2); }
 .dir-item.on { background: var(--surface-2); border-color: var(--border); box-shadow: inset 2px 0 0 var(--accent); }
+/* 停用：整条压淡 + 名字划线。不用 opacity 压整块——
+   那样连“启用/停用”这颗开关也一起看不清了。 */
+.dir-item.off .dir-name { color: var(--fg-muted); text-decoration: line-through; }
+.dir-item.off .dir-meta { opacity: .7; }
+
+/* 行首开关（基准 5 · 样张「丙」四件之一）。
+   只做 enabled —— 它在引擎里真的被读：
+   pipeline 里 `if (entity.enabled === false) return ""`。 */
+.dir-sw {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 15px;
+  margin-top: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--sunken);
+  position: relative;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.dir-sw::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform .2s var(--ease);
+}
+.dir-sw[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.dir-sw[aria-checked="true"]::after { transform: translateX(11px); }
+
+/* 「本场在用」标记：与设定库的归属徽章同一套规矩——只在变化时画 */
+.dir-bound-tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 9.5px;
+  font-weight: 500;
+}
+
 .dir-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
 .dir-meta { font-size: 11px; color: var(--fg-muted); margin-top: 2px; }
 .dir-acts { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }

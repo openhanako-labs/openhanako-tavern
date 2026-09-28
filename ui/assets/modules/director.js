@@ -81,18 +81,30 @@ export function renderDirectors() {
 
   box.innerHTML = list.map((d) => {
     const on = String(d.id) === bound;
+    const off = d.enabled === false;
     const rules = Array.isArray(d.rules) ? d.rules : [];
     const briefs = rules.filter(r => String(r?.brief || "").trim()).length;
     const vars = Object.keys(d.state || {}).length;
-    return `<div class="dir-item${on ? " on" : ""}" data-id="${escapeHtml(d.id)}">
+    /*
+     * 行结构照基准 5 样张「丙」：开关 + 名字 + 一行读数 + 操作。
+     *
+     * 开关做在行首而不是藏在编辑器里：引擎真的读 enabled
+     * （pipeline 里 `if (entity.enabled === false) return ""`），
+     * “这条公式这局用不用”是个高频动作，不该躲两层。
+     *
+     * 注：样张里还有「顺序 / 优先级 / 标签」三件——它们**暂未落地**，
+     * 因为引擎里一场对话只绑一个公式（conv.directorId 是单值），
+     * 没有“两条公式同时生效”的场合让它们排序。等语义定了再加。
+     */
+    return `<div class="dir-item${on ? " on" : ""}${off ? " off" : ""}" data-id="${escapeHtml(d.id)}">
+      <span class="dir-sw" role="switch" aria-checked="${off ? "false" : "true"}" data-act="toggle" data-id="${escapeHtml(d.id)}" title="${off ? "启用" : "停用"}"></span>
       <div class="dir-main">
-        <div class="dir-name">${escapeHtml(d.name || "未命名配方")}${d.enabled === false ? '<span class="dir-off">已关</span>' : ""}</div>
+        <div class="dir-name">${escapeHtml(d.name || "未命名公式")}${on ? '<span class="dir-bound-tag">本场在用</span>' : ""}</div>
         <div class="dir-meta">${vars} 个状态 · ${rules.length} 条规则${briefs ? ` · ${briefs} 条约束` : ""}</div>
       </div>
       <div class="dir-acts">
         <button class="mini" data-act="bind" data-id="${escapeHtml(d.id)}">${on ? "解绑" : "绑到这一场"}</button>
         <button class="mini" data-act="edit" data-id="${escapeHtml(d.id)}">编辑</button>
-        <button class="mini" data-act="toggle" data-id="${escapeHtml(d.id)}">${d.enabled === false ? "启用" : "停用"}</button>
       </div>
     </div>`;
   }).join("");
@@ -141,7 +153,7 @@ export function newDirector() {
     }
   };
   renderEditor();
-  $("director-editor")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  // 编辑器现在在弹窗里（基准 5 · 样张「丙」），不再需要滚到抽屉底部
 }
 
 export function openDirectorEditor(id) {
@@ -156,51 +168,43 @@ export function closeDirectorEditor() {
   renderEditor();
 }
 
+/** 删掉当前正在编辑的那一条（弹窗底部的「删除」）。 */
+export async function deleteEditingDirector() {
+  if (!editing?.id) return;
+  await deleteDirector(editing.id);
+}
+
 function renderEditor() {
-  const box = $("director-editor");
-  if (!box) return;
-  if (!editing) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+  const modal = $("director-editor-modal");
+  if (!modal) return;
+
+  // 没在编辑 → 弹窗收起。编辑器搬到弹窗后，这个函数只负责开/关与填内容。
+  if (!editing) {
+    modal.classList.add("hidden");
+    destroyEditor();
+    return;
+  }
 
   const d = editing.draft;
+  const title = $("director-editor-title");
+  if (title) title.textContent = editing.id ? "编辑公式" : "新建公式";
 
-  box.classList.remove("hidden");
-  box.innerHTML = `
-    <div class="panel" style="margin:0">
-      <h3>${editing.id ? "编辑配方" : "新建配方"}</h3>
-      <div class="field">
-        <label>名字</label>
-        <input id="dir-name" type="text" value="${escapeHtml(d.name || "")}">
-      </div>
-      <div class="field">
-        <label>状态与规则</label>
-        <div id="dir-editor-host" class="dir-editor-host"></div>
-        <div class="hint">
-          <b>state</b>：数值量写 <code>{ "init": 1, "min": 0, "max": 10 }</code>；开关写 <code>{ "init": false }</code>。<br>
-          <b>rules</b>：<code>when</code> 支持 <code>always</code> / <code>名字 >= 数字</code> / 用 <code>&amp;&amp;</code> 串；
-          <code>effect</code> 支持 <code>名字 += 数字</code>、<code>-=</code>、<code>=</code>。<br>
-          <b>brief</b> 是给模型的**性质要求**（「必须出现一次正面冲突」），不是「本轮去做第几件事」。
-        </div>
-      </div>
-      <div class="row">
-        <button id="dir-save" class="btn btn-primary btn-sm">保存</button>
-        ${editing.id ? '<button id="dir-sim" class="btn btn-sm">试算一轮</button>' : ""}
-        <button id="dir-cancel" class="btn btn-ghost btn-sm">取消</button>
-        ${editing.id ? '<button id="dir-del" class="btn btn-ghost btn-sm" style="margin-left:auto">删除</button>' : ""}
-      </div>
-      <div id="dir-check" class="dir-check"></div>
-      <div id="dir-sim-out" class="dir-sim hidden"></div>
-    </div>`;
+  const nameEl = $("dir-name");
+  if (nameEl) nameEl.value = d.name || "";
+
+  // 删除/试算只在已存的条目上有意义（新配方还没 id）
+  const del = $("dir-del");
+  const sim = $("dir-sim");
+  if (del) del.classList.toggle("hidden", !editing.id);
+  if (sim) sim.classList.toggle("hidden", !editing.id);
+
+  modal.classList.remove("hidden");
 
   mountEditor({
     state: d.state || {},
     rules: Array.isArray(d.rules) ? d.rules : [],
     freeform: d.freeform || ""
   });
-
-  $("dir-save")?.addEventListener("click", saveDirector);
-  $("dir-cancel")?.addEventListener("click", closeDirectorEditor);
-  $("dir-del")?.addEventListener("click", () => deleteDirector(editing?.id));
-  $("dir-sim")?.addEventListener("click", simulateDirector);
 
   // 打开就查一次：不查的话，一份旧配方要等你动一下键盘才看到它已经坏了
   runCheck();

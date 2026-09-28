@@ -500,7 +500,6 @@
       <div class="drawer-body">
         <div id="director-bound" class="dir-bound"></div>
         <div id="directors-list" class="list"><div class="d-skel"><div class="d-skel-bar w46"></div><div class="d-skel-bar w82"></div><div class="d-skel-bar w64"></div></div></div>
-        <div id="director-editor" class="panel hidden"></div>
       </div>
     </div>
 
@@ -1710,6 +1709,44 @@
   而“想不起哪个图标叫什么”的那一下依然会发生——面板就是那个出口。
   它同时也是九个入口之外的快路径（打“设定”就跳设定库）。
 -->
+<div id="director-editor-modal" class="modal hidden">
+  <div class="modal-content modal-fullscreen">
+    <!--
+      公式编辑器搬到全宽弹窗（基准 5 · 样张「丙」）。
+
+      为什么不在抽屉里就地展开：抽屉只有 344px，而公式的字段是**嵌套**的
+      （state 里是对象、rules 是数组）。真机上用 vanilla-jsoneditor 的树模式，
+      每层缩进吃掉 20px——三层就折成一行一个字。整屏宽下才正常。
+
+      而且弹窗本来就是这个 App 处理「编辑」的既有方式
+      （角色 / 设定 / 变量 / 预设 / 正则都用 .modal）。
+    -->
+    <div class="de-hd">
+      <h2 id="director-editor-title">编辑公式</h2>
+      <span class="de-hd-right">
+        <button id="dir-cancel" type="button" class="btn btn-sm">取消</button>
+        <button id="dir-save" type="button" class="btn btn-primary btn-sm">保存</button>
+      </span>
+      <button id="director-editor-close" type="button" class="btn btn-ghost btn-sm modal-close">✕</button>
+    </div>
+    <div class="de-body">
+      <div class="de-name">
+        <label for="dir-name">名字</label>
+        <input id="dir-name" type="text" placeholder="未命名公式">
+      </div>
+      <div class="de-json">
+        <div id="dir-editor-host" class="dir-editor-host"></div>
+      </div>
+      <div id="dir-check" class="dir-check"></div>
+      <div id="dir-sim-out" class="dir-sim hidden"></div>
+      <div class="de-foot">
+        <button id="dir-sim" type="button" class="btn btn-sm">试算一轮</button>
+        <button id="dir-del" type="button" class="btn btn-ghost btn-sm" style="margin-left:auto">删除</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="bg-modal" class="modal hidden">
   <div class="modal-content">
     <div class="modal-header">
