@@ -64,48 +64,52 @@ taskId  → sdk.media.getTaskResources(taskId) → { kind:"local-file", path }
 
 ### 第 0 批 · 收尾今天报的两个小毛病（约 40 分钟）
 
-- [ ] 0.1 `ui/assets/modules/characters.js`：头像 `<img>` 加点击 → 打开一个轻量看图浮层（复用现有 modal 样式；Esc / 点背景关闭）。
-- [ ] 0.2 左栏角色行加缩略图：`ui/assets/modules/shell.js`（或角色列表渲染处）在行首放 20×20 圆角图，走同一条 `apiAvatarBlobUrl(id)`；失败退回首字母。
-- [ ] 0.3 两条都要有测试：`test/check-dom-refs.mjs` 覆盖新元素 id；`test/regression-avatar-url.mjs` 断言"界面上不再出现裸 `<img src>` 指向 App 路由"。
-- [ ] 0.4 真机验：面板点开能放大、左栏能看到缩略图。
+- [x] 0.1 `ui/assets/modules/characters.js`：头像 `<img>` 加点击 → 打开一个轻量看图浮层（复用现有 modal 样式；Esc / 点背景关闭）。
+- [x] 0.2 左栏角色行加缩略图：`ui/assets/modules/shell.js`（或角色列表渲染处）在行首放 20×20 圆角图，走同一条 `apiAvatarBlobUrl(id)`；失败退回首字母。
+- [x] 0.3 两条都要有测试：`test/check-dom-refs.mjs` 覆盖新元素 id；`test/regression-avatar-url.mjs` 断言"界面上不再出现裸 `<img src>` 指向 App 路由"。
+- [x] 0.4 真机验：面板点开能放大、左栏能看到缩略图。
 
 ### 第 1 批 · 图片台账（约 1 小时）
 
 > 这是第 3 件事的地基，先做它，后面图库只是读台账。
 
-- [ ] 1.1 新增 `lib/media/index-store.js`：`<dataDir>/media-index.json`，每条记
+- [x] 1.1 新增 `lib/media/index-store.js`：`<dataDir>/media-index.json`，每条记
       `{ id, kind, characterId, conversationId, messageId, file, bytes, prompt, taskId, scene, createdAt }`。
       写入必须**原子**（复用 `lib/atomic.js`），读损坏时要能自愈（丢一条不丢全表）。
-- [ ] 1.2 出图成功后（`tavern_generate_portrait` 与将来的场景插图）都往台账写一条。
-- [ ] 1.3 `GET /media/index` 与 `GET /media/index/:id`（后者回 base64，给界面显示用）。
-- [ ] 1.4 `test/regression-media-index.mjs`：新增/读回/损坏自愈/重复 id 覆盖，4 条。
-- [ ] 1.5 纪律：台账里的 `file` 只存**绝对路径**（相对路径无从追溯，BUG-059 同源）。
+- [x] 1.2 出图成功后（`tavern_generate_portrait` 与将来的场景插图）都往台账写一条。
+- [x] 1.3 `GET /media/index` 与 `GET /media/index/:id`（后者回 base64，给界面显示用）。
+- [x] 1.4 `test/regression-media-index.mjs`：新增/读回/损坏自愈/重复 id 覆盖，4 条。
+- [x] 1.5 纪律：台账里的 `file` 只存**绝对路径**（相对路径无从追溯，BUG-059 同源）。
 
 ### 第 2 批 · 场景插图（约 4–6 小时，主线）
 
-- [ ] 2.1 规格先落文档：`docs/spec-scene-illustration.md`——`[场景]` 标记的语法、出现在哪、被谁消费、模型漏写时怎么办、写错时怎么办。
-- [ ] 2.2 `lib/illustration/scene-marker.js`：从回复正文里**抽取**标记（纯函数，含：无标记、多标记、标记里带换行、标记里有 `{{char}}` 宏 四种用例）。
-- [ ] 2.3 `lib/illustration/prompt.js`：把"卡里已有字段 + 场景描述 + 说话人"拼成出图提示词。**不编外貌**（沿用 `portraitPrompt` 的纪律）。
-- [ ] 2.4 `lib/conversations/model.js`：消息新 kind `illustration`（`{ kind:"illustration", mediaId, prompt, status }`）；**旧消息读进来要照常工作**（迁移兼容）。
-- [ ] 2.5 `lib/illustration/service.js`：拿到标记 → 出图（复用 `generateImageRaw` + `readProductBytes`）→ 落文件到 `<dataDir>/media/` → 写台账 → 回写消息的 `mediaId` + `status`。
-- [ ] 2.6 `lib/illustration/routes.js`：`POST /conversations/:id/illustrate`（手动补一张）、`GET /media/:id`（取图，base64）。
-- [ ] 2.7 `ui/assets/modules/chat.js`：插图消息的渲染（缩略图 + 点开放大 + 生成中/失败三态）；失败要说出原因，不许静默。
-- [ ] 2.8 设置项：`scene.enabled`（默认关）、`scene.mode`（`marker` | `off`）、`scene.characterRef`（默认开）。默认关——**别替用户决定花钱**。
-- [ ] 2.9 测试：`regression-scene-marker.mjs`(≥6) / `regression-scene-prompt.mjs`(≥4) / `regression-scene-flow.mjs`(≥5，用假 sdk)。
+- [x] 2.1 规格先落文档：`docs/spec-scene-illustration.md`——`[场景]` 标记的语法、出现在哪、被谁消费、模型漏写时怎么办、写错时怎么办。
+- [x] 2.2 `lib/illustration/scene-marker.js`：从回复正文里**抽取**标记（纯函数，含：无标记、多标记、标记里带换行、标记里有 `{{char}}` 宏 四种用例）。
+- [x] 2.3 `lib/illustration/prompt.js`：把"卡里已有字段 + 场景描述 + 说话人"拼成出图提示词。**不编外貌**（沿用 `portraitPrompt` 的纪律）。
+- [x] 2.4 `lib/conversations/model.js`：消息新 kind `illustration`（`{ kind:"illustration", mediaId, prompt, status }`）；**旧消息读进来要照常工作**（迁移兼容）。
+- [x] 2.5 `lib/illustration/service.js`：拿到标记 → 出图（复用 `generateImageRaw` + `readProductBytes`）→ 落文件到 `<dataDir>/media/` → 写台账 → 回写消息的 `mediaId` + `status`。
+- [x] 2.6 `lib/illustration/routes.js`：`POST /conversations/:id/illustrate`（手动补一张）、`GET /media/:id`（取图，base64）。
+- [x] 2.7 `ui/assets/modules/chat.js`：插图消息的渲染（缩略图 + 点开放大 + 生成中/失败三态）；失败要说出原因，不许静默。
+- [x] 2.8 设置项：`scene.enabled`（默认关）、`scene.mode`（`marker` | `off`）、`scene.characterRef`（默认开）。默认关——**别替用户决定花钱**。
+- [x] 2.9 测试：`regression-scene-marker.mjs`(≥6) / `regression-scene-prompt.mjs`(≥4) / `regression-scene-flow.mjs`(≥5，用假 sdk)。
 - [ ] 2.10 真机验：开设置 → 发一条带 `[场景]` 的消息 → 出现一张插图 → 点开能放大。
 
 ### 第 3 批 · 接到图库（约 2 小时）
 
-- [ ] 3.1 **先侦察，别先写**：读 `hanako-gallery` 的工具与能力（`gallery_push` 的参数语义、它监视哪些目录、分类是目录级还是标签级、能否自定义目标）。
+- [x] 3.1 **先侦察，别先写**：读 `hanako-gallery` 的工具与能力（`gallery_push` 的参数语义、它监视哪些目录、分类是目录级还是标签级、能否自定义目标）。
       —— 这一步的产出是一段结论，不是代码。
-- [ ] 3.2 按侦察结果二选一：
+- [x] 3.2 按侦察结果二选一：
       **(a) 推**：出图后把文件复制到图库监视的目录（`gallery_push` 或直接复制）。
       **(b) 报**：App 只维护台账 + 暴露 `GET /media/index`，图库那边加一个读台账的来源。
       **优先 (b)**——单向、无侵入、图库不用改；只有在图库完全不支持外部来源时才走 (a)。
+
+      > ⚠ **2026-09-27 侦察已定：走 (a)，但形态是「插图落盘到 `app-data/eleckoi-tavern/generated/`」，
+      > 不是调推送接口。图库自动扫盘发现，零图库侧改动。详见 `docs/notes-gallery-intake.md`。
+      > 原默认的 (b) 已被推翻——图库没有「读外部清单」的口子，加一个会把台账 schema 绑死。**
 - [ ] 3.3 分类键定死：`kind`（立绘 / 场景）/ `characterId` / `conversationId` / 日期。写进 spec。
 - [ ] 3.4 去重：同一个 `mediaId` 不重复归档；重复推送要幂等。
 - [ ] 3.5 测试：台账 → 归档清单的纯函数测试（≥4）。
-- [ ] 3.6 真机验：图库里能找到今天的薇拉立绘，并且能按分类筛出来。
+- [x] 3.6 真机验：图库里能找到今天的薇拉立绘，并且能按分类筛出来。
 
 ---
 
@@ -136,6 +140,44 @@ taskId  → sdk.media.getTaskResources(taskId) → { kind:"local-file", path }
 派活原则：**只读侦察可以并行**；写代码同一文件同一时间只有一个执行者。
 
 ---
+
+## 六点五、状态复核（2026-09-27）
+
+> 刷这份勾的时候发现：**这些框一直没人维护**（第 0、1 批早做完了还空着，
+> 而下面几条又早就不成立了）。所以顺手复核了一遗，写清楚每一条为什么是这个状态。
+> **后续纪律：活落地就把框划掉；划不了的在框旁写一句为什么。**
+
+### 已划（有证据）
+
+0.1–0.4、1.1–1.5、2.1–2.9、3.1、3.2、3.6。
+
+### 2.7 曾经只做了一半（今天才补全）
+
+框里写的是「缩略图 + 点开放大 + 生成中/失败三态」，而今天查出来：
+
+- **`.illus-*` 那一套一行 CSS 都没有**——JS 里类名齐全，样式零，图按原始尺寸糊满气泡
+- **“点开放大”只绑了头像**，插图没绑——画出来了却点不开
+
+三态的结构当时是有的，所以很容易看着像做完了。两条今天已补，并在
+`test/check-scene-entry.mjs` 里钉住（「JS 里有类名」不等于「有人给它们写过样式」）。
+
+### 2.10 没划：自动那条不该现在跑
+
+- **手动那条已真机验过**（2026-09-27，真出图两张，含参考图通路，见日记）
+- **自动那条未验，而且现在跑也证明不了什么**：App **从不告诉模型要写 `[场景]`**——
+  spec §4 把「模型漏写」定成了“不救”，但正文里写着“提示词**约束**模型是建议”，
+  而代码里那句约束**不存在**。所以 `mode=marker` 对普通用户等于永不触发，
+  而设置面板写着「模型写 `[场景]` 时自动出图」，读起来像它自己会。
+
+**这是个待定的设计口，不是 bug**：要么在 `mode=marker` 时注入一句指令（改提示词），
+要么在面板上说清“得自己在预设里写”。**两条都会改行为/文案，等你定。**
+
+### 3.3 / 3.4 / 3.5 没划
+
+3.2 改道后（图库自己扫盘，App 不做归档清单也不推送）这三条的对象变了：
+3.3 的分类键部分由 spec §6 与 `index-store` 的 schema 承担；3.4 的去重在 App 这一侧
+变成了 `index-store` 的 upsert（同 id 覆盖，有测试）；3.5 要的那个「归档清单纯函数」
+已经不存在了。**没有逐条确认，留给下次复核。**
 
 ## 七、风险与未决
 
