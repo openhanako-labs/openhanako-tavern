@@ -55,6 +55,14 @@ export const dom = {
   regexModalEl: document.getElementById("regex-modal"),
   importRegexInput: document.getElementById("import-regex-input"),
 
+  // 图库（本场 / 全部两级）
+  galleryListEl: document.getElementById("gallery-list"),
+  galleryCountEl: document.getElementById("gallery-count"),
+  galleryScopeEl: document.getElementById("gallery-scope"),
+  galleryKindEl: document.getElementById("gallery-kind"),
+  galleryMoreEl: document.getElementById("gallery-more"),
+  galleryMoreBtn: document.getElementById("gallery-more-btn"),
+
   // 预设
   presetListEl: document.getElementById("preset-list"),
   presetCountEl: document.getElementById("preset-count"),
@@ -82,6 +90,9 @@ export const DRAWERS = {
   variables: document.getElementById("drawer-variables"),
   presets: document.getElementById("drawer-presets"),
   regex: document.getElementById("drawer-regex"),
+  // 图库：本场 / 全部两级。装在这里而不是左轨——
+  // 它和预设/正则/工具/迁移同级，属于「配一次就不常看」的那一类。
+  gallery: document.getElementById("drawer-gallery"),
   tools: document.getElementById("drawer-tools"),
   migration: document.getElementById("drawer-migration"),
   character: document.getElementById("drawer-character"),

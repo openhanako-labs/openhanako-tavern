@@ -303,6 +303,7 @@
               <button data-drawer="variables"><span class="mi">◫</span>变量</button>
               <button data-drawer="presets"><span class="mi">⌗</span>提示词预设</button>
               <button data-drawer="regex"><span class="mi">⁂</span>正则规则</button>
+              <button data-drawer="gallery"><span class="mi">🖼</span>图库</button>
               <div class="sep"></div>
               <button data-drawer="tools"><span class="mi">⚙</span>工具</button>
               <button data-drawer="migration"><span class="mi">⇅</span>迁移</button>
@@ -459,6 +460,61 @@
       </div>
       <!-- 分页条：吸底。settings.js 自己控制 hidden -->
       <div id="settings-pager" class="settings-pager hidden"></div>
+    </div>
+
+    <!-- ── 抽屉：图库 ───────────────────────────────
+       两级范围，一张网格。
+
+      「本场 / 全部」是这里唯一的正题——所以它占 filter 的第一行，
+       而不是和「类型」挤在同一个 select 里让人猜。
+
+      两级的分界是**归属**，不是时间：
+       · 本场 —— 这一场对话里画出来的场景插图（台账里 conversationId 对得上）
+       · 全部 —— 立绘 + 所有场次的场景插图
+
+       立绘属于**角色卡**，不属于某一场。所以「本场 + 立绘」恒为空——
+       这不是 bug，空态会把这句话说出来（见 gallery.js 的 galleryEmptyState），
+       否则用户会在这里反复点选却永远看不到东西，还以为图库坏了。
+
+      没有工具条：图库只做「看」和「点开放大」，没有别的主操作。
+      按基准 5 第二节的纪律——「新加一个控件之前，先问它有没有可能
+      从来不需要被按」——这里一颗都凑不出来，就不放。
+    -->
+    <div id="drawer-gallery" class="drawer hidden">
+      <div class="drawer-head">
+        <h2>图库</h2>
+        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <!--
+        两个 select 平分一行（344px 装不下第三个）。
+        scope 是这一页的正题，所以排在前面；kind 收窄它。
+      -->
+      <div class="drawer-filter">
+        <select id="gallery-scope" title="看哪一级的图">
+          <option value="conv">本场</option>
+          <option value="all">全部</option>
+        </select>
+        <select id="gallery-kind" title="图的类型">
+          <option value="">全部类型</option>
+          <option value="scene">场景插图</option>
+          <option value="portrait">立绘</option>
+        </select>
+      </div>
+      <div id="gallery-count" class="drawer-count"></div>
+      <!--
+        网格容器。初始是骨架条（三态里的「加载」）——
+        不要写「加载中…」：数据回来了但确实没有时，那句话会让用户一直等。
+      -->
+      <div id="gallery-list" class="drawer-body" aria-live="polite">
+        <div class="gal-grid">
+          <div class="gal-cell gal-skel"></div><div class="gal-cell gal-skel"></div>
+          <div class="gal-cell gal-skel"></div><div class="gal-cell gal-skel"></div>
+        </div>
+      </div>
+      <!-- 够一屏才出现：不足一页时整行不显示（基准 5 · 一节 ⑥） -->
+      <div id="gallery-more" class="gal-more hidden">
+        <button id="gallery-more-btn" class="btn btn-ghost btn-sm" type="button">再看更多</button>
+      </div>
     </div>
 
     <!-- ── 抽屉：变量 ───────────────────────────────── -->

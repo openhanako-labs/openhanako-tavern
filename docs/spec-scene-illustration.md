@@ -131,6 +131,52 @@ prompt 就变成错的。台账里存的是"当初模型写了什么"，不是"�
 **三处对得上**才算完成：消息指台账，台账指文件。任何一处失联，
 UI 就该说清是"生成中"还是"文件已删"还是"这条记录本身没了"。
 
+### 6.1 分类键（图库那两级靠它们）
+
+台账的四个键就是**分类键**，已在 `lib/media/index-store.js` 的 schema 里定死：
+
+| 键 | 值域 | 归谁 | 备注 |
+|---|---|---|---|
+| `kind` | `portrait` / `scene` / `reference` / `import` | 图的种类 | 立绘有卡无场；场景插图两者都有 |
+| `characterId` | 角色卡 id | 图上是谁 | 立绘必有；场景插图有（带参考图那张） |
+| `conversationId` | 对话 id | 图是哪一场的 | **场景插图才有**；立绘为 null |
+| `createdAt` | ISO 时间 | 什么时候 | 两者都有，排序用 |
+
+**这条不对称是设计，不是待补的洞**：立绘属于**角色卡**，场景插图属于
+**一场对话**。所以「本场」这一级天然筛不出立绘——`conversationId` 是 null。
+图库的空态会把这句话说出来（见 6.2），不让用户以为图库坏了。
+
+### 6.2 图库的两级范围
+
+界面：`ui/assets/modules/gallery.js` + 纯契约 `ui/assets/modules/gallery-query.js`。
+
+| 级 | 查询 | 含什么 |
+|---|---|---|
+| **本场** | `/media/index?conversationId=<当前对话>` | 只这一场画出来的场景插图 |
+| **全部** | `/media/index`（不带 conversationId） | 立绘 + 所有场次的场景插图 |
+
+两条边界，都不是洁癖：
+
+- **没开会话时不拼 `conversationId=`**。空串会被后端 `!= null` 当成一个
+  真实 id 去比，结果恒为空——而那正是用户最不该看到的一种空。
+- **`kind` 只在有值时拼**。同理，空 kind 会让后端一条都筛不出来。
+
+对应测试：`test/regression-gallery-query.mjs`（13 条，含反证）、
+`test/regression-gallery-drawer.mjs`（45 条接线）。
+
+### 6.3 去重
+
+App 这一侧**不做归档清单、不推送**（`docs/notes-gallery-intake.md` 定的）：
+插图落盘到 `<dataDir>/generated/`，图库自己扫盘发现。
+
+去重分两层，各管一段：
+
+- **台账内**：`index-store` 的 `insert` 同 id 报错、`upsert` 同 id 覆盖。
+  场景插图的 `status` 从 pending 走到 ok/failed 就靠 upsert 推进，
+  不然同一条媒体会在台账里堆两行。
+- **图库内**：按文件字节 sha256（`images.file_hash` UNIQUE）。
+  与「引用了哪条台账」无关——Tavern 不需要为实现去重改 schema。
+
 ---
 
 ## 7. 上下文参与

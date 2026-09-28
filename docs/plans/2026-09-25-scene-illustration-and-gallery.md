@@ -106,9 +106,17 @@ taskId  → sdk.media.getTaskResources(taskId) → { kind:"local-file", path }
       > ⚠ **2026-09-27 侦察已定：走 (a)，但形态是「插图落盘到 `app-data/eleckoi-tavern/generated/`」，
       > 不是调推送接口。图库自动扫盘发现，零图库侧改动。详见 `docs/notes-gallery-intake.md`。
       > 原默认的 (b) 已被推翻——图库没有「读外部清单」的口子，加一个会把台账 schema 绑死。**
-- [ ] 3.3 分类键定死：`kind`（立绘 / 场景）/ `characterId` / `conversationId` / 日期。写进 spec。
-- [ ] 3.4 去重：同一个 `mediaId` 不重复归档；重复推送要幂等。
-- [ ] 3.5 测试：台账 → 归档清单的纯函数测试（≥4）。
+- [x] 3.3 分类键定死：`kind`（立绘 / 场景）/ `characterId` / `conversationId` / 日期。写进 spec。
+      —— 落在 `docs/spec-scene-illustration.md` §6.1（表格），
+         并写清「立绘没有 conversationId」这条不对称是设计。
+- [x] 3.4 去重：同一个 `mediaId` 不重复归档；重复推送要幂等。
+      —— App 侧不做归档也不推送（见 3.2 的侦察结论），所以这一条
+         拆成两层写在 §6.3：台账内 insert/upsert，图库内按文件字节 hash。
+- [x] 3.5 测试：台账 → 归档清单的纯函数测试（≥4）。
+      —— 「归档清单纯函数」已不存在（改为图库自己扫盘），
+         换成两个真契约的测试：
+         `test/regression-gallery-query.mjs`（13 条，两级查询 + 空态 + 计数，含反证）
+         `test/regression-gallery-drawer.mjs`（45 条，入口→抽屉→dom→shell→模块→CSS 全链）
 - [x] 3.6 真机验：图库里能找到今天的薇拉立绘，并且能按分类筛出来。
 
 ---
@@ -174,10 +182,15 @@ taskId  → sdk.media.getTaskResources(taskId) → { kind:"local-file", path }
 
 ### 3.3 / 3.4 / 3.5 没划
 
-3.2 改道后（图库自己扫盘，App 不做归档清单也不推送）这三条的对象变了：
-3.3 的分类键部分由 spec §6 与 `index-store` 的 schema 承担；3.4 的去重在 App 这一侧
-变成了 `index-store` 的 upsert（同 id 覆盖，有测试）；3.5 要的那个「归档清单纯函数」
-已经不存在了。**没有逐条确认，留给下次复核。**
+~~3.2 改道后（图库自己扫盘，App 不做归档清单也不推送）这三条的对象变了：~~
+**2026-09-28 已划。** 对象确实变了，但三条各自都还有真实的落点：
+
+- **3.3** → §6.1 的分类键表。四条键（kind / characterId / conversationId / createdAt）
+  就是两级筛选的全部依据，已在 index-store 的 schema 里定死，spec 补上图。
+- **3.4** → §6.3 拆成两层：台账内 insert/upsert（App 侧），图库内文件字节 hash（图库侧）。
+- **3.5** → 「归档清单纯函数」这个对象**不存在了**（改成图库自己扫盘），
+  换成两个真契约的测试：两级查询 + 空态文案 + 计数（13 条），
+  以及整条接线的 source-level 测试（45 条）。
 
 ## 七、风险与未决
 

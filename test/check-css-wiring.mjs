@@ -62,6 +62,13 @@ const CSS = join(UI, "assets", "characters.css");
  *   `.section-head`
  *        ← settings.js:354 `const headCls = \`section-head${folded ? " folded" : ""}\``。
  *          它整个是变量（不是 `class="…"` 字面量），静态扫不到。
+ *
+ * 2026-09-28 再补 1 条 —— 图库（gallery.js）同一个成因：
+ *   `.is-portrait`
+ *        ← gallery.js cellHtml()：
+ *          `class="gal-kind${rec.kind === "portrait" ? " is-portrait" : ""}"`
+ *          插值前只取到 `gal-kind`，` is-portrait` 整个落在插值内部。
+ *          （反向守门见下文 assertExemptionRegistered。）
  */
 const DYNAMIC_CLASSES = [
   "user", "assistant", "system",                    // chat.js 消息气泡角色
@@ -71,6 +78,7 @@ const DYNAMIC_CLASSES = [
   "private",        // board.js 黑板「仅本人」标签
   "core", "common", "rare",   // settings.js 常用度三档（PRIORITY_TIERS.cls）
   "section-head",   // settings.js 分组抬头（整个是变量 headCls）
+  "is-portrait",    // gallery.js 图库格子「这是立绘」标记
 ];
 
 let pass = 0;
