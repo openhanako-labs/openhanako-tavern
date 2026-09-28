@@ -6032,6 +6032,216 @@ main.ctx-open #panel-head { display: flex; }
 }
 
 /* ══════════════════════════════════════════════════════════════
+ * 欠账清收（2026-09-28）—— 只用到、CSS 里一条规则都没有的类
+ *
+ * 这些不是“没写完”，而是**写在别处 / 后来被删**的那一批：
+ *   check-css-coverage 把它们记在 KNOWN_DEBT 里当预算，
+ *   每补一族就收紧一格。这一轮把 13 条全部清掉，预算降到 0。
+ * ══════════════════════════════════════════════════════════════ */
+
+/* ── ① 命令面板条目（cmd-item / cn-sub / cmd-empty）──────────
+   外壳（.cmd-bar / .cmd-content / .cmd-list）早就有，
+   而**每一行条目**一条样式都没有——搜出来的结果是一排裸按钮。
+   形态：甲型（图标 + 名字 + 右侧说明），选中态用左侧 accent 竖线。 */
+.cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 13px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
+}
+.cmd-item:hover { background: var(--surface-2); }
+.cmd-item[aria-selected="true"] {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+/* 图标跟着左轨走（command.js 从 #apprail 借 svg），这里只统一尺寸 */
+.cmd-item .ri { width: 14px; height: 14px; flex: 0 0 auto; opacity: .8; }
+/* 右侧说明：推到最右，长了省略 */
+.cn-sub {
+  margin-left: auto;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cmd-empty {
+  padding: 20px 14px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--fg-muted);
+}
+
+/* ── ② 自定义背景：无背景时的占位（bg-none）────────────────
+   拖放区在没图的时候要看得见“可以点这里”。 */
+.bg-none {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-height: 78px;
+  padding: 10px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--fg-muted);
+  text-align: center;
+}
+.bg-none b { color: var(--fg-dim); font-weight: 500; }
+
+/* ── ③ 角色卡“建于…”（card-since）────────────────────────
+   .card-foot 已经是 flex + space-between，它和 .card-id 分站两端。 */
+.card-since { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── ④ 对话选择器的标题与元信息（picker-title / picker-meta）──
+   坑：.picker-item 是 space-between 布局，而样式只写了 `.picker-item .t`——
+   JS 渲染的却是 .picker-title / .picker-meta，两边名字对不上，
+   于是标题和“几条·日期”都是裸文本、挤在一行。 */
+.picker-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-meta {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── ⑤ 类目弹层的空/错提示（cats-empty）────────────────── */
+.cats-empty {
+  padding: 16px 12px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--fg-muted);
+}
+
+/* ── ⑥ 生图的世界书条目勾选框（gen-entry-ck）──────────────
+   .gen-entry 是整块 label，勾选框只负责选中，不该抢视线。 */
+.gen-entry-ck {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ── ⑦ TTS 声音表的名字输入框（vm-name-input）─────────────
+   原先靠内联 style 撑（flex/padding/border 全写在标签里）。
+   内联清不掉（JS 里写着），这里只补它没写到的两处：
+   焦点态、以及 hover 时边框的反馈。 */
+.vm-name-input { min-width: 0; }
+.vm-name-input:focus {
+  outline: none;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(224, 138, 60, .18);
+}
+
+/* ── ⑧ 弹层标题行与关闭按钮（modal-head / modal-close）─────
+   .modal-head 在 CSS 里只有一条后代规则（.cats-modal .modal-head h3），
+   自己一条布局都没有——所以标题与 ✕ 是**上下两行**堆着的。
+   两个调用点（类目管理 / 合并弹层）都用同一套头，这里补成一行。 */
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.modal-head h3 { flex: 1; min-width: 0; }
+
+/* 关闭按钮：推到最右、不抢视线。
+   现在父容器是 flex 了，margin-left:auto 真的会生效。 */
+.modal-close {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+}
+.modal-close:hover { color: var(--fg); }
+/* 合到 .merge-box 里那颗是独立一行（不在 .modal-head 内），
+   那里靠自身靠右——不给它 auto（父容器是 block，auto 会静默失效）。 */
+.merge-box > .modal-close { display: block; width: fit-content; margin-left: auto; }
+
+/* ── ⑨ 剧情公式列表项的主体（dir-main）──────────────────
+   .dir-item 是外层，.dir-acts 是操作行——
+   中间那层 .dir-main 缺“占满剩余宽度”这一条，
+   窄栏里名字与操作会互相挤。 */
+.dir-main { flex: 1; min-width: 0; }
+
+/* ── ⑩ 左轨隐藏 / 抽屉态下的房间分配（no-rail / roomy）────
+   两者都挂在 .shell 上，和 rail-folded 是同一族状态：
+     · no-rail —— 左轨整个收起（宿主嵌入等场景），把宽度还给主区
+     · roomy   —— 抽屉开着时左轨收窄，因为抽屉是实打实占宽的 */
+.shell.no-rail { --rail-w: 0px; }
+.shell.no-rail #apprail { display: none; }
+.shell.roomy { --rail-w: 46px; }
+
+/* ── ⑪ 自定义背景层（#app-bg / has-app-bg）───────────────
+   这一族是**整套功能缺 CSS**：appearance.js 把图挂上了、
+   把 --app-bg-veil / --app-bg-blur 写进 :root 了、
+   还往 documentElement 加了 .has-app-bg——而 CSS 里一行都没有。
+   所以“选了背景图看不到效果”，面板里的两个滑块也完全没作用。
+
+   为什么单独一层而不是给 body 加 background-image：
+   body 上还有宿主注入的主题底色，叠在一起难收回来；
+   单独一层看得见、也关得掉（HTML 里 #app-bg 就在 .shell 前面）。 */
+#app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  /* 模糊自己，不模糊内容——filter 在这一层，不会传染给兄弟 */
+  filter: blur(var(--app-bg-blur, 0px));
+  /* 放大一点，把模糊带来的边缘透底盖住 */
+  transform: scale(1.06);
+  transform-origin: center;
+  /* 遮罩：铺在图上的一层纸。--app-bg-veil 越大越不透明。
+     下限 0.75 是刻意的——自定义背景一进来，所有颜色的对比度
+     就不再有任何保证，这层保的是“字能不能读”。 */
+  opacity: 0;
+  transition: opacity var(--t-slow) var(--ease);
+}
+/* 没图时整层不存在；有图才淡入 */
+html:not(.has-app-bg) #app-bg { display: none; }
+html.has-app-bg #app-bg { opacity: 1; }
+
+/* 遮罩层：用 ::after 铺纸，不占用 #app-bg 自己的 opacity */
+html.has-app-bg #app-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: var(--app-bg-veil, 0.78);
+}
+
+/* 有背景时，内容层抬到它上面（.shell 原本没写 z-index）*/
+html.has-app-bg .shell {
+  position: relative;
+  z-index: 1;
+}
+
+/* ══════════════════════════════════════════════════════════════
  * 抽屉公共三态（基准 5 · docs/spec-drawer.md 第四节）
  *
  * 为什么要有这一组：

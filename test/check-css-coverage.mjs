@@ -26,24 +26,20 @@ const BASE_OK = new Set([
   "selected", "disabled", "empty", "dragging", "collapsed", "show",
   "user", "assistant", "system",     // 消息气泡角色，样式挂在 .message 上
   "you-left", "you-right",           // 同上，状态类
+  "has-app-bg",                       // 状态类：挂在 <html> 上，样式走 html.has-app-bg #app-bg
 ]);
 
 // 已知欠账（2026-09-28 核查后）：
-//   事故里丢的那批组件样式已按 session 原文恢复；下列是恢复后仍缺、
-//   需要**重写**（不在任何 session 里，说明当时就没写完 / 或写在别处）：
-//     .dir-*    剧情公式抽屉 —— 那一轮设计定了但没派落地，样式自然没有
-//     .cmd-item/.cmd-empty/.cn-sub   命令面板的条目与空态
-//     .no-rail/.roomy/.picker-meta   外壳的若干状态类
-//     .cats-empty/.card-since/.setting-cat-badge  空态与徽章
-//     .bg-none/.gen-entry-ck/.vm-name-input/.modal-close
-//   这些记为欠账，不允许再变多；每减一条就把预算收紧。
-const KNOWN_DEBT = new Set([
-  "dir-acts", "dir-item", "dir-k", "dir-line", "dir-main", "dir-meta", "dir-name", "dir-prog",
-  "cmd-item", "cmd-empty", "cn-sub",
-  "no-rail", "roomy", "picker-meta",
-  "cats-empty", "card-since", "setting-cat-badge",
-  "bg-none", "gen-entry-ck", "vm-name-input", "modal-close",
-]);
+//   【已清空】原 21 条欠账已全部补齐样式（见 characters.css「欠账清收」段）：
+//     · .dir-* 一族：剧情公式抽屉的列表项与操作行
+//     · .cmd-item/.cmd-empty/.cn-sub：命令面板的条目与空态
+//     · .no-rail/.roomy：外壳的两个状态（左轨收起 / 抽屉态收窄）
+//     · .picker-meta（+.picker-title）：对话选择器的标题与元信息
+//     · .cats-empty/.card-since/.setting-cat-badge：空态与徽章
+//     · .bg-none：无背景时的占位
+//     · .gen-entry-ck/.vm-name-input/.modal-close：零散控件
+//   预算跟着收到 0——以后再出现裸类就是新问题，不是欠账。
+const KNOWN_DEBT = new Set([]);
 const BUDGET = { naked: KNOWN_DEBT.size, base: 12 };
 
 // ── 1. 收集"用到的类" ───────────────────────────────────────
