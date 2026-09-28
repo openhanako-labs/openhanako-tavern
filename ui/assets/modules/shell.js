@@ -11,7 +11,7 @@
 import { dom, DRAWERS } from "./dom.js";
 import { state } from "./state.js";
 import { apiFetch, extractArray, toast, friendlyError, escapeHtml } from "./core.js";
-import { onNavigation, askRailRefresh, setActiveConv, railAlive } from "./nav-bus.js";
+import { onNavigation, askRailRefresh, setActiveConv } from "./nav-bus.js";
 
 /** 当前打开的抽屉名；null = 都关着。 */
 let openDrawerName = null;
@@ -573,20 +573,13 @@ export function bindShell() {
     }
   });
 
-  // 左栏不在场时，主区得有自己的兜底侧栏——否则从 App 卡片直接进来
-  // 会没有任何导航可用。左栏在场则收起，把宽度全让给聊天。
-  refreshSidebarVisibility();
-  setInterval(refreshSidebarVisibility, 5000);
-}
-
-/**
- * 按左栏是否在场，决定主区兜底侧栏显不显示。
- * 用户手动展开过就不插手——房间归他分。
- */
-function refreshSidebarVisibility() {
-  if (!dom.shellEl) return;
-  const manual = dom.shellEl.dataset.sidebarManual === "1";
-  if (manual) return;
-  const alive = railAlive();
-  dom.shellEl.classList.toggle("no-rail", alive);
+  // 左轨**常驻**，不再因宿主 rail 在场而让位。
+  //
+  // 曾经这里调 refreshSidebarVisibility()，宿主 rail 一发心跳就给 .shell
+  // 挂 no-rail —— 结果从宿主打开时左轨整个消失。而左轨是**全 App 唯一的
+  // 抽屉入口**（九个面板全在这条上），砍它等于把设定库/公式/世界/变量
+  // 全锁了。
+  //
+  // 两者职责本不重叠：宿主 rail 管「选谁聊」，App 左轨管「配置这个 App」。
+  // 用户仍可点收起键手动折（rail-fold），那是他自己的选择。
 }
