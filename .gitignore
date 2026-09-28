@@ -7,3 +7,8 @@ node_modules/
 
 # 提交消息的临时文件（写完就删，别进仓库）
 MSG*
+
+# CSS 审计的扫描产物（可由 tools/audit-css-usage.cjs 重新生成，
+# 是某一时刻的快照而非源码 —— 提交它们只会让 diff 里多出几千行噪声）
+tools/dead-audit.txt
+tools/dead-list.txt
