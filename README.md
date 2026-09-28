@@ -81,17 +81,19 @@ eleckoi-tavern/
 ├─ manifest.json           # V2 manifest · 3 个 capabilities
 ├─ index.js                # defineApp 入口 · 探针逻辑
 ├─ assets/
-│  ├─ icon.svg             # App icon
-│  └─ cover.svg            # Card face
+│  └─ icon.svg             # App icon（宿主读 App 根下的 assets/）
 ├─ sdk/                    # 宿主 bundle 的本地副本
 └─ ui/
-   ├─ probe.html           # 探针卡片页面
+   ├─ characters.html      # 主页面（卡片 route 指向它）
+   ├─ rail.html            # functionPanel 页
    └─ assets/
-      ├─ probe.css
-      ├─ probe.js
-      ├─ cover.svg
-      └─ sdk.js            # 前端 SDK
+      ├─ characters.css
+      ├─ icon-photo.png    # Card face（宿主读 ui/ 树）
+      └─ modules/          # 前端模块
 ```
+
+> 路径基准分两套，容易踩：`icon` 从 **App 根** 解析（`assets/icon.svg`）；
+> `face.image` 从 **`ui/` 树** 解析（写 `assets/icon-photo.png`，实际读 `ui/assets/icon-photo.png`）。
 
 ## 下一步
 
