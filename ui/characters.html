@@ -1734,6 +1734,26 @@
         <label for="dir-name">名字</label>
         <input id="dir-name" type="text" placeholder="未命名公式">
       </div>
+      <!--
+        「四件」的后三件（2026-09-28）。
+        它们只在**一场能绑多条公式**之后才有意义，所以现在才加。
+        一行三格：顺序 / 优先级 / 标签。
+        状态与规则仍只编辑 JSON——那是这个抽屉的立身之本，不包表单。
+      -->
+      <div class="de-fields">
+        <div class="de-field">
+          <label for="dir-order" title="数字小的先注入">顺序</label>
+          <input id="dir-order" type="number" min="1" step="1" value="1">
+        </div>
+        <div class="de-field">
+          <label for="dir-priority" title="状态同名时数字大的说了算">优先级</label>
+          <input id="dir-priority" type="number" min="0" step="50" value="100">
+        </div>
+        <div class="de-field de-field-tags">
+          <label for="dir-tags">标签</label>
+          <input id="dir-tags" type="text" placeholder="节奏, 日常">
+        </div>
+      </div>
       <div class="de-json">
         <div id="dir-editor-host" class="dir-editor-host"></div>
       </div>

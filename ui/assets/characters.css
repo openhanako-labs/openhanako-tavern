@@ -5810,6 +5810,74 @@ main.ctx-open #panel-head { display: flex; }
 .de-body .dir-check { margin-top: 0; }
 .de-body .dir-sim { margin-top: 0; }
 
+/* 弹窗里的「顺序 / 优先级 / 标签」一行三格（2026-09-28）。
+   它们只在**一场能绑多条公式**之后才有意义。
+   标签格给两倍宽度——名字比数字长。 */
+.de-fields {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.de-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+.de-field label {
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.de-field input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--fg);
+}
+.de-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(224, 138, 60, .18);
+}
+.de-field-tags { flex: 2 1 0; }
+
+/* 列表行的优先级徽章。
+   照设定库的规矩：**只在非默认（100）时才画**——
+   每条都挂一个「普通」等于没信息。 */
+.dir-pri {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--fg-muted);
+  font-size: 9.5px;
+  font-weight: 500;
+}
+.dir-pri.core { background: var(--accent-soft); color: var(--accent); }
+
+/* 列表行的标签胶囊。纯本地组织，不进引擎。 */
+.dir-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+.dir-tag {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--fg-dim);
+  font-size: 9.5px;
+}
+
 /* 注：.row / .row .nm / .row:first-child / .row:hover 四条已删（2026-09-28）。
    它们原本只服务于公式编辑器那一小段就地展开的 HTML；
    编辑器搬进弹窗后（基准 5 · 样张「丙」），那段 HTML 不再存在。

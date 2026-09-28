@@ -96,7 +96,6 @@ ok("model 里 enabled 有默认值与归一", () => {
 });
 
 console.log("\n── ④ 弹窗按钮绑在 main.js（静态元素只绑一次）──");
-
 for (const id of ["dir-save", "dir-cancel", "director-editor-close", "dir-del", "dir-sim"]) {
   ok(`#${id} 有绑定`, () => {
     assert(new RegExp(`getElementById\\("${id}"\\)\\?\\.addEventListener`).test(MAIN),
@@ -108,6 +107,62 @@ ok("弹窗按钮不是每次重绘重建（不再绑在 renderEditor 里）", ()
   const renderEditor = JS.slice(JS.indexOf("function renderEditor()"), JS.indexOf("function mountEditor"));
   assert(!/addEventListener\("click", saveDirector\)/.test(renderEditor),
     "renderEditor 里还在绑保存——元素现在在 HTML 里，绑多次会叠监听器");
+});
+
+console.log("\n── ⑤ 「四件」：顺序 / 优先级 / 标签都落地了 ──");
+
+ok("弹窗里有顺序 / 优先级 / 标签三个输入", () => {
+  for (const id of ["dir-order", "dir-priority", "dir-tags"]) {
+    assert(new RegExp(`id="${id}"`).test(HTML), `弹窗里没有 #${id}`);
+  }
+});
+
+ok("读编辑器时把三个字段读回来", () => {
+  assert(/\$\("dir-order"\)\?\.value/.test(JS), "没读顺序");
+  assert(/\$\("dir-priority"\)\?\.value/.test(JS), "没读优先级");
+  assert(/\$\("dir-tags"\)\?\.value/.test(JS), "没读标签");
+});
+
+ok("标签按逗号拆（半角/全角都认）", () => {
+  assert(/split\(\/\[,，\]\//.test(JS), "标签没按逗号拆，或只认了一种逗号");
+});
+
+ok("列表行画优先级徽章，且只在非默认时画", () => {
+  assert(/dir-pri/.test(JS), "列表行没有优先级徽章");
+  assert(/pri !== 100/.test(JS), "优先级徽章没做「非默认才画」——每条都挂等于没信息");
+});
+
+ok("列表行画标签胶囊", () => {
+  assert(/dir-tag\b/.test(JS), "没有标签胶囊");
+  assert(/dir-tags/.test(JS), "没有标签容器");
+});
+
+ok("列表按 order 排序显示（所见即注入顺序）", () => {
+  assert(/Number\(a\.order\)/.test(JS) && /Number\(b\.order\)/.test(JS),
+    "列表没按 order 排——行上写着「顺序 N」却与列表顺序不符就是骗人");
+});
+
+console.log("\n── ⑥ 多条绑定：绑定动作变成增删，不是单值切换 ──");
+
+ok("绑定读的是列表，不是单值", () => {
+  assert(/function boundIds\(\)/.test(JS), "没有 boundIds（多值读入口）");
+  assert(/Array\.isArray\(conv\.directorIds\)/.test(JS), "没读 directorIds");
+});
+
+ok("绑定写的是多值路由", () => {
+  assert(/\/directors`/.test(JS), "绑定没走多值路由 /directors");
+  assert(/directorIds:\s*next/.test(JS), "请求体没带 directorIds");
+});
+
+ok("绑定区多条时带序号", () => {
+  assert(/boundList\.map\(\(id, i\)/.test(JS), "绑定区没逐条列（多条时只能看到一条）");
+});
+
+ok("进度按公式取（不直接拿 __dir 整份）", () => {
+  // 直接拿 __dir 会让多条公式共用一份进度
+  assert(!/conv\?\.variables\?\.__dir \|\| undefined/.test(JS),
+    "还有地方直接把整份 __dir 当一条的进度用");
+  assert(/dirStateOf\(/.test(JS), "没有按公式取进度的读入口");
 });
 
 console.log("\n" + "=".repeat(50));

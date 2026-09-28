@@ -22,14 +22,42 @@ let editing = null;   // { id: string|null, draft: object }
 
 const $ = (id) => document.getElementById(id);
 
-/** 这一场绑的配方 id。 */
+/** 这一场绑的公式 id 列表。旧对话只有 directorId（单值）也能读。 */
+function boundIds() {
+  const conv = state.currentConv;
+  if (!conv) return [];
+  if (Array.isArray(conv.directorIds) && conv.directorIds.length) {
+    return conv.directorIds.map(x => String(x || "")).filter(Boolean);
+  }
+  const one = String(conv.directorId || "").trim();
+  return one ? [one] : [];
+}
+
+/** 兼容旧调用点：第一条绑定的 id（没有就空串）。 */
 function boundId() {
-  return String(state.currentConv?.directorId || "");
+  return boundIds()[0] || "";
+}
+
+/**
+ * 这一场某条公式的进度。
+ *
+ * 认两种形状（与 lib/director/binding.js 的 dirStateOf 同一套判据）：
+ *   · 新：`{ "uuid-a": { 张力: 3 } }` —— 取 raw[id]
+ *   · 旧：`{ 张力: 3 }`              —— 扁平，整份都是那唯一一条的
+ * 判据是**值是不是对象**，不是「有没有这个键」。
+ */
+function dirStateOf(raw, id) {
+  if (!raw || typeof raw !== "object") return {};
+  const own = raw[String(id)];
+  if (own && typeof own === "object" && !Array.isArray(own)) return own;
+  const vals = Object.values(raw);
+  if (vals.length > 0 && vals.every(v => v === null || typeof v !== "object")) return raw;
+  return {};
 }
 
 /** 把这一场的进度读成一行字。读的是对话自己的 variables，不是全局。 */
 function progressOf(entity) {
-  const raw = state.currentConv?.variables?.__dir;
+  const raw = dirStateOf(state.currentConv?.variables?.__dir, entity?.id);
   if (!raw || typeof raw !== "object") return "";
   const parts = [];
   for (const [name, spec] of Object.entries(entity?.state || {})) {
@@ -61,17 +89,30 @@ export function renderDirectors() {
   const n = $("directors-count");
   if (n) n.textContent = list.length ? `${list.length} 份` : "";
 
-  const bound = boundId();
+  const boundList = boundIds();
   const boundBox = $("director-bound");
   if (boundBox) {
-    const one = list.find(d => String(d.id) === bound);
-    const prog = one ? progressOf(one) : "";
-    boundBox.innerHTML = state.currentConv
-      ? (one
-        ? `<div class="dir-line"><span class="dir-k">这一场</span>正在跑「${escapeHtml(one.name)}」${one.enabled === false ? "（已关）" : ""}</div>`
-          + (prog ? `<div class="dir-line dir-prog">${escapeHtml(prog)}</div>` : `<div class="dir-line dir-prog">还没推进过——发出第一条消息就有读数了</div>`)
-        : `<div class="dir-line dir-k">这一场还没绑配方</div>`)
-      : `<div class="dir-line dir-k">先开一场对话，配方要绑在场上</div>`;
+    if (!state.currentConv) {
+      boundBox.innerHTML = `<div class="dir-line dir-k">先开一场对话，公式要绑在场上</div>`;
+    } else if (boundList.length === 0) {
+      boundBox.innerHTML = `<div class="dir-line dir-k">这一场还没绑公式</div>`;
+    } else {
+      /*
+       * 多条时逐条列出来（带序号）。
+       * 序号不是装饰：它对应注入顺序（order），
+       * 也告诉你“哪条排在前面”。
+       */
+      const lines = boundList.map((id, i) => {
+        const one = list.find(d => String(d.id) === id);
+        if (!one) return `<div class="dir-line dir-k">第 ${i + 1} 条：公式已不在</div>`;
+        const prog = progressOf(one);
+        const off = one.enabled === false;
+        return `<div class="dir-line"><span class="dir-k">${i + 1}.</span>「${escapeHtml(one.name)}"${off ? "（已关）" : ""}</div>`
+          + (prog ? `<div class="dir-line dir-prog">${escapeHtml(prog)}</div>`
+                  : `<div class="dir-line dir-prog">还没推进过——发出第一条消息就有读数了</div>`);
+      });
+      boundBox.innerHTML = lines.join("");
+    }
   }
 
   if (!list.length) {
@@ -79,12 +120,23 @@ export function renderDirectors() {
     return;
   }
 
-  box.innerHTML = list.map((d) => {
-    const on = String(d.id) === bound;
+  // 列表按 order 排序显示——列表的顺序就是注入顺序，所见即所得
+  const ordered = list.slice().sort((a, b) => {
+    const ao = Number.isFinite(Number(a.order)) ? Number(a.order) : 1;
+    const bo = Number.isFinite(Number(b.order)) ? Number(b.order) : 1;
+    return ao - bo;
+  });
+
+  box.innerHTML = ordered.map((d) => {
+    const idx = boundList.indexOf(String(d.id));
+    const on = idx >= 0;
     const off = d.enabled === false;
     const rules = Array.isArray(d.rules) ? d.rules : [];
     const briefs = rules.filter(r => String(r?.brief || "").trim()).length;
     const vars = Object.keys(d.state || {}).length;
+    const pri = Number.isFinite(Number(d.priority)) ? Number(d.priority) : 100;
+    const tags = Array.isArray(d.tags) ? d.tags : [];
+
     /*
      * 行结构照基准 5 样张「丙」：开关 + 名字 + 一行读数 + 操作。
      *
@@ -92,15 +144,25 @@ export function renderDirectors() {
      * （pipeline 里 `if (entity.enabled === false) return ""`），
      * “这条公式这局用不用”是个高频动作，不该躲两层。
      *
-     * 注：样张里还有「顺序 / 优先级 / 标签」三件——它们**暂未落地**，
-     * 因为引擎里一场对话只绑一个公式（conv.directorId 是单值），
-     * 没有“两条公式同时生效”的场合让它们排序。等语义定了再加。
+     * 序号 / 顺序 / 优先级 / 标签（四件的后三件，2026-09-28 补上）：
+     *   · 序号 = 绑定顺序（本场第几条），只在绑着的时候画
+     *   · 顺序 = order，列表已按它排，行上再写一次让用户看得见
+     *   · 优先级 = priority，**只在非默认（100）时才画**——照设定库的规矩
+     *   · 标签 = tags，纯本地组织，不进引擎
      */
+    const priBadge = pri !== 100
+      ? `<span class="dir-pri${pri >= 300 ? " core" : ""}">${pri >= 300 ? "核心" : pri >= 200 ? "常用" : "低"}</span>`
+      : "";
+    const tagHtml = tags.length
+      ? tags.map(t => `<span class="dir-tag">${escapeHtml(t)}</span>`).join("")
+      : "";
+
     return `<div class="dir-item${on ? " on" : ""}${off ? " off" : ""}" data-id="${escapeHtml(d.id)}">
       <span class="dir-sw" role="switch" aria-checked="${off ? "false" : "true"}" data-act="toggle" data-id="${escapeHtml(d.id)}" title="${off ? "启用" : "停用"}"></span>
       <div class="dir-main">
-        <div class="dir-name">${escapeHtml(d.name || "未命名公式")}${on ? '<span class="dir-bound-tag">本场在用</span>' : ""}</div>
-        <div class="dir-meta">${vars} 个状态 · ${rules.length} 条规则${briefs ? ` · ${briefs} 条约束` : ""}</div>
+        <div class="dir-name">${escapeHtml(d.name || "未命名公式")}${on ? `<span class="dir-bound-tag">${boundList.length > 1 ? `${idx + 1}` : "本场在用"}</span>` : ""}${priBadge}</div>
+        <div class="dir-meta">顺序 ${Number.isFinite(Number(d.order)) ? Number(d.order) : 1} · ${vars} 个状态 · ${rules.length} 条规则${briefs ? ` · ${briefs} 条约束` : ""}</div>
+        ${tagHtml ? `<div class="dir-tags">${tagHtml}</div>` : ""}
       </div>
       <div class="dir-acts">
         <button class="mini" data-act="bind" data-id="${escapeHtml(d.id)}">${on ? "解绑" : "绑到这一场"}</button>
@@ -137,8 +199,11 @@ export function newDirector() {
   editing = {
     id: null,
     draft: {
-      name: "新配方",
+      name: "新公式",
       enabled: true,
+      order: 1,
+      priority: 100,
+      tags: [],
       state: {
         tension: { init: 1, min: 0, max: 10 },
         turn: { init: 0 }
@@ -191,6 +256,14 @@ function renderEditor() {
 
   const nameEl = $("dir-name");
   if (nameEl) nameEl.value = d.name || "";
+
+  // 「四件」的后三件：顺序 / 优先级 / 标签
+  const orderEl = $("dir-order");
+  if (orderEl) orderEl.value = String(Number.isFinite(Number(d.order)) ? Number(d.order) : 1);
+  const priEl = $("dir-priority");
+  if (priEl) priEl.value = String(Number.isFinite(Number(d.priority)) ? Number(d.priority) : 100);
+  const tagsEl = $("dir-tags");
+  if (tagsEl) tagsEl.value = Array.isArray(d.tags) ? d.tags.join(", ") : "";
 
   // 删除/试算只在已存的条目上有意义（新配方还没 id）
   const del = $("dir-del");
@@ -299,7 +372,7 @@ async function runCheck() {
         rules: draft?.rules,
         freeform: draft?.freeform,
         // 有这一场的真实进度就用它预演——比拿初值算准得多
-        previewState: state.currentConv?.variables?.__dir || undefined
+        previewState: dirStateOf(state.currentConv?.variables?.__dir, editing?.id) || undefined
       })
     });
     renderCheck(unwrap(res) || {});
@@ -331,7 +404,18 @@ function renderCheck(d) {
 
 /** 读编辑器里的内容。JSON 坏掉时给出**位置**，不是一句「格式错误」。 */
 function readEditor() {
-  const name = ($("dir-name")?.value || "").trim() || "未命名配方";
+  const name = ($("dir-name")?.value || "").trim() || "未命名公式";
+
+  // 「四件」的后三件。数值非法时退回默认——不让一个空输入框变成 NaN
+  const orderRaw = Number($("dir-order")?.value);
+  const order = Number.isFinite(orderRaw) && orderRaw >= 1 ? Math.floor(orderRaw) : 1;
+  const priRaw = Number($("dir-priority")?.value);
+  const priority = Number.isFinite(priRaw) ? Math.floor(priRaw) : 100;
+  const tags = String($("dir-tags")?.value || "")
+    .split(/[,，]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+
   let parsed;
   try {
     parsed = currentDraft();
@@ -343,6 +427,9 @@ function readEditor() {
   }
   return {
     name,
+    order,
+    priority,
+    tags,
     state: parsed.state && typeof parsed.state === "object" ? parsed.state : {},
     rules: Array.isArray(parsed.rules) ? parsed.rules : [],
     freeform: typeof parsed.freeform === "string" ? parsed.freeform : ""
@@ -401,15 +488,22 @@ export async function toggleDirector(id) {
 
 export async function bindDirector(id) {
   const conv = state.currentConv;
-  if (!conv) { toast("先开一场对话——配方是绑在场上的", "error"); return; }
-  const next = boundId() === String(id) ? "" : String(id);
+  if (!conv) { toast("先开一场对话——公式是绑在场上的", "error"); return; }
+
+  const key = String(id);
+  const cur = boundIds();
+  // 已绑 → 解绑；未绑 → 追加到末尾（新绑的排最后，order 仍说了算）
+  const next = cur.includes(key) ? cur.filter(x => x !== key) : [...cur, key];
+
   try {
-    await apiFetch(`conversations/${encodeURIComponent(conv.id)}/director`, {
+    const saved = unwrap(await apiFetch(`conversations/${encodeURIComponent(conv.id)}/directors`, {
       method: "PATCH",
-      body: JSON.stringify({ directorId: next })
-    });
-    conv.directorId = next;
-    toast(next ? "已绑到这一场" : "已解绑", "success");
+      body: JSON.stringify({ directorIds: next })
+    }));
+    // 用后端回来的结果更新内存——别自己拼，免得与写侧归一不一致
+    conv.directorIds = Array.isArray(saved?.directorIds) ? saved.directorIds : next;
+    conv.directorId = String(saved?.directorId ?? (next[0] || ""));
+    toast(next.includes(key) ? "已绑到这一场" : "已解绑", "success");
     renderDirectors();
   } catch (e) {
     toast("绑定失败：" + friendlyError(e), "error");
@@ -431,7 +525,8 @@ export async function simulateDirector() {
     const res = await apiFetch(`directors/${encodeURIComponent(editing.id)}/simulate`, {
       method: "POST",
       body: JSON.stringify({
-        state: conv?.variables?.__dir || undefined,
+        // 取**这一条**的进度（多条时 __dir 是按公式分家的）
+        state: dirStateOf(conv?.variables?.__dir, editing.id) || undefined,
         text: ""
       })
     });
