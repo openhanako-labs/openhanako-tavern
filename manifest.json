@@ -1,9 +1,9 @@
 {
   "manifestVersion": 2,
   "id": "eleckoi-tavern",
-  "name": "ElecKoi Tavern",
+  "name": "夜航船 · Night Ferry Tavern",
   "version": "0.2.0-m8",
-  "description": "ElecKoi Tavern · Hana v2 App — 角色卡、对话、LLM、变量、设定库、提示词预设、工具、迁移。",
+  "description": "夜航船 · Night Ferry Tavern · Hana v2 App — 角色卡、对话、LLM、变量、设定库、提示词预设、工具、迁移。",
   "entry": "index.js",
   "icon": "assets/icon.svg",
   "minAppVersion": "0.982.0",
@@ -43,7 +43,7 @@
     "cards": [
       {
         "id": "characters",
-        "title": "ElecKoi Tavern",
+        "title": "夜航船",
         "description": "角色卡管理、对话、LLM 角色扮演",
         "route": "/characters.html",
         "cardForm": "flush",
