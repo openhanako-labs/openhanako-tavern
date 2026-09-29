@@ -51,6 +51,7 @@ import { registerIllustrationRoutes } from "./lib/illustration/routes.js";
 import { registerTtsRoutes } from "./lib/tts/routes.js";
 import { registerAppearanceRoutes } from "./lib/appearance/routes.js";
 import { registerModelRoutes } from "./lib/models/routes.js";
+import { registerMemoryRoutes } from "./lib/memory/routes.js";
 import { LLMService } from "./lib/llm/service.js";
 import { runSelfCheck } from "./lib/selfcheck.js";
 
@@ -317,6 +318,10 @@ export default defineApp(async (sdk) => {
   // 模型按用途分选（Q3）。列表需要 llmService 读宿主目录；配置读写只需要 dataDir。
   // 两者都独立于其它路由——坏掉一条不影响主链路。
   registerModelRoutes(app, { llmService, dataDir });
+
+  // 记忆面板（S2）。三格硬编码提到 App 配置：keepRecent / summaryMaxChars / summaryPrompt。
+  // 只依赖 dataDir（不需要 llmService）；与模型、TTS、场景同层。
+  registerMemoryRoutes(app, { dataDir });
     }
   });
   probe.record("routes registered");

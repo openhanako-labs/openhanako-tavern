@@ -6799,6 +6799,47 @@ html.has-app-bg .shell {
 }
 #models-modal .modal-body { max-height: 70vh; overflow-y: auto; }
 
+/* ── S2：记忆面板 ─────────────────────
+   与模型分选同一个模态语言（顶部体检 + tts-sec 分区）。
+   三格输入 + 一个只读默认模板展示。默认模板用 <details> 折起来，
+   不占主屏，但用户想知道时能一眼看到。 */
+#memory-modal .modal-body { max-height: 70vh; overflow-y: auto; }
+#memory-modal .field input[type="number"],
+#memory-modal .field textarea {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-md);
+}
+#memory-modal .field textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 8em;
+  line-height: 1.6;
+}
+.memory-default-tpl {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+}
+.memory-default-tpl > summary {
+  cursor: pointer;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.memory-default-tpl pre {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.18);
+  color: var(--fg);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ── S1：本轮发生了什么（var-diff 面板） ──
    与 chips 速览同一个数据源（msg.varDiff），两种读法：
      chips（行内小字，24 字截断）：一眼扫

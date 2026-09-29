@@ -22,6 +22,7 @@ import { importFile, handleMigrationFile, loadExports, renderExports, downloadEx
 import { saveBoardCell, deleteBoardCell, bindBoard } from "./board.js";
 import { bindGen } from "./gen.js";
 import { bindTts } from "./tts.js";
+import { bind as bindMemory } from "./memory.js";
 import { bind as bindVarDiffModal } from "./var-diff-modal.js";
 import { bindImage } from "./image.js";
 import { bindScene } from "./scene.js";
@@ -192,6 +193,9 @@ bindTts();
 // 「本轮发生了什么」面板的关闭 / 修改按钮。chips 行的「明细 ›」在 chat.js 动态绑。
 bindVarDiffModal();
 
+// 记忆面板（S2）：短期轮数 / 总结字数 / 总结提示词。入口在工具抽屉。
+bindMemory();
+
 // 出图设置（同样在 ⋯ 菜单里）：宿主供应商 / 本机 ComfyUI 两条路
 bindImage();
 
@@ -224,6 +228,10 @@ document.getElementById("open-scene-settings")?.addEventListener("click", async 
 document.getElementById("open-models-settings")?.addEventListener("click", async () => {
   const m = await import("./models.js");
   await m.openModels();
+});
+document.getElementById("open-memory-settings")?.addEventListener("click", async () => {
+  const m = await import("./memory.js");
+  await m.openMemory();
 });
 
 // 聊天输入：Enter 发送，Shift+Enter 换行

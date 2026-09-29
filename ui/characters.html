@@ -618,6 +618,7 @@
           </div>
           <div class="tools-appsec-btns">
             <button type="button" id="open-models-settings" class="btn btn-sm">模型分选</button>
+            <button type="button" id="open-memory-settings" class="btn btn-sm">记忆</button>
             <button type="button" id="open-tts-settings" class="btn btn-sm">语音朗读</button>
             <button type="button" id="open-image-settings" class="btn btn-sm">出图引擎</button>
             <button type="button" id="open-scene-settings" class="btn btn-sm">场景插图</button>
@@ -1326,6 +1327,84 @@
     <div class="modal-footer right-align">
       <button id="models-cancel" class="btn">取消</button>
       <button id="models-save" class="btn btn-primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 记忆（S2） ─────────────────────────── -->
+<!--
+  三格硬编码提到 App 配置：短期记忆轮数 / 总结字数 / 总结提示词。
+
+  与模型分选同一个位置（工具抽屉 App 设置区），同一个模态语言（顶部体检、下面分区）。
+
+  总结提示词：默认模板以只读形式展示在旁边，用户自己知道改掉了什么。
+  三条防编约束（只压缩/不新增/不写成对话）写在默认模板里——
+  覆盖之后由用户自己负责，我们不假装有裁判。
+-->
+<div id="memory-modal" class="modal hidden">
+  <div class="modal-content tts-content">
+    <div class="modal-header">
+      <h2>记忆 · 短期轮数与总结</h2>
+      <button id="memory-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- 体检条：与模型分选同一样式 -->
+      <div id="memory-health" class="modal-health">
+        <span class="mh-dot"></span>
+        <div class="mh-text">
+          <div class="mh-title">未就绪</div>
+          <div class="mh-sub">拉不到记忆配置——保存后不生效</div>
+        </div>
+      </div>
+
+      <!-- 短期记忆轮数 -->
+      <section class="tts-sec">
+        <h3>短期记忆轮数</h3>
+        <div class="field">
+          <label>至少保留最近多少条历史消息（无论超不超预算）</label>
+          <input type="number" id="memory-keep-recent" min="1" max="40" step="1" />
+        </div>
+        <div class="hint">默认 4。小一些 = 更快，多一些 = 记得多。与总结预算无关，只控「不折叠的那几轮」。</div>
+      </section>
+
+      <!-- 总结字数上限 -->
+      <section class="tts-sec">
+        <h3>前情提要字数上限</h3>
+        <div class="field">
+          <label>模型重写前情提按时写的最大字数</label>
+          <input type="number" id="memory-summary-chars" min="50" max="5000" step="10" />
+        </div>
+        <div class="hint">默认 500。太小会删信息，太大会把历史塞满 prompt。模型超出时会硬截断。</div>
+      </section>
+
+      <!-- 总结提示词 -->
+      <section class="tts-sec">
+        <h3>总结提示词（可选）</h3>
+        <div class="field">
+          <label>自定义总结时的 systemPrompt；留空 = 用默认模板</label>
+          <textarea id="memory-summary-prompt" rows="8" placeholder="（留空 = 用默认模板）"></textarea>
+        </div>
+        <div class="hint">支持两个模板变量：<code>{maxChars}</code> = 上面那格；<code>{characterName}</code> = 角色名。模板里没写 <code>{maxChars}</code>，模型就不知道字数上限。</div>
+
+        <details class="memory-default-tpl">
+          <summary>默认模板（不改就展示这个）</summary>
+          <pre id="memory-default-prompt"></pre>
+        </details>
+      </section>
+
+      <!-- 向量记忆评估 -->
+      <section class="tts-sec">
+        <h3>向量记忆（未接入）</h3>
+        <div id="memory-embed-status" class="vm-md-result">
+          <span class="hint">评估中……</span>
+        </div>
+        <div class="hint">lib/embed 目前只有「算向量」和「体检」两件事，没有把向量存下来、也没有按相似度捞回旧消息的路。加个开关只能做成「关与开都一样」，不如不接。接入时回方案文档看评估。</div>
+      </section>
+    </div>
+    <div class="modal-footer right-align">
+      <button id="memory-cancel" class="btn">取消</button>
+      <button id="memory-save" class="btn btn-primary">保存</button>
     </div>
   </div>
 </div>
