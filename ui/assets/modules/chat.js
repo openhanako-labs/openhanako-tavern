@@ -602,6 +602,7 @@ export async function sendMessage() {
   dom.messagesContainer.appendChild(loadingEl);
 
   const streamEl = loadingEl;
+  let gotReply = false; // Q2：这轮真的拿到正文了，才值得自动要方向
   try {
     // 优先走流式；失败或不可用时降级为一次性生成
     const streamRes = await sendMessageStream(content);
@@ -639,6 +640,7 @@ export async function sendMessage() {
       };
       state.currentConv.messages.push(assistantMsg);
       renderMessages();
+      gotReply = true;
     } else {
       // 降级为同步
       // 同步生成：服务端把整段回复一次性返回，几十秒是常态——
@@ -652,6 +654,7 @@ export async function sendMessage() {
         loadingEl.remove();
         state.currentConv.messages.push(res.data.assistantMessage);
         renderMessages();
+        gotReply = true;
         // 非流式路径：插图也可能已经触发了（服务端保存后异步）
         startIllustrationPoll(state.currentConv.id);
       } else {
@@ -672,6 +675,9 @@ export async function sendMessage() {
     renderSpeakerRow();
     renderWhisperRow();
     await loadConversations();
+    // Q2：正文落盘后自动给方向（输入区「自动」可关）。静默模式——
+    // 这是附带的“看一眼”，失败不该打断阅读。
+    if (gotReply && autoSuggestOn()) requestSuggestions({ quiet: true }).catch(() => {});
   } catch (e) {
     loadingEl.remove();
     toast(`发送失败: ${e.message}`, "error");
@@ -1177,6 +1183,17 @@ function acceptSavedMessage(saved) {
 /** 正在向模型要方向——防连点。 */
 let suggesting = false;
 
+/*
+ * Q2（2026-09-29）：每轮自动给方向。
+ * 开关存在本地——它是「这台设备的阅读习惯」，不是会话属性。
+ * 默认开：AIRP 对照里这是基础体验；想关的人多半会第一时间找开关，
+ * 而开关就摆在按钮旁边，一眼能看到。
+ */
+const AUTO_SUGGEST_KEY = "eleckoi:auto-suggest";
+function autoSuggestOn() {
+  try { return localStorage.getItem(AUTO_SUGGEST_KEY) !== "0"; } catch { return true; }
+}
+
 /**
  * 画候选项。
  *
@@ -1213,7 +1230,8 @@ export function renderSuggestions() {
 }
 
 /** 向模型要几个方向。独立一次调用，结果挂在消息上、不进正文 prompt。 */
-export async function requestSuggestions() {
+export async function requestSuggestions(opts = {}) {
+  const quiet = !!opts.quiet; // 自动触发时静默：失败不该为一次“附带的看”弹 toast
   const conv = state.currentConv;
   const btn = dom.suggestBtn || document.getElementById("suggest-btn");
   if (!conv || suggesting) return;
@@ -1234,12 +1252,12 @@ export async function requestSuggestions() {
     renderSuggestions();
 
     if (items.length === 0) {
-      toast(data?.note ? `没给出可用的方向：${data.note}` : "没给出可用的方向", "error");
-    } else if (data?.note) {
+      if (!quiet) toast(data?.note ? `没给出可用的方向：${data.note}` : "没给出可用的方向", "error");
+    } else if (data?.note && !quiet) {
       toast(data.note, "info");
     }
   } catch (e) {
-    toast("拿方向失败: " + friendlyError(e), "error");
+    if (!quiet) toast("拿方向失败: " + friendlyError(e), "error");
   } finally {
     suggesting = false;
     if (btn) { btn.disabled = false; btn.textContent = "给点方向"; }
@@ -1252,6 +1270,14 @@ export function bindComposer() {
   if (btn && btn.dataset.bound !== "1") {
     btn.dataset.bound = "1";
     btn.addEventListener("click", () => requestSuggestions());
+  }
+  const auto = document.getElementById("suggest-auto");
+  if (auto && auto.dataset.bound !== "1") {
+    auto.dataset.bound = "1";
+    auto.checked = autoSuggestOn();
+    auto.addEventListener("change", () => {
+      try { localStorage.setItem(AUTO_SUGGEST_KEY, auto.checked ? "1" : "0"); } catch { /* 隐身模式 */ }
+    });
   }
 }
 

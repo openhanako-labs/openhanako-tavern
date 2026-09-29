@@ -2247,6 +2247,18 @@ main.ctx-open .drawer:not(.hidden) {
   color: var(--accent);
 }
 
+/* Q2：「自动」开关——贴在按钮旁边的小件，不抢戏 */
+.suggest-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.suggest-auto input { accent-color: var(--accent); margin: 0; }
+
 /* ── AI 生成台（gen.js）────────────────────────────────
    三段式：需求 / 过程 / 结果。观感对齐 .import-item——
    同一类东西（逐条看一眼再决定）不该长两个样。 */
