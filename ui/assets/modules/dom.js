@@ -91,6 +91,7 @@ export const DRAWERS = {
   presets: document.getElementById("drawer-presets"),
   regex: document.getElementById("drawer-regex"),
   codex: document.getElementById("drawer-codex"),
+  ops: document.getElementById("drawer-ops"),
   // 图库：本场 / 全部两级。装在这里而不是左轨——
   // 它和预设/正则/工具/迁移同级，属于「配一次就不常看」的那一类。
   gallery: document.getElementById("drawer-gallery"),

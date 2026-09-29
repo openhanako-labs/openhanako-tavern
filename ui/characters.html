@@ -78,6 +78,10 @@
       <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h10v10H3z"/><path d="M5 6.2h6M5 8.6h6M5 11h4"/></svg>
       <span>图鉴</span>
     </button>
+    <button type="button" class="rail-item" data-drawer="ops" title="操作与结算">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 14l5-5M11 3l2 2-6 6-2-2z"/><path d="M13 3l-2 2M7 9l-2 2"/></svg>
+      <span>操作</span>
+    </button>
     <div class="rail-sep"></div>
     <span class="rail-group">配置</span>
     <!--
@@ -236,6 +240,7 @@
               <button data-drawer="presets"><span class="mi">⌗</span>提示词预设</button>
               <button data-drawer="regex"><span class="mi">⁂</span>正则规则</button>
               <button data-drawer="gallery"><span class="mi">🖼</span>图库</button>
+              <button data-drawer="ops"><span class="mi">⚔</span>操作</button>
               <div class="sep"></div>
               <button data-drawer="tools"><span class="mi">⚙</span>工具</button>
               <button data-drawer="migration"><span class="mi">⇅</span>迁移</button>
@@ -596,6 +601,48 @@
       <div id="codex-count" class="codex-count"></div>
       <div id="codex-list" class="list drawer-body">
         <div class="d-skel"><div class="d-skel-bar w46"></div><div class="d-skel-bar w82"></div><div class="d-skel-bar w64"></div></div>
+      </div>
+    </div>
+
+    <!-- ── 抽屉：操作（C2） ──
+         两段：
+           · 上方：可执行操作清单（世界级，跨对话共享）
+           · 下方：待执行项（对话级，随本轮正文一起推进）
+         没有二级弹窗——直接在本抽屉里展开。
+         与黑板 / 图鉴 / 变量 分工：操作是「能做什么」，
+         不是「现在是什么」（黑板），也不是「世界里的人」（图鉴）。
+      -->
+    <div id="drawer-ops" class="drawer hidden">
+      <div class="drawer-head">
+        <h2>操作</h2>
+        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <div class="drawer-body">
+        <div class="ops-section">
+          <div class="ops-section-hd">
+            <span class="ops-section-title">可执行操作</span>
+            <button id="ops-new-btn" class="btn btn-primary btn-sm">+ 新建</button>
+          </div>
+          <span id="ops-count" class="ops-count"></span>
+          <div id="ops-list" class="ops-list"></div>
+        </div>
+
+        <div class="ops-section">
+          <div class="ops-section-hd">
+            <span class="ops-section-title">待执行项</span>
+            <button id="ops-pending-clear" class="btn btn-ghost btn-sm">清空</button>
+          </div>
+          <span id="ops-pending-count" class="ops-count"></span>
+          <div id="ops-pending-list" class="ops-pending-list"></div>
+        </div>
+
+        <div class="ops-note">
+          写完后模型会在正文里写 <code>[结算 操作名 …]</code> 标记；
+          管线自动吃掉标记并把变量写回。语法：<br>
+          <code>[结算 攻击 delta:hp=-20]</code>（增量）<br>
+          <code>[结算 攻击 set:mp=0]</code>（直设）<br>
+          <code>[结算 攻击 失败:体力不足]</code>（不改变量）
+        </div>
       </div>
     </div>
 

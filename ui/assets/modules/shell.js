@@ -233,6 +233,10 @@ export async function openDrawer(name, opts = {}) {
       const { bindCodex, loadCodex } = await import("./codex.js");
       bindCodex();
       await loadCodex();
+    } else if (name === "ops") {
+      const { bindOps, loadOps } = await import("./ops.js");
+      bindOps();
+      await loadOps();
     }
   } catch (e) {
     toast(`加载失败: ${friendlyError(e)}`, "error");

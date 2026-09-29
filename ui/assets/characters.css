@@ -7152,3 +7152,174 @@ html.has-app-bg .shell {
 .codex-note-at { color: var(--fg-muted); font-variant-numeric: tabular-nums; font-size: var(--fs-xs); }
 .codex-note-conv { color: var(--fg-muted); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
 .codex-note-text { color: var(--fg); word-break: break-word; }
+
+/* ── 操作抽屉（C2）────────────────────────
+   两段：可执行操作清单 + 待执行项。
+   行内编辑（不开弹窗）——操作字段少（名称/消耗/简述/标签），
+   弹窗就重了。
+   颜色 / 尺寸 与图鉴抽屉同一套。
+*/
+.ops-section { margin-bottom: 14px; }
+.ops-section:last-of-type { margin-bottom: 8px; }
+.ops-section-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px 4px;
+}
+.ops-section-title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--fg);
+}
+.ops-count {
+  display: block;
+  padding: 0 12px 4px;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+}
+.ops-list,
+.ops-pending-list { padding: 0 8px; }
+
+/* 操作卡 */
+.ops-item {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  margin-bottom: 6px;
+}
+.ops-item:hover { border-color: var(--border-strong); }
+.ops-item-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ops-item-main { flex: 1; min-width: 0; }
+.ops-item-name {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--fg);
+}
+.ops-item-summary {
+  margin-top: 3px;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.ops-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.ops-cost {
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  background: var(--surface-2);
+}
+.ops-cost-none { color: var(--fg-muted); }
+.ops-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.ops-tag {
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+/* 行内编辑表单 */
+.ops-edit-form { display: flex; flex-direction: column; gap: 6px; }
+.ops-edit-form input,
+.ops-edit-form textarea {
+  width: 100%;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: var(--fs-sm);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--fg);
+}
+.ops-edit-form textarea { resize: vertical; }
+.ops-edit-acts {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+/* 待执行项 */
+.ops-pending-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  margin-bottom: 4px;
+}
+.ops-pending-idx {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: var(--fs-xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+.ops-pending-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ops-pending-note {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+.ops-pending-item .mini {
+  padding: 2px 8px;
+  font-size: var(--fs-xs);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.ops-pending-item .mini:hover { border-color: var(--danger, #c66); color: var(--danger, #c66); }
+
+/* 底部语法提示 */
+.ops-note {
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-sm);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+}
+.ops-note code {
+  padding: 1px 4px;
+  background: var(--surface);
+  border-radius: 3px;
+  color: var(--fg);
+  font-size: var(--fs-xs);
+}

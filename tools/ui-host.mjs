@@ -56,6 +56,8 @@ const { registerMediaRoutes } = await import("../lib/media/routes.js");
 const { registerTtsRoutes } = await import("../lib/tts/routes.js");
 const { createCodexRepo } = await import("../lib/codex/repo.js");
 const { registerCodexRoutes } = await import("../lib/codex/routes.js");
+const { OpsRepo } = await import("../lib/ops/repo.js");
+const { registerOpsRoutes } = await import("../lib/ops/routes.js");
 const { registerModelRoutes } = await import("../lib/models/routes.js");
 const { registerMemoryRoutes } = await import("../lib/memory/routes.js");
 const { loadGroupState } = await import("../lib/tools/group.js");
@@ -83,6 +85,7 @@ const varRepo = new VariableRepo(DATA); await varRepo.init();
 const presetRepo = new PresetRepo(DATA); await presetRepo.init();
 const boardRepo = new BoardRepo(DATA); await boardRepo.init();
 const codexRepo = createCodexRepo(DATA); await codexRepo.init();
+const opsRepo = new OpsRepo(DATA); await opsRepo.init();
 const regexRepo = new RegexRepo(DATA); await regexRepo.init();
 await loadGroupState(DATA);
 
@@ -139,10 +142,10 @@ const apps = {
   characters: makeApp(), conversations: makeApp(), settings: makeApp(),
   variables: makeApp(), presets: makeApp(), board: makeApp(),
   regex: makeApp(), tools: makeApp(), migration: makeApp(), gen: makeApp(), media: makeApp(),
-  tts: makeApp(), codex: makeApp(), models: makeApp(), memory: makeApp()
+  tts: makeApp(), codex: makeApp(), models: makeApp(), memory: makeApp(), ops: makeApp()
 };
 registerCharacterRoutes(apps.characters, charRepo, transfer, setRepo);
-registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo);
+registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo, { opsRepo });
 registerSettingRoutes(apps.settings, setRepo, convRepo);
 registerVariableRoutes(apps.variables, varRepo, convRepo, charRepo);
 registerPresetRoutes(apps.presets, presetRepo);
@@ -186,6 +189,7 @@ registerTtsRoutes(apps.tts, { sdk: null, dataDir: DATA });
    codex 有自己的 repo；models 在 dev 宿主没有真 llmService——给 null，
    GET /models 会诚实回 available:false，面板显示「未就绪」，这正是要测的状态。 */
 registerCodexRoutes(apps.codex, codexRepo);
+registerOpsRoutes(apps.ops, opsRepo);
 registerModelRoutes(apps.models, { llmService: null, dataDir: DATA });
 registerMemoryRoutes(apps.memory, { dataDir: DATA });
 

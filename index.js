@@ -35,9 +35,11 @@ import { registerPresetRoutes } from "./lib/presets/routes.js";
 import { BoardRepo } from "./lib/board/repo.js";
 import { DirectorRepo } from "./lib/director/repo.js";
 import { CodexRepo } from "./lib/codex/repo.js";
+import { OpsRepo } from "./lib/ops/repo.js";
 import { registerDirectorRoutes } from "./lib/director/routes.js";
 import { registerBoardRoutes } from "./lib/board/routes.js";
 import { registerCodexRoutes } from "./lib/codex/routes.js";
+import { registerOpsRoutes } from "./lib/ops/routes.js";
 
 import { registerToolRoutes } from "./lib/tools/routes.js";
 import { createEmbedTools } from "./lib/embed/tool.js";
@@ -187,6 +189,15 @@ export default defineApp(async (sdk) => {
     s.codex = { repoInitialized: true, dir: path.join(dataDir, "codex") };
   }
 
+  // 操作（C2）：可执行操作清单（世界级）+ 待执行项（对话级）。
+  // ops 与 codex 不同：不嵌套卡、没有 notes 追加制；结算了就从 pending 里抹掉。
+  let opsRepo = null;
+  if (dataDir) {
+    opsRepo = new OpsRepo(dataDir);
+    await probe.safe(() => opsRepo.init(), "opsRepo.init");
+    s.ops = { repoInitialized: true, file: path.join(dataDir, "ops.json") };
+  }
+
   // ── LLM 服务 ──
   let llmService = null;
   if (s.modelsAvailable) {
@@ -273,7 +284,8 @@ export default defineApp(async (sdk) => {
     if (conversationRepo && characterRepo) {
       // opts 传 { sdk, dataDir }：供场景插图自动触发使用。
       // 不传时自动触发会静默跳过（只保留 [场景] 标记的剥离行为）。
-      registerConversationRoutes(app, conversationRepo, llmService, characterRepo, settingRepo, regexRepo, presetRepo, boardRepo, { sdk, dataDir, directorRepo });
+      // directorRepo / opsRepo 供管道注入剧情公式与待执行项。
+      registerConversationRoutes(app, conversationRepo, llmService, characterRepo, settingRepo, regexRepo, presetRepo, boardRepo, { sdk, dataDir, directorRepo, opsRepo });
     }
     if (variableRepo && conversationRepo) {
       registerVariableRoutes(app, variableRepo, conversationRepo, characterRepo);
@@ -295,6 +307,9 @@ export default defineApp(async (sdk) => {
     }
     if (codexRepo) {
       registerCodexRoutes(app, codexRepo);
+    }
+    if (opsRepo) {
+      registerOpsRoutes(app, opsRepo);
     }
 
     registerToolRoutes(app, sdk);
