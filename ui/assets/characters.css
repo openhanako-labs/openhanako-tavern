@@ -7049,6 +7049,11 @@ html.has-app-bg .shell {
 /* codex-only-person.codex-only-faction：两行都命中才显 ——
    因为上面三条已经保证了「任一命中就显示」，这个组合不需要额外规则。 */
 
+/* 收紧行间距：与既有抽屉表单一致，不要让全屏弹窗把内容拉长。
+   默认 .de-body 的 gap 是 --sp-7（10px），图鉴字段多，收一下密度。 */
+#codex-editor-modal .modal-fullscreen { max-height: 80vh; }
+#codex-editor-modal .de-body { gap: var(--sp-5); padding: 10px 14px 12px; }
+
 .codex-affinity {
   display: inline-flex;
   align-items: center;

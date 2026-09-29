@@ -54,6 +54,10 @@ const { registerMigrationRoutes } = await import("../lib/migration/routes.js");
 const { registerGenRoutes } = await import("../lib/gen/routes.js");
 const { registerMediaRoutes } = await import("../lib/media/routes.js");
 const { registerTtsRoutes } = await import("../lib/tts/routes.js");
+const { createCodexRepo } = await import("../lib/codex/repo.js");
+const { registerCodexRoutes } = await import("../lib/codex/routes.js");
+const { registerModelRoutes } = await import("../lib/models/routes.js");
+const { registerMemoryRoutes } = await import("../lib/memory/routes.js");
 const { loadGroupState } = await import("../lib/tools/group.js");
 
 // ── 数据：真实数据的临时副本 ──────────────────────────
@@ -78,6 +82,7 @@ const setRepo = new SettingRepo(DATA); await setRepo.init();
 const varRepo = new VariableRepo(DATA); await varRepo.init();
 const presetRepo = new PresetRepo(DATA); await presetRepo.init();
 const boardRepo = new BoardRepo(DATA); await boardRepo.init();
+const codexRepo = createCodexRepo(DATA); await codexRepo.init();
 const regexRepo = new RegexRepo(DATA); await regexRepo.init();
 await loadGroupState(DATA);
 
@@ -134,7 +139,7 @@ const apps = {
   characters: makeApp(), conversations: makeApp(), settings: makeApp(),
   variables: makeApp(), presets: makeApp(), board: makeApp(),
   regex: makeApp(), tools: makeApp(), migration: makeApp(), gen: makeApp(), media: makeApp(),
-  tts: makeApp()
+  tts: makeApp(), codex: makeApp(), models: makeApp(), memory: makeApp()
 };
 registerCharacterRoutes(apps.characters, charRepo, transfer, setRepo);
 registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo);
@@ -176,6 +181,13 @@ registerMediaRoutes(apps.media, { sdk: null, characterRepo: charRepo, transfer, 
  * sdk 给 null：正门不存在，service 会自动退到运行时那扇门。
  */
 registerTtsRoutes(apps.tts, { sdk: null, dataDir: DATA });
+
+/* 图鉴 / 模型分选 / 记忆（C1/Q3/S2 进来的三条）：
+   codex 有自己的 repo；models 在 dev 宿主没有真 llmService——给 null，
+   GET /models 会诚实回 available:false，面板显示「未就绪」，这正是要测的状态。 */
+registerCodexRoutes(apps.codex, codexRepo);
+registerModelRoutes(apps.models, { llmService: null, dataDir: DATA });
+registerMemoryRoutes(apps.memory, { dataDir: DATA });
 
 // ── 静态文件 ──────────────────────────────────────────
 const MIME = {

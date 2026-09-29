@@ -288,6 +288,7 @@ function readEditor() {
 
 export async function saveCodex() {
   if (!editing) return;
+  const tab = editing.tab;   // 先记下：下面 closeEditor() 会把 editing 置 null
   let body;
   try { body = readEditor(); }
   catch (e) { toast(e.message, "error"); return; }
@@ -295,23 +296,22 @@ export async function saveCodex() {
   const convId = state.currentConv?.id || null;
   try {
     if (editing.id) {
-      const res = await apiFetch(`codex/${editing.tab}/${encodeURIComponent(editing.id)}`, {
+      const res = await apiFetch(`codex/${tab}/${encodeURIComponent(editing.id)}`, {
         method: "PUT",
         body: JSON.stringify({ ...body, conversationId: convId })
       });
       unwrap(res);
       toast("已保存", "success");
     } else {
-      const res = await apiFetch(`codex/${editing.tab}`, {
+      const res = await apiFetch(`codex/${tab}`, {
         method: "POST",
         body: JSON.stringify({ ...body, conversationId: convId })
       });
       const created = unwrap(res) || {};
-      editing.id = created.id || null;
       toast("已保存", "success");
     }
     closeEditor();
-    await loadOne(editing.tab);
+    await loadOne(tab);
     renderCodexList();
   } catch (e) {
     toast("保存失败：" + friendlyError(e), "error");
@@ -462,7 +462,7 @@ export function bindCodex() {
   $("codex-del")?.addEventListener("click", async () => {
     if (!editing?.id) return;
     const id = editing.id;
-    const tab = editing.tab;
+    const tab = editing.tab;   // 先记下：closeEditor() 会把 editing 置 null
     closeEditor();
     await deleteOne(id);
     // tab 可能已经被切走；这里再拉一次当前 tab 保稳
