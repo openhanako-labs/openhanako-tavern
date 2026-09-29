@@ -6798,3 +6798,92 @@ html.has-app-bg .shell {
   font-family: var(--font-sans);
 }
 #models-modal .modal-body { max-height: 70vh; overflow-y: auto; }
+
+/* ── S1：本轮发生了什么（var-diff 面板） ──
+   与 chips 速览同一个数据源（msg.varDiff），两种读法：
+     chips（行内小字，24 字截断）：一眼扫
+     面板（这里，不截断）        ：按 change 分组，完整值
+
+   行内排版：变量名左对齐 + 旧值→新值右半区。
+   长值靠 pre-wrap 折行——面板里就是「完整」的意思。 */
+.vdm-hdr-acts {
+  display: flex; align-items: center; gap: var(--sp-3);
+}
+.vd-summary {
+  padding: 10px 12px; margin: 0 0 16px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs);
+}
+.vd-group { margin: 0 0 16px; }
+.vd-group:last-child { margin-bottom: 0; }
+.vd-group-body {
+  display: block;
+}
+.vd-group-hd {
+  display: flex; align-items: baseline; gap: var(--sp-3);
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+.vd-group-hd b {
+  font-size: var(--fs-md); font-weight: 600; color: var(--fg);
+}
+.vd-group-count {
+  font-size: var(--fs-xs); color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+.vd-row {
+  display: grid;
+  grid-template-columns: minmax(80px, auto) 1fr;
+  gap: var(--sp-5);
+  padding: 8px 10px;
+  margin: 0 0 4px;
+  border-left: 2px solid transparent;
+  align-items: baseline;
+}
+.vd-row:last-child { margin-bottom: 0; }
+.vd-chg-add    { border-left-color: var(--accent-line); background: rgba(120, 190, 220, .05); }
+.vd-chg-remove { border-left-color: rgba(194, 90, 78, .5); background: rgba(194, 90, 78, .05); }
+.vd-chg-set    { border-left-color: var(--border); }
+.vd-chg-remove .vd-name { text-decoration: line-through; }
+.vd-name {
+  font-weight: 600; color: var(--fg);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-sm);
+}
+.vd-vals {
+  display: flex; align-items: baseline; gap: var(--sp-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  flex-wrap: wrap;
+}
+.vd-vals .vd-from, .vd-vals .vd-to {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg);
+}
+.vd-vals .vd-from { color: var(--fg-muted); }
+.vd-vals .vd-to.empty { color: var(--fg-muted); }
+.vd-vals .vd-arrow {
+  color: var(--fg-muted);
+  flex: 0 0 auto;
+}
+
+/* 明细按钮：紧跟 chips 行末尾，视觉上是「chips 的延伸」 */
+.msg-vars .vars-detail {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.msg-vars .vars-detail:hover {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}

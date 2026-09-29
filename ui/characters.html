@@ -1330,6 +1330,32 @@
   </div>
 </div>
 
+<!-- ── 本轮发生了什么（S1） ─────────────────── -->
+<!--
+  入口在 chips 行末尾的「明细 ›」（不每条一个）。chips 行保留作速览。
+
+  内容：按 add / set / remove 分三组，一行一条。
+  组头带条数，行内不截断——长值靠 pre-wrap 折行，
+  chips 里 24 字截断的规矩只留给 chips，面板里看完整值。
+
+  「修改本轮变量」不在这里嵌编辑器：跳去变量抽屉。
+  一处编辑入口，不养双胞胎。
+-->
+<div id="var-diff-modal" class="modal hidden">
+  <div class="modal-content tts-content">
+    <div class="modal-header">
+      <h2>本轮发生了什么</h2>
+      <div class="vdm-hdr-acts">
+        <button type="button" id="var-diff-edit" class="btn btn-sm">修改本轮变量</button>
+        <button id="var-diff-close" class="btn btn-ghost btn-sm">✕</button>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div id="var-diff-body"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ── 导入预览 ───────────────────────────────────── -->
 <div id="import-modal" class="modal hidden">
   <div class="modal-content">

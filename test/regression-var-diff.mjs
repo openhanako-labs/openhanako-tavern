@@ -59,9 +59,10 @@ await okAsync("描述：长值截断，不让一条几百字的变量撑破整�
   assert.ok(s.includes("…"), s);
 });
 
-await okAsync("描述：三种形状都说人话", () => {
+await okAsync("描述：三种形状都说人话（add / 空串补齐都显示「空 → 值」）", () => {
   assert.strictEqual(describeVarDiff({ name: "好感", change: "set", from: "3", to: "4" }), "好感 3 → 4");
-  assert.strictEqual(describeVarDiff({ name: "势力", change: "add", from: null, to: "5" }), "势力 → 5");
+  assert.strictEqual(describeVarDiff({ name: "势力", change: "add", from: null, to: "5" }), "势力 空 → 5");
+  assert.strictEqual(describeVarDiff({ name: "笔记", change: "set", from: "", to: "x" }), "笔记 空 → x");
   assert.ok(/已移除/.test(describeVarDiff({ name: "旧线索", change: "remove", from: "x", to: null })));
 });
 
@@ -123,7 +124,7 @@ await okAsync("账挂在消息上：形状对、change 是 add、文字是服务
     { name: "好感", change: "add", from: null, to: "7" }
   );
   // 显示用的那行字由服务端拼好（前端不再养一份拼字逻辑）
-  assert.strictEqual(d.text, "好感 → 7", `文字不对：${d.text}`);
+  assert.strictEqual(d.text, "好感 空 → 7", `文字不对：${d.text}`);
 });
 
 await okAsync("第二轮改写：change 是 set，from 是上一轮的值", async () => {

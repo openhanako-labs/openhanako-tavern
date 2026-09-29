@@ -507,8 +507,11 @@ export function renderMessages() {
     // 本轮变量变化的账：正文下方一行小 chips。
     // 服务端连显示用的字都拼好了（text）——前端只负责印，
     // 免得同一条拼字逻辑长成第二份双胞胎镜像。
+    // 行末的「明细 ›」进 S1 面板——chips 行本身保留作速览，不删。
     const varLine = Array.isArray(m.varDiff) && m.varDiff.length > 0
-      ? `<div class="msg-vars">${m.varDiff.map(d => `<span class="var-chip" data-change="${escapeHtml(d.change || "set")}">${escapeHtml(d.text || d.name || "")}</span>`).join("")}</div>`
+      ? `<div class="msg-vars">${m.varDiff.map(d => `<span class="var-chip" data-change="${escapeHtml(d.change || "set")}">${escapeHtml(d.text || d.name || "")}</span>`).join("")}
+           <button type="button" class="mini vars-detail" data-act="vars-detail" data-id="${m.id}" title="本轮发生了什么">明细 ›</button>
+         </div>`
       : "";
     // 群聊：这条回复是谁说的。名字从角色列表解（消息上只存 id）。
     const spk = speakerLineHtml(m) +
@@ -538,6 +541,12 @@ export function renderMessages() {
   dom.messagesContainer.querySelectorAll(".message").forEach(el => {
     const id = el.dataset.id;
     el.querySelector('[data-act="copy"]')?.addEventListener("click", () => copyMessage(id));
+    // 变量账明细：S1 面板。动态 import 保持 chat.js 启动轻。
+    el.querySelector('[data-act="vars-detail"]')?.addEventListener("click", () => {
+      import("./var-diff-modal.js").then(m => m.open(m.findMessage(id) || null)).catch(e => {
+        console.error("[var-diff-modal] open failed:", e);
+      });
+    });
     el.querySelector('[data-act="speak"]')?.addEventListener("click", async (e) => {
       const btn = e.currentTarget;
       // 用现成的 findMessage，不要在这里重新写一遍查找：
