@@ -344,15 +344,15 @@ await okAsync("路由：POST /codex/persons/:id/notes 追加一条", async () =>
   cleanup(dataDir);
 });
 
-await okAsync("路由：三张表各四条 CRUD + persons 额外一条 notes", async () => {
+await okAsync("路由：五张表各四条 CRUD + persons 额外一条 notes", async () => {
   const { dataDir } = await freshSetup();
   const repo = await createCodexRepo(dataDir).init();
   const app = makeApp();
   registerCodexRoutes(app, repo);
-  // 三张表 × 5 条（GET list / GET single / POST / PUT / DELETE）= 15；
-  // 再加 1 条 persons notes = 16 条注册
+  // 五张表 × 5 条（GET list / GET single / POST / PUT / DELETE）= 25；
+  // 再加 1 条 persons notes = 26 条注册
   const codexRoutes = app.routes.filter(r => r.path.startsWith("/codex/"));
-  assert.equal(codexRoutes.length, 16);
+  assert.equal(codexRoutes.length, 26);
   cleanup(dataDir);
 });
 

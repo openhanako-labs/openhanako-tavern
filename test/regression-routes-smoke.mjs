@@ -194,6 +194,8 @@ const EXPECTED = {
   characters: [
     "GET /characters", "GET /characters/tags", "GET /characters/:id",
     "POST /characters", "PUT /characters/:id", "DELETE /characters/:id",
+    // C3：角色 profile（八区块）。注册在 /:id 之前，否则会被当 id="profile" 误吸。
+    "GET /characters/:id/profile", "PUT /characters/:id/profile",
     "POST /characters/batch-delete", "GET /characters/:id/avatar", "GET /characters/:id/avatar.json",
     "POST /characters/import/prepare", "POST /characters/import/parse",
     "POST /characters/import/commit", "POST /characters/import/discard",
@@ -309,7 +311,12 @@ const EXPECTED = {
     "GET /codex/places", "POST /codex/places", "PUT /codex/places/:id", "DELETE /codex/places/:id",
     "GET /codex/places/:id",
     "GET /codex/factions", "POST /codex/factions", "PUT /codex/factions/:id", "DELETE /codex/factions/:id",
-    "GET /codex/factions/:id"
+    "GET /codex/factions/:id",
+    // C3：关系图 + 力量表
+    "GET /codex/relations", "POST /codex/relations", "PUT /codex/relations/:id", "DELETE /codex/relations/:id",
+    "GET /codex/relations/:id",
+    "GET /codex/powers", "POST /codex/powers", "PUT /codex/powers/:id", "DELETE /codex/powers/:id",
+    "GET /codex/powers/:id"
   ],
   ops: [
     "GET /ops", "POST /ops", "PUT /ops/:id", "DELETE /ops/:id", "GET /ops/:id",
