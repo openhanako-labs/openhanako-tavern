@@ -50,6 +50,7 @@ import { registerMediaRoutes } from "./lib/media/routes.js";
 import { registerIllustrationRoutes } from "./lib/illustration/routes.js";
 import { registerTtsRoutes } from "./lib/tts/routes.js";
 import { registerAppearanceRoutes } from "./lib/appearance/routes.js";
+import { registerModelRoutes } from "./lib/models/routes.js";
 import { LLMService } from "./lib/llm/service.js";
 import { runSelfCheck } from "./lib/selfcheck.js";
 
@@ -312,6 +313,10 @@ export default defineApp(async (sdk) => {
   // 自定义背景图。配置 + 图文件都落在 app-data/appearance/。
   // 不依赖 sdk，纯数据目录读写，所以只 gate 在 dataDir 上。
   registerAppearanceRoutes(app, dataDir);
+
+  // 模型按用途分选（Q3）。列表需要 llmService 读宿主目录；配置读写只需要 dataDir。
+  // 两者都独立于其它路由——坏掉一条不影响主链路。
+  registerModelRoutes(app, { llmService, dataDir });
     }
   });
   probe.record("routes registered");

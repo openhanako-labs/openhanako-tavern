@@ -617,6 +617,7 @@
             这几项<b>配一次就不动</b>；原来只在聊天头的 ⋯ 菜单里，没开对话就进不去。
           </div>
           <div class="tools-appsec-btns">
+            <button type="button" id="open-models-settings" class="btn btn-sm">模型分选</button>
             <button type="button" id="open-tts-settings" class="btn btn-sm">语音朗读</button>
             <button type="button" id="open-image-settings" class="btn btn-sm">出图引擎</button>
             <button type="button" id="open-scene-settings" class="btn btn-sm">场景插图</button>
@@ -1259,6 +1260,72 @@
     <div class="modal-footer right-align">
       <button id="tts-cancel" class="btn">取消</button>
       <button id="tts-save" class="btn btn-primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 模型：按用途分选 ────────────────────────────── -->
+<!--
+  与语音 / 出图 / 场景同一个模态语言（.modal-health + .tts-sec）：
+    顶部体检条——现在到底在用哪个模型，一眼看到
+    下方一块一块的用途卡片，每块一个二态下拉：跟随默认 / 指定模型
+
+  为什么把向量列在这里：lib/embed 自管一条路，但用户想知道
+  「向量现在用的是哪家」——这里只读展示，不设下拉。改它要回自己那儿。
+
+  为什么“变量与状态”现在空着：预留位——仓库里还没有独立的变量生成调用，
+  先让形状齐，等 S1 变量账 2.0 真正起 LLM 时会拿这一格。
+-->
+<div id="models-modal" class="modal hidden">
+  <div class="modal-content tts-content">
+    <div class="modal-header">
+      <h2>模型 · 按用途分选</h2>
+      <button id="models-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- 体检条：目录能不能拉到 / 有多少个 chat 候选 -->
+      <div id="models-health" class="modal-health">
+        <span class="mh-dot"></span>
+        <div class="mh-text">
+          <div class="mh-title">未就绪</div>
+          <div class="mh-sub">拉不到宿主模型目录——保存后不生效</div>
+        </div>
+        <div class="mh-act">
+          <button type="button" id="models-relist" class="btn btn-sm">重拉</button>
+        </div>
+      </div>
+
+      <!-- 全局默认 -->
+      <section class="tts-sec">
+        <h3>全局默认</h3>
+        <div class="field">
+          <label>当某一用途选「跟随默认」时，落到哪个模型</label>
+          <select id="models-default"></select>
+        </div>
+        <div class="hint">留空 = 完全交回宿主目录默认。填了之后，所有「跟随默认」的用途都用它。</div>
+      </section>
+
+      <!-- 按用途覆盖：后端返回的 purposes[] 逐行渲染到这里 -->
+      <section class="tts-sec">
+        <h3>按用途覆盖</h3>
+        <div id="models-purposes"></div>
+        <div class="hint">每用途二态：「跟随默认」= 用上面那个全局值；「指定模型」= 只用这一格选的那个，不跟全局。unset 用途自动走宿主目录。</div>
+      </section>
+
+      <!-- 向量：只读展示（lib/embed 自管） -->
+      <section class="tts-sec">
+        <h3>向量（只读）</h3>
+        <div id="models-embed-status" class="vm-md-result">
+          <span class="hint">拉取中……</span>
+        </div>
+        <div class="hint">向量检索走的是 lib/embed 自己那条路（bus + 宿主凭据），
+          不从这里选。改它：向量能力面板。这里只告诉你「现在用的是哪家」。</div>
+      </section>
+    </div>
+    <div class="modal-footer right-align">
+      <button id="models-cancel" class="btn">取消</button>
+      <button id="models-save" class="btn btn-primary">保存</button>
     </div>
   </div>
 </div>

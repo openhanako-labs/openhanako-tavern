@@ -6764,3 +6764,37 @@ html.has-app-bg .shell {
 }
 .gal-more.hidden { display: none; }
 
+
+/* ── 模型按用途分选（Q3） ──
+   每用途一个「跟随 / 指定」二态下拉。
+   与 tts-sec 同一套分区语言，但更矮——一格只用一行下拉 + 一行状态。 */
+.model-purpose {
+  padding: 10px 12px; margin: 0 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: transparent;
+}
+.model-purpose:last-child { margin-bottom: 0; }
+.model-purpose .mp-head { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; margin-bottom: 6px; }
+.model-purpose .mp-title {
+  font-weight: 600; color: var(--fg); font-size: var(--fs-md);
+}
+.model-purpose .mp-title .mp-id {
+  margin-left: 6px; font-weight: 400; color: var(--fg-muted);
+  font-family: var(--font-mono, monospace); font-size: var(--fs-xs);
+}
+.model-purpose .mp-note {
+  flex: 1 1 100%; color: var(--fg-muted); font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.model-purpose .mp-state {
+  margin-top: 6px; color: var(--fg-muted); font-size: var(--fs-xs);
+  font-family: var(--font-mono, monospace);
+}
+.model-purpose .mp-state.is-readonly {
+  color: var(--fg-muted);
+  background: rgba(194, 90, 78, .06);
+  padding: 6px 10px; border-radius: var(--r-sm);
+  font-family: var(--font-sans);
+}
+#models-modal .modal-body { max-height: 70vh; overflow-y: auto; }

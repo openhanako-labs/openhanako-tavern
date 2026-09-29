@@ -47,6 +47,7 @@ const { registerGenRoutes } = await import("../lib/gen/routes.js");
 const { registerMediaRoutes } = await import("../lib/media/routes.js");
 const { registerIllustrationRoutes } = await import("../lib/illustration/routes.js");
 const { registerTtsRoutes } = await import("../lib/tts/routes.js");
+const { registerModelRoutes } = await import("../lib/models/routes.js");
 const { DirectorRepo } = await import("../lib/director/repo.js");
 const { registerDirectorRoutes } = await import("../lib/director/routes.js");
 const { registerBoardRoutes } = await import("../lib/board/routes.js");
@@ -114,7 +115,8 @@ const apps = {
   media: makeApp(),
   illustration: makeApp(),
   tts: makeApp(),
-  director: makeApp()
+  director: makeApp(),
+  models: makeApp()
 };
 
 // 假 llm。生成路由需要它，而**不能因为麻烦就跳过这一段**——
@@ -166,6 +168,8 @@ registerIllustrationRoutes(apps.illustration, { sdk: null, dataDir: fs.mkdtempSy
 // 语音合成：sdk 与 dataDir 都给 null → 两条服务路由会诚实地报“未就绪”，
 // 而 /tts/providers 不依赖它们，照样能答。
 registerTtsRoutes(apps.tts, { sdk: null, dataDir: null });
+// 模型按用途分选（Q3）：dataDir 给一个临时目录，llmService 给 null（列表接口会诚实报未就绪）
+registerModelRoutes(apps.models, { llmService: null, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "eleckoi-smoke-")) });
 // 板上与正则各自的深测在 regression-board-routes / regression-regex-routes，
 // 这里注册它们只是为了让下面那张表是**完整的九张脸**。
 registerBoardRoutes(apps.board, boardRepo);
@@ -279,6 +283,9 @@ const EXPECTED = {
   tts: [
     "GET /tts/providers", "GET /tts/config", "PUT /tts/config",
     "POST /tts/speak", "GET /tts/audio/:name"
+  ],
+  models: [
+    "GET /models", "GET /models/config", "PUT /models/config"
   ]
 };
 

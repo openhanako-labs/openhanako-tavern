@@ -217,6 +217,10 @@ document.getElementById("open-scene-settings")?.addEventListener("click", async 
   const m = await import("./scene.js");
   m.openScene();
 });
+document.getElementById("open-models-settings")?.addEventListener("click", async () => {
+  const m = await import("./models.js");
+  await m.openModels();
+});
 
 // 聊天输入：Enter 发送，Shift+Enter 换行
 dom.chatInput?.addEventListener("keydown", (e) => {
