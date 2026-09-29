@@ -10,6 +10,7 @@
 
 import { state } from "./state.js";
 import { apiFetch, toast, confirmDialog, escapeHtml, extractArray, unwrap, friendlyError } from "./core.js";
+import { renderGraph, renderRadar } from "./graph-renderer.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -665,85 +666,6 @@ export function bindCodex() {
   $("codex-graph-btn")?.addEventListener("click", () => openGraph(null));
   $("codex-graph-close")?.addEventListener("click", closeGraph);
 }
-// ── SVG 雷达（缺轴虚线圈 + 多边形不闭合；纯 SVG、无外部依赖） ──
-//
-// 三条红线：
-//   · value === null 的轴：画虚线圈 + 「—」，且不进多边形顶点（不闭合）
-//   · 颜色全部走 CSS 变量（currentColor / var(--*)），无十六进制字面量
-//   · 缺 axis 名字的轴跳过——axis 空了整条就没意义
-
-function renderRadar(axes, opts = {}) {
-  const size = Number(opts.size) || 150;
-  const title = String(opts.title || "");
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = (size / 2) - 18;
-  const list = (axes || []).filter(a => a && a.name);
-  const total = list.length;
-  const svgNS = "http://www.w3.org/2000/svg";
-
-  const svg = `<svg class="codex-radar" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" xmlns="${svgNS}" aria-label="${escapeHtml(title || "雷达")}">`;
-
-  // 背景圈（三档：1/3, 2/3, 3/3）
-  svg += `<circle cx="${cx}" cy="${cy}" r="${r}" class="codex-radar-ring"/>`;
-  svg += `<circle cx="${cx}" cy="${cy}" r="${(r * 2 / 3).toFixed(1)}" class="codex-radar-ring"/>`;
-  svg += `<circle cx="${cx}" cy="${cy}" r="${(r / 3).toFixed(1)}" class="codex-radar-ring"/>`;
-
-  if (total === 0) {
-    svg += `<text x="${cx}" y="${cy}" class="codex-radar-empty" text-anchor="middle" dominant-baseline="middle">（无轴）</text>`;
-    svg += `</svg>`;
-    return svg;
-  }
-
-  // 轴：缺值画虚线圈 + 「—」
-  const filled = [];
-  for (let i = 0; i < total; i++) {
-    const angle = -Math.PI / 2 + (i / total) * Math.PI * 2;
-    const nx = cx + r * Math.cos(angle);
-    const ny = cy + r * Math.sin(angle);
-
-    svg += `<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(2)}" y2="${ny.toFixed(2)}" class="codex-radar-axis"/>`;
-
-    const a = list[i];
-    const hasVal = typeof a.value === "number" && Number.isFinite(a.value);
-    if (!hasVal) {
-      // 缺值：虚线圈 + 「—」
-      svg += `<circle cx="${nx.toFixed(2)}" cy="${ny.toFixed(2)}" r="9" class="codex-radar-missing"/>`;
-      svg += `<text x="${nx.toFixed(2)}" y="${ny.toFixed(2)}" class="codex-radar-missing-label" text-anchor="middle" dominant-baseline="central">—</text>`;
-    } else {
-      filled.push({ angle, value: a.value, name: a.name });
-    }
-
-    // 轴名标签
-    const lx = cx + (r + 10) * Math.cos(angle);
-    const ly = cy + (r + 10) * Math.sin(angle);
-    svg += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" class="codex-radar-label" text-anchor="middle" dominant-baseline="central">${escapeHtml(a.name)}</text>`;
-  }
-
-  // 多边形：仅用有值的轴；不满一圈就用 polyline 不闭合
-  if (filled.length >= 1) {
-    const scale = (typeof opts.max === "number" && opts.max > 0) ? opts.max : 1;
-    const pts = filled.map(f => {
-      const ratio = Math.max(0, Math.min(1, (f.value || 0) / scale));
-      const px = cx + r * ratio * Math.cos(f.angle);
-      const py = cy + r * ratio * Math.sin(f.angle);
-      return `${px.toFixed(2)},${py.toFixed(2)}`;
-    });
-    if (filled.length >= 3) {
-      // 只有当有值的轴 >= 总轴数时才闭合；否则走 polyline 不闭合
-      const closeTag = filled.length >= total ? " polygon" : " polyline";
-      const tag = `codex-radar-${closeTag.trim()}`;
-      svg += `<${tag === "codex-radar-polygon" ? "polygon" : "polyline"} points="${pts.join(" ")}" class="codex-radar-shape"/>`;
-    }
-    for (const p of pts) {
-      const [x, y] = p.split(",");
-      svg += `<circle cx="${x}" cy="${y}" r="3" class="codex-radar-dot"/>`;
-    }
-  }
-
-  svg += `</svg>`;
-  return svg;
-}
 
 // ── 图谱主区视图（静态环形布局，无向边灰、有向边带箭头） ──
 
@@ -755,167 +677,40 @@ async function openGraph(focusPersonId) {
   if (statsEl) statsEl.textContent = "";
   if (modal) modal.classList.remove("hidden");
 
-  // 图谱需要五张表全齐（relations 里 from/to 引用 p_ / pl_ / f_，
-  // 缺一张表就漏一堆节点）；loadOne 是幂等的，重复拉一次也就多一次往返。
+  // 整个流程包 try/catch：任何一步炸了（loadOne 失败、renderGraph 抛异常）
+  // 都必须把 loading 换成错误提示，不能永远转圈。async 函数里抛错会
+  // 变成 unhandledrejection，外部没有 .catch，loading 就永远留在那里。
   try {
+    // 图谱需要五张表全齐（relations 里 from/to 引用 p_ / pl_ / f_，
+    // 缺一张表就漏一堆节点）；loadOne 是幂等的，重复拉一次也就多一次往返。
     await Promise.all(["persons", "places", "factions", "relations"].map(loadOne));
+
+    // renderGraph 是同步函数，但里面也可能抛（数据形状异常、内部引用未定义）。
+    // 不捕就变成 unhandledrejection，loading 不会换。
+    const { svg, stats } = renderGraph(all, focusPersonId);
+    if (box) box.innerHTML = svg;
+    if (statsEl) statsEl.textContent = stats;
+
+    // 节点点击 → 打开该人物的详情
+    if (box) {
+      box.querySelectorAll("[data-node-id]").forEach(el => {
+        el.style.cursor = "pointer";
+        el.addEventListener("click", () => {
+          const id = el.dataset.nodeId;
+          const type = el.dataset.nodeType;
+          if (type === "person") {
+            closeGraph();
+            currentTab = "persons";
+            openDetail(id);
+          }
+        });
+      });
+    }
   } catch (e) {
     if (box) box.innerHTML = `<div class="codex-graph-loading codex-graph-loading-err">加载失败：${escapeHtml(String(e?.message || e))}</div>`;
-    return;
-  }
-
-  const { svg, stats } = renderGraph(focusPersonId);
-  if (box) box.innerHTML = svg;
-  if (statsEl) statsEl.textContent = stats;
-  // 节点点击 → 打开该人物的详情
-  if (box) {
-    box.querySelectorAll("[data-node-id]").forEach(el => {
-      el.style.cursor = "pointer";
-      el.addEventListener("click", () => {
-        const id = el.dataset.nodeId;
-        const type = el.dataset.nodeType;
-        if (type === "person") {
-          closeGraph();
-          currentTab = "persons";
-          openDetail(id);
-        }
-      });
-    });
   }
 }
 
 export function closeGraph() {
   $("codex-graph-modal")?.classList.add("hidden");
-}
-
-function renderGraph(focusPersonId) {
-  const persons = all.persons || [];
-  const places = all.places || [];
-  const factions = all.factions || [];
-  const relations = all.relations || [];
-
-  // 把 relations 表里的 id 引用映射回具体的 codex 对象。
-  // 支持两种写法：带前缀（p_ / pl_ / f_）与无前缀（纯 UUID）。
-  // 前缀是用户标注意图的线索；无前缀就直接按实际所在的表判类型。
-  const strip = (s) => String(s || "").replace(/^(p_|pl_|f_)/, "");
-  const resolveRef = (id) => {
-    if (!id) return null;
-    const raw = strip(id);
-    if (id.startsWith("p_")) {
-      const p = persons.find(x => x.id === raw);
-      return p ? { type: "person", obj: p } : null;
-    }
-    if (id.startsWith("pl_")) {
-      const p = places.find(x => x.id === raw);
-      return p ? { type: "place", obj: p } : null;
-    }
-    if (id.startsWith("f_")) {
-      const f = factions.find(x => x.id === raw);
-      return f ? { type: "faction", obj: f } : null;
-    }
-    // 无前缀：直接按各表查
-    const p = persons.find(x => x.id === raw);
-    if (p) return { type: "person", obj: p };
-    const pl = places.find(x => x.id === raw);
-    if (pl) return { type: "place", obj: pl };
-    const f = factions.find(x => x.id === raw);
-    if (f) return { type: "faction", obj: f };
-    return null;
-  };  // 收集出现在任一条边上的实体
-  const seen = new Map();
-  for (const r of relations) {
-    for (const id of [r.from, r.to]) {
-      if (!id || seen.has(id)) continue;
-      const info = resolveRef(id);
-      if (info.obj) seen.set(id, info);
-    }
-  }
-  // 也收孤立的实体——AIRP 那张图全部实体都在图上，
-  // 孤点本身就是信息（「这个人还没和任何人发生关系」）。
-  // 人物、地点、势力都要收，不管有没有 focusPersonId；
-  // focus 只控制视觉高亮，不控制是否入图。
-  for (const p of persons) if (!seen.has(p.id)) seen.set(p.id, { type: "person", obj: p });
-  for (const pl of places) if (!seen.has(pl.id)) seen.set(pl.id, { type: "place", obj: pl });
-  for (const f of factions) if (!seen.has(f.id)) seen.set(f.id, { type: "faction", obj: f });
-
-  const nodes = [...seen.values()].filter(x => x.obj);
-
-  const W = 900, H = 520;
-  const cx = W / 2, cy = H / 2 + 20;
-  const R = Math.min(W, H) * 0.36;
-  const n = nodes.length;
-
-  // 环形布局
-  const posMap = new Map();
-  for (let i = 0; i < n; i++) {
-    const id = nodes[i].obj.id;
-    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
-    posMap.set(id, { x: cx + R * Math.cos(angle), y: cy + R * Math.sin(angle) });
-  }
-
-  const svgNS = "http://www.w3.org/2000/svg";
-  let svg = `<svg class="codex-graph-svg-inner" viewBox="0 0 ${W} ${H}" xmlns="${svgNS}">`;
-
-  // 箭头 marker
-  svg += `<defs>
-    <marker id="codex-graph-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M 0 0 L 10 5 L 0 10 z" class="codex-graph-arrow-fill"/>
-    </marker>
-  </defs>`;
-
-  // 边
-  for (const r of relations) {
-    const from = posMap.get(r.from);
-    const to = posMap.get(r.to);
-    if (!from || !to) continue;
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const d = Math.hypot(dx, dy) || 1;
-    const ux = dx / d, uy = dy / d;
-    const x1 = from.x + ux * 22;
-    const y1 = from.y + uy * 22;
-    const x2 = to.x - ux * 22;
-    const y2 = to.y - uy * 22;
-
-    const s = typeof r.strength === "number" ? Math.abs(r.strength) : 0;
-    const w = 1.2 + Math.min(6, s / 20);
-    const isDirected = r.direction !== "undirected";
-    const strokeClass = isDirected ? "codex-graph-edge codex-graph-edge-directed" : "codex-graph-edge codex-graph-edge-undirected";
-    const marker = isDirected ? ' marker-end="url(#codex-graph-arrow)"' : "";
-    svg += `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke-width="${w.toFixed(2)}" class="codex-graph-edge" data-directed="${isDirected ? 1 : 0}"${marker} data-rel-id="${escapeHtml(r.id)}"/>`;
-    if (r.kind) {
-      const mx = (x1 + x2) / 2;
-      const my = (y1 + y2) / 2;
-      svg += `<text x="${mx.toFixed(2)}" y="${my.toFixed(2)}" class="codex-graph-edge-label" text-anchor="middle" dominant-baseline="central">${escapeHtml(r.kind)}</text>`;
-    }
-  }
-
-  // 节点
-  for (const info of nodes) {
-    const p = posMap.get(info.obj.id);
-    if (!p) continue;
-    const obj = info.obj;
-    const name = obj.name || "（未命名）";
-    const focus = info.type === "person" && obj.id === focusPersonId;
-    // (shapeClass 已迁移到 data-type 属性选择器上，这里不再需要类名)\n
-
-    let shape;
-    if (info.type === "faction") {
-      const s = 22;
-      shape = `<rect x="${(p.x - s / 2).toFixed(2)}" y="${(p.y - s / 2).toFixed(2)}" width="${s}" height="${s}" class="codex-graph-node" data-type="${info.type}"${focusAttr} data-node-id="${escapeHtml(obj.id)}" data-node-type="${info.type}"/>`;
-    } else if (info.type === "place") {
-      const s = 22;
-      const h = s * 0.87;
-      shape = `<polygon points="${p.x.toFixed(2)},${(p.y - h / 2).toFixed(2)} ${(p.x - s / 2).toFixed(2)},${(p.y + h / 2).toFixed(2)} ${(p.x + s / 2).toFixed(2)},${(p.y + h / 2).toFixed(2)}" class="codex-graph-node" data-type="${info.type}"${focusAttr} data-node-id="${escapeHtml(obj.id)}" data-node-type="${info.type}"/>`;
-    } else {
-      const focusAttr = focus ? " data-focus=1" : "";
-      shape = `<circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="11" class="codex-graph-node" data-type="${info.type}"${focusAttr} data-node-id="${escapeHtml(obj.id)}" data-node-type="${info.type}"/>`;
-    }
-    svg += shape;
-    svg += `<text x="${p.x.toFixed(2)}" y="${(p.y + 28).toFixed(2)}" class="codex-graph-node-label" data-focus="${focus ? 1 : 0}" text-anchor="middle">${escapeHtml(name)}</text>`;
-  }
-
-  svg += `</svg>`;
-  const stats = `${persons.length} 人 · ${factions.length} 势力 · ${places.length} 地 · ${relations.length} 关系`;
-  return { svg, stats };
 }
