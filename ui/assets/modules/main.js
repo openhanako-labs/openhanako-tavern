@@ -22,7 +22,7 @@ import { importFile, handleMigrationFile, loadExports, renderExports, downloadEx
 import { saveBoardCell, deleteBoardCell, bindBoard } from "./board.js";
 import { bindGen } from "./gen.js";
 import { bindTts } from "./tts.js";
-import { bind as bindMemory } from "./memory.js";
+import { bindMemory } from "./memory.js";
 import { bind as bindVarDiffModal } from "./var-diff-modal.js";
 import { bindImage } from "./image.js";
 import { bindScene } from "./scene.js";

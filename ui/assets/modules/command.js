@@ -22,6 +22,7 @@ const ITEMS = [
   { id: "variables",   label: "变量",       sub: "右栏面板",     alias: "vars bianliang",       run: () => openDrawer("variables") },
   { id: "presets",     label: "提示词预设", sub: "右栏面板 · 设一次就不动", alias: "preset yushe", run: () => openDrawer("presets") },
   { id: "regex",       label: "正则规则",   sub: "右栏面板 · 设一次就不动", alias: "regex zhengze", run: () => openDrawer("regex") },
+  { id: "codex",       label: "图鉴",       sub: "人物 / 地点 / 势力",       alias: "codex tujian atlas", run: () => openDrawer("codex") },
   { id: "gallery",     label: "图库",       sub: "本场 / 全部两级", alias: "gallery tuku image picture", run: () => openDrawer("gallery") },
   { id: "tools",       label: "工具",       sub: "右栏面板 · 设一次就不动", alias: "tools gongju", run: () => openDrawer("tools") },
   { id: "migration",   label: "迁移",       sub: "右栏面板 · 设一次就不动", alias: "migration qianyi", run: () => openDrawer("migration") },

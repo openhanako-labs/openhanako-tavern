@@ -74,6 +74,10 @@
       <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2.8c-1.5 0-1.9.7-1.9 2v1.5c0 1-.4 1.5-1.4 1.5.9 0 1.4.5 1.4 1.5v1.7c0 1.3.4 2 1.9 2"/><path d="M10 2.8c1.5 0 1.9.7 1.9 2v1.5c0 1 .4 1.5 1.4 1.5-.9 0-1.4.5-1.4 1.5v1.7c0 1.3-.4 2-1.9 2"/></svg>
       <span>变量</span>
     </button>
+    <button type="button" class="rail-item" data-drawer="codex" title="图鉴（人物 / 地点 / 势力）">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h10v10H3z"/><path d="M5 6.2h6M5 8.6h6M5 11h4"/></svg>
+      <span>图鉴</span>
+    </button>
     <div class="rail-sep"></div>
     <span class="rail-group">配置</span>
     <!--
@@ -564,6 +568,34 @@
         <div id="regex-list" class="regex-list">
           <div class="d-skel"><div class="d-skel-bar w46"></div><div class="d-skel-bar w82"></div><div class="d-skel-bar w64"></div></div>
         </div>
+      </div>
+    </div>
+
+    <!-- ── 抽屉：图鉴（C1） ───────────────────── -->
+    <!--
+      三张表：人物 / 地点 / 势力。都支持寿命两级（世界级 / 这场）。
+      人物多一个「+ 记一条」按钮（追加制记录），地点多一个「父级」下拉。
+
+      与「角色」的分工：角色是能上场扮演的卡（ST 兼容），图鉴是世界里存在的人。
+      不互嵌套，图鉴里的 characterId 只是一行引用。
+    -->
+    <div id="drawer-codex" class="drawer hidden">
+      <div class="drawer-head">
+        <h2>图鉴</h2>
+        <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <div class="codex-tabs" role="tablist">
+        <button type="button" class="codex-tab active" data-codex-tab="persons" role="tab">人物</button>
+        <button type="button" class="codex-tab" data-codex-tab="places" role="tab">地点</button>
+        <button type="button" class="codex-tab" data-codex-tab="factions" role="tab">势力</button>
+      </div>
+      <div class="drawer-toolbar">
+        <button id="codex-new-btn" class="btn btn-primary btn-sm">+ 新建</button>
+        <button id="codex-append-note-btn" class="btn btn-sm hidden" title="仅人物：追加一条记录">+ 记一条</button>
+      </div>
+      <div id="codex-count" class="codex-count"></div>
+      <div id="codex-list" class="list drawer-body">
+        <div class="d-skel"><div class="d-skel-bar w46"></div><div class="d-skel-bar w82"></div><div class="d-skel-bar w64"></div></div>
       </div>
     </div>
 
@@ -1920,6 +1952,121 @@
         <button id="dir-sim" type="button" class="btn btn-sm">试算一轮</button>
         <button id="dir-del" type="button" class="btn btn-ghost btn-sm" style="margin-left:auto">删除</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div id="codex-editor-modal" class="modal hidden">
+  <div class="modal-content modal-fullscreen">
+    <!--
+      三张表共一个编辑器：根据当前 Tab 切换字段。
+      人物多一栏「追加一条记录」；地点多一个「父级」下拉。
+
+      字段名与 lib/codex/model.js 对齐；不额外编 UI 字段。
+    -->
+    <div class="de-hd">
+      <h2 id="codex-editor-title">新建条目</h2>
+      <span class="de-hd-right">
+        <button id="codex-cancel" type="button" class="btn btn-sm">取消</button>
+        <button id="codex-save" type="button" class="btn btn-primary btn-sm">保存</button>
+      </span>
+      <button id="codex-editor-close" type="button" class="btn btn-ghost btn-sm modal-close">✕</button>
+    </div>
+    <div class="de-body">
+      <div class="de-name">
+        <label for="codex-name">名字</label>
+        <input id="codex-name" type="text" placeholder="未命名">
+      </div>
+
+      <div class="de-fields">
+        <div class="de-field">
+          <label for="codex-lifespan" title="世界级 = 跨对话共享；这场 = 只在这一场">
+            寿命
+          </label>
+          <select id="codex-lifespan">
+            <option value="world">世界级</option>
+            <option value="chat">这场</option>
+          </select>
+        </div>
+        <div class="de-field" id="codex-field-affinity-wrap" style="display:none">
+          <label for="codex-affinity" title="-100 ~ 100；留空 = 未知">好感度</label>
+          <input id="codex-affinity" type="number" min="-100" max="100" step="1" placeholder="—">
+        </div>
+      </div>
+
+      <!-- 人物字段：只在 is-person 时显示 -->
+      <div class="de-fields codex-only-person">
+        <div class="de-field">
+          <label for="codex-character-id">角色卡 id（可空）</label>
+          <input id="codex-character-id" type="text" placeholder="引用 lib/characters 的 id">
+        </div>
+        <div class="de-field">
+          <label for="codex-aliases">称呼（逗号分隔）</label>
+          <input id="codex-aliases" type="text" placeholder="相女, 小姐">
+        </div>
+      </div>
+      <div class="de-field codex-only-person">
+        <label for="codex-attitude">态度</label>
+        <input id="codex-attitude" type="text" placeholder="戒备 / 信任 / 厌恶…">
+      </div>
+      <div class="de-field codex-only-person">
+        <label for="codex-status">状态</label>
+        <input id="codex-status" type="text" placeholder="禁足中 / 在外游历…">
+      </div>
+      <div class="de-field codex-only-person">
+        <label for="codex-first-met-conv">首次见面（对话 id，可空）</label>
+        <input id="codex-first-met-conv" type="text" placeholder="留空 = 未记录">
+      </div>
+
+      <!-- 地点字段：只在 is-place 时显示 -->
+      <div class="de-field codex-only-place">
+        <label for="codex-parent">父级地点（可选）</label>
+        <input id="codex-parent" type="text" placeholder="例如：pl_xxx">
+      </div>
+      <div class="de-field codex-only-place">
+        <label for="codex-description">描述（静态，不变）</label>
+        <textarea id="codex-description" rows="3" placeholder="地点长什么样"></textarea>
+      </div>
+      <div class="de-field codex-only-place">
+        <label for="codex-situation">当前局势（动态，会变）</label>
+        <textarea id="codex-situation" rows="2" placeholder="此刻谁在这里、正在发生什么"></textarea>
+      </div>
+      <div class="de-field codex-only-place">
+        <label for="codex-tendency">走向倾向</label>
+        <input id="codex-tendency" type="text" placeholder="偏向宫斗线 / 偏向江湖线…">
+      </div>
+
+      <!-- 势力字段：只在 is-faction 时显示 -->
+      <div class="de-field codex-only-faction">
+        <label for="codex-faction-desc">简介</label>
+        <textarea id="codex-faction-desc" rows="3" placeholder="一句话说明"></textarea>
+      </div>
+
+      <!-- 人物 / 势力 共用的标签字段（地点没有） -->
+      <div class="de-field codex-only-person codex-only-faction">
+        <label for="codex-tags">标签</label>
+        <input id="codex-tags" type="text" placeholder="皇室, 将门, 禁军">
+      </div>
+
+      <div class="de-foot">
+        <span class="hint">本期 source 均为 manual；extract 是二期。</span>
+        <button id="codex-del" type="button" class="btn btn-ghost btn-sm" style="margin-left:auto" hidden>删除</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="codex-detail-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="codex-detail-title">详情</h2>
+      <button id="codex-detail-close" type="button" class="btn btn-ghost btn-sm modal-close">✕</button>
+    </div>
+    <div class="modal-body" id="codex-detail-body"></div>
+    <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end">
+      <button id="codex-detail-edit" type="button" class="btn">编辑</button>
+      <button id="codex-detail-append" type="button" class="btn" hidden>+ 记一条</button>
+      <button id="codex-detail-delete" type="button" class="btn btn-ghost">删除</button>
     </div>
   </div>
 </div>

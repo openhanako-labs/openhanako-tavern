@@ -6928,3 +6928,222 @@ html.has-app-bg .shell {
   border-color: var(--accent-line);
   color: var(--accent);
 }
+
+/* ═══ C1 图鉴（人物 / 地点 / 势力） ═══
+   暖纸风底色与卡片、标签、好感条。
+   颜色全走 CSS 变量，不写死。 */
+
+/* Tab 行：抽屉头部与工具条之间一条薄 Tab 行 */
+.codex-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  padding: 4px 8px 0;
+}
+.codex-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.codex-tab:hover { color: var(--fg); }
+.codex-tab.active {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+  font-weight: 500;
+}
+
+.codex-count {
+  padding: 4px 12px 0;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+}
+
+/* 卡片：名字 + 寿命 badge + 标签 + meta */
+.codex-item {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  margin-bottom: 8px;
+  transition: border-color var(--t) var(--ease);
+}
+.codex-item:hover { border-color: var(--border-strong); }
+
+.codex-hd {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-5);
+  flex-wrap: wrap;
+}
+.codex-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-md);
+  font-weight: 500;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.codex-life {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+}
+.codex-life-chat { color: var(--fg); border-color: var(--accent-line); }
+.codex-life-world { color: var(--fg-muted); }
+
+.codex-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.codex-tag {
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+.codex-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.codex-chip {
+  padding: 1px 8px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--fg);
+  background: var(--surface-2);
+}
+.codex-chip-attitude { border-color: var(--accent-line); color: var(--accent); }
+.codex-chip-status { color: var(--fg); border-color: var(--border); }
+.codex-chip-tendency { color: var(--fg-muted); border-color: var(--border); }
+
+/* ── 图鉴编辑器：按 tab 切字段 ──────────────
+   codex-only-* 默认隐藏；.de-body.is-* 把它显示出来。
+   codex-only-person 与 codex-only-faction 同时写在同一个元素上时，
+   任一命中就显示（用 OR）。 */
+.codex-only-person,
+.codex-only-place,
+.codex-only-faction { display: none; }
+.de-body.codex-mode-person .codex-only-person,
+.de-body.codex-mode-faction .codex-only-faction,
+.de-body.codex-mode-place .codex-only-place { display: revert; }
+/* codex-only-person.codex-only-faction：两行都命中才显 ——
+   因为上面三条已经保证了「任一命中就显示」，这个组合不需要额外规则。 */
+
+.codex-affinity {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  border: 1px solid var(--border);
+  min-width: 32px;
+  justify-content: center;
+}
+.codex-affinity-none { color: var(--fg-muted); }
+.codex-affinity-pos { border-color: var(--accent-line); color: var(--accent); }
+.codex-affinity-neg { border-color: var(--danger, #c66); color: var(--danger, #c66); }
+.codex-affinity-val { font-variant-numeric: tabular-nums; }
+
+.codex-desc,
+.codex-situation {
+  margin-top: 6px;
+  font-size: var(--fs-sm);
+  color: var(--fg-muted);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.codex-situation { color: var(--fg); }
+
+.codex-aliases,
+.codex-notes-count {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.codex-alias-row { margin-top: 4px; }
+
+.codex-acts {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+  opacity: .85;
+}
+.codex-item:hover .codex-acts { opacity: 1; }
+.codex-acts .mini {
+  padding: 2px 8px;
+  font-size: var(--fs-xs);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.codex-acts .mini:hover { border-color: var(--accent-line); color: var(--accent); }
+.codex-acts .codex-del:hover { border-color: var(--danger, #c66); color: var(--danger, #c66); }
+
+/* 详情弹窗 */
+.codex-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.codex-detail-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 12px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.codex-detail-row:last-child { border-bottom: 0; }
+.codex-detail-k {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  text-align: right;
+}
+.codex-detail-v {
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+/* 人物详情里的「记录」列表 */
+.codex-notes { margin-top: 10px; }
+.codex-notes-hd {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  margin-bottom: 4px;
+}
+.codex-note {
+  display: grid;
+  grid-template-columns: 88px auto 1fr;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: var(--fs-sm);
+}
+.codex-note-at { color: var(--fg-muted); font-variant-numeric: tabular-nums; font-size: var(--fs-xs); }
+.codex-note-conv { color: var(--fg-muted); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+.codex-note-text { color: var(--fg); word-break: break-word; }

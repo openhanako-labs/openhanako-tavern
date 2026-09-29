@@ -52,6 +52,8 @@ const { registerMemoryRoutes } = await import("../lib/memory/routes.js");
 const { DirectorRepo } = await import("../lib/director/repo.js");
 const { registerDirectorRoutes } = await import("../lib/director/routes.js");
 const { registerBoardRoutes } = await import("../lib/board/routes.js");
+const { registerCodexRoutes } = await import("../lib/codex/routes.js");
+const { CodexRepo } = await import("../lib/codex/repo.js");
 const { registerRegexRoutes } = await import("../lib/regex/routes.js");
 
 let pass = 0, fail = 0;
@@ -101,6 +103,7 @@ const presetRepo = new PresetRepo(tmp); await presetRepo.init();
 const boardRepo = new BoardRepo(tmp); await boardRepo.init();
 const regexRepo = new RegexRepo(tmp); await regexRepo.init();
 const directorRepo = new DirectorRepo(tmp); await directorRepo.init();
+const codexRepo = new CodexRepo(tmp); await codexRepo.init();
 
 const apps = {
   characters: makeApp(),
@@ -118,7 +121,8 @@ const apps = {
   tts: makeApp(),
   director: makeApp(),
   models: makeApp(),
-  memory: makeApp()
+  memory: makeApp(),
+  codex: makeApp()
 };
 
 // 假 llm。生成路由需要它，而**不能因为麻烦就跳过这一段**——
@@ -173,6 +177,7 @@ registerTtsRoutes(apps.tts, { sdk: null, dataDir: null });
 // 模型按用途分选（Q3）：dataDir 给一个临时目录，llmService 给 null（列表接口会诚实报未就绪）
 registerModelRoutes(apps.models, { llmService: null, dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "eleckoi-smoke-")) });
 registerMemoryRoutes(apps.memory, { dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "eleckoi-smoke-mem-")) });
+registerCodexRoutes(apps.codex, codexRepo);
 // 板上与正则各自的深测在 regression-board-routes / regression-regex-routes，
 // 这里注册它们只是为了让下面那张表是**完整的九张脸**。
 registerBoardRoutes(apps.board, boardRepo);
@@ -292,6 +297,14 @@ const EXPECTED = {
   ],
   memory: [
     "GET /memory/config", "PUT /memory/config"
+  ],
+  codex: [
+    "GET /codex/persons", "POST /codex/persons", "PUT /codex/persons/:id", "DELETE /codex/persons/:id",
+    "GET /codex/persons/:id", "POST /codex/persons/:id/notes",
+    "GET /codex/places", "POST /codex/places", "PUT /codex/places/:id", "DELETE /codex/places/:id",
+    "GET /codex/places/:id",
+    "GET /codex/factions", "POST /codex/factions", "PUT /codex/factions/:id", "DELETE /codex/factions/:id",
+    "GET /codex/factions/:id"
   ]
 };
 

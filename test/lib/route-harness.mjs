@@ -28,7 +28,8 @@ export function makeApp() {
 
   /** 找第一条能匹配的路由。返回 { route, params } 或 null。 */
   app.match = (method, reqPath) => {
-    const segs = String(reqPath).split("/").filter(Boolean);
+    // 路由只看路径部分：剥掉 query string（`?conversationId=…`）
+    const segs = String(reqPath).split("?")[0].split("/").filter(Boolean);
     for (const r of routes) {
       if (r.method !== String(method).toUpperCase()) continue;
       const rs = r.path.split("/").filter(Boolean);

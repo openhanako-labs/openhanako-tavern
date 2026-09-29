@@ -34,8 +34,10 @@ import { registerPresetRoutes } from "./lib/presets/routes.js";
 
 import { BoardRepo } from "./lib/board/repo.js";
 import { DirectorRepo } from "./lib/director/repo.js";
+import { CodexRepo } from "./lib/codex/repo.js";
 import { registerDirectorRoutes } from "./lib/director/routes.js";
 import { registerBoardRoutes } from "./lib/board/routes.js";
+import { registerCodexRoutes } from "./lib/codex/routes.js";
 
 import { registerToolRoutes } from "./lib/tools/routes.js";
 import { createEmbedTools } from "./lib/embed/tool.js";
@@ -177,6 +179,14 @@ export default defineApp(async (sdk) => {
     s.director = { repoInitialized: true, file: path.join(dataDir, "directors.json") };
   }
 
+  // 图鉴（C1）：人物 / 地点 / 势力。三张表与 board 同构（寿命两级）。
+  let codexRepo = null;
+  if (dataDir) {
+    codexRepo = new CodexRepo(dataDir);
+    await probe.safe(() => codexRepo.init(), "codexRepo.init");
+    s.codex = { repoInitialized: true, dir: path.join(dataDir, "codex") };
+  }
+
   // ── LLM 服务 ──
   let llmService = null;
   if (s.modelsAvailable) {
@@ -282,6 +292,9 @@ export default defineApp(async (sdk) => {
     }
     if (directorRepo) {
       registerDirectorRoutes(app, directorRepo);
+    }
+    if (codexRepo) {
+      registerCodexRoutes(app, codexRepo);
     }
 
     registerToolRoutes(app, sdk);
