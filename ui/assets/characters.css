@@ -3961,13 +3961,72 @@ main.ctx-open .drawer:not(.hidden) {
   transition: grid-template-columns .2s var(--ease);
 }
 
-/* ── 插图消息 ── */
-.illus-img { display: block; max-width: 100%; border-radius: var(--r-sm); }
-.illus-prompt { font-size: var(--fs-xs); color: var(--fg-muted); margin-top: 4px; }
+/* ── 插图消息（2026-09-29 Q1：characters.html 内联块并入此处，双写收敛为一处）── */
+.illus-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  min-width: 220px;
+  max-width: 100%;
+  border-radius: 10px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+}
+.illus-ok { display: flex; flex-direction: column; gap: 6px; }
+.illus-img {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;        /* 竖图上限：一屏内同时看得见字和图 */
+  border-radius: var(--r-sm);
+  object-fit: contain;      /* 只缩不放，不裁切——插图是内容不是装饰 */
+  background: rgba(0,0,0,.2);
+}
+.illus-img-missing {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--fg-muted, #888);
+}
+.illus-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-muted, #888);
+  font-size: 13px;
+}
+.illus-spinner { display: inline-block; animation: illus-pulse 1.2s ease-in-out infinite; }
+@keyframes illus-pulse {
+  0%, 100% { opacity: .3; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+.illus-failed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--danger, #e06);
+  font-size: 12px;
+}
+.illus-failed-title { font-weight: 600; }
+.illus-reason {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-muted, #999);
+  word-break: break-word;
+  max-height: 80px;
+  overflow-y: auto;
+}
+.illus-prompt {
+  font-size: 11px;
+  color: var(--fg-muted, #aaa);
+  margin-top: 4px;
+  line-height: 1.4;
+  word-break: break-word;
+}
 .illus-note { font-size: var(--fs-xs); color: var(--fg-dim); }
-.illus-pending { font-size: var(--fs-sm); color: var(--fg-muted); opacity: 0.7; }
-.illus-failed { font-size: var(--fs-sm); color: var(--fg-muted); opacity: 0.7; }
-.illus-img-missing { font-size: var(--fs-sm); color: var(--fg-muted); opacity: 0.7; }
 
 /* ══ 恢复：2026-09-28 被 write 覆盖 + git checkout 抹掉的存量（从 session 的 edit 记录还原）══ */
 
@@ -6042,9 +6101,6 @@ main.ctx-open #panel-head { display: flex; }
 .illus-detail > summary:hover {color: var(--accent);}
 .illus-zoomable {cursor: zoom-in;
   transition: border-color var(--t) var(--ease);}
-.illus-spinner {display: inline-block;
-  animation: illus-pulse 1.2s ease-in-out infinite;}
-.illus-failed-title {font-weight: 600;}
 .illus-headline {margin-top: 4px;
   font-size: var(--fs-sm);
   line-height: 1.55;
@@ -6066,11 +6122,6 @@ main.ctx-open #panel-head { display: flex; }
   word-break: break-word;
   max-height: 140px;
   overflow: auto;}
-.illus-reason {margin-top: 3px;
-  font-size: var(--fs-sm);
-  line-height: 1.5;
-  color: var(--fg);
-  word-break: break-word;}
 .setting-section {margin-bottom: 14px;}
 
 /*
@@ -6113,10 +6164,6 @@ main.ctx-open #panel-head { display: flex; }
   color: var(--accent);
   opacity: .9;
   word-break: break-word;}
-.illus-ok {display: flex;
-      flex-direction: column;
-      gap: var(--sp-5);}
-
 /* ── 抽屉工具条里的「⋯」（2026-09-28）──────────────────────
    左边留最常按的一颗（新建），右边收零散动作。
    复用现成的 .more-menu（绝对定位 + 阴影 + 悬停高亮），不另造一套。 */
