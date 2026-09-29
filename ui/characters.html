@@ -593,10 +593,13 @@
         <button type="button" class="codex-tab active" data-codex-tab="persons" role="tab">人物</button>
         <button type="button" class="codex-tab" data-codex-tab="places" role="tab">地点</button>
         <button type="button" class="codex-tab" data-codex-tab="factions" role="tab">势力</button>
+        <button type="button" class="codex-tab" data-codex-tab="relations" role="tab">关系</button>
+        <button type="button" class="codex-tab" data-codex-tab="powers" role="tab">体系</button>
       </div>
       <div class="drawer-toolbar">
         <button id="codex-new-btn" class="btn btn-primary btn-sm">+ 新建</button>
         <button id="codex-append-note-btn" class="btn btn-sm hidden" title="仅人物：追加一条记录">+ 记一条</button>
+        <button id="codex-graph-btn" class="btn btn-sm" title="把当前世界铺到主区看">图谱</button>
       </div>
       <div id="codex-count" class="codex-count"></div>
       <div id="codex-list" class="list drawer-body">
@@ -744,6 +747,9 @@
       <div class="drawer-head">
         <h2>当前角色</h2>
         <button class="btn btn-ghost btn-sm drawer-close">✕</button>
+      </div>
+      <div class="drawer-toolbar">
+        <button id="char-profile-btn" class="btn btn-sm" title="八区块档案（只读展示，版面待校准）">角色档案</button>
       </div>
       <div class="drawer-body" id="char-ctx-body">
         <div class="empty">尚未打开对话</div>
@@ -2089,6 +2095,64 @@
         <textarea id="codex-faction-desc" rows="3" placeholder="一句话说明"></textarea>
       </div>
 
+      <!-- 关系字段：只在 is-relation 时显示 -->
+      <div class="de-field codex-only-relation">
+        <label for="codex-rel-from">从（带前缀 id：p_ / pl_ / f_）</label>
+        <input id="codex-rel-from" type="text" placeholder="例如：p_abc123">
+      </div>
+      <div class="de-field codex-only-relation">
+        <label for="codex-rel-to">到（带前缀 id：p_ / pl_ / f_）</label>
+        <input id="codex-rel-to" type="text" placeholder="例如：pl_xxx">
+      </div>
+      <div class="de-field codex-only-relation">
+        <label for="codex-rel-kind">关系类型（自由文本）</label>
+        <input id="codex-rel-kind" type="text" placeholder="师徒 / 宿敌 / 同盟…">
+      </div>
+      <div class="de-field codex-only-relation">
+        <label for="codex-rel-direction">方向</label>
+        <select id="codex-rel-direction">
+          <option value="undirected">无向</option>
+          <option value="directed">从 → 到</option>
+          <option value="reverse">到 → 从</option>
+        </select>
+      </div>
+      <div class="de-field codex-only-relation">
+        <label for="codex-rel-strength" title="-100 ~ 100；留空 = 未知">强度</label>
+        <input id="codex-rel-strength" type="number" min="-100" max="100" step="1" placeholder="—">
+      </div>
+      <div class="de-field codex-only-relation">
+        <label for="codex-rel-note">备注</label>
+        <textarea id="codex-rel-note" rows="2" placeholder="可选"></textarea>
+      </div>
+
+      <!-- 力量字段：只在 is-power 时显示 -->
+      <div class="de-field codex-only-power">
+        <label for="codex-pow-person">人物（可选）</label>
+        <input id="codex-pow-person" type="text" placeholder="引用 persons 表的 id，可空">
+      </div>
+      <div class="de-field codex-only-power">
+        <label for="codex-pow-system">体系名（魔法 / 武技…）</label>
+        <input id="codex-pow-system" type="text" placeholder="例如：魔法">
+      </div>
+      <div class="de-field codex-only-power">
+        <label for="codex-pow-axis">轴名（雷达图的轴）</label>
+        <input id="codex-pow-axis" type="text" placeholder="例如：攻击">
+      </div>
+      <div class="de-fields codex-only-power">
+        <div class="de-field">
+          <label for="codex-pow-value" title="数值；留空 = 未知（雷达图轴会留虚线圈）">数值</label>
+          <input id="codex-pow-value" type="number" step="0.1" placeholder="—">
+        </div>
+        <div class="de-field">
+          <label for="codex-pow-max" title="这一体系的上限；留空 = 未定">上限</label>
+          <input id="codex-pow-max" type="number" step="0.1" placeholder="—">
+        </div>
+      </div>
+      <div class="de-field codex-only-power">
+        <label for="codex-pow-note">备注</label>
+        <textarea id="codex-pow-note" rows="2" placeholder="可选"></textarea>
+      </div>
+
       <!-- 人物 / 势力 共用的标签字段（地点没有） -->
       <div class="de-field codex-only-person codex-only-faction">
         <label for="codex-tags">标签</label>
@@ -2111,9 +2175,52 @@
     </div>
     <div class="modal-body" id="codex-detail-body"></div>
     <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end">
+      <button id="codex-detail-graph" type="button" class="btn" hidden>在图谱中查看</button>
       <button id="codex-detail-edit" type="button" class="btn">编辑</button>
       <button id="codex-detail-append" type="button" class="btn" hidden>+ 记一条</button>
       <button id="codex-detail-delete" type="button" class="btn btn-ghost">删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- C3 二期：图谱主区视图。
+     一期静态布局：将当前世界所有实体按环形铺布，
+     人物圆点、势力方角、地点三角；有向边带箭头、粗细 = 强度；
+     点人物 → 打开他的详情（复用 codex-detail-modal，不养双份）。
+     不做力导向——二期才有那个必要。 -->
+<div id="codex-graph-modal" class="modal hidden">
+  <div class="modal-content modal-fullscreen">
+    <div class="modal-header">
+      <h2>世界图谱</h2>
+      <span id="codex-graph-stats" class="codex-graph-stats"></span>
+      <button id="codex-graph-close" type="button" class="btn btn-ghost btn-sm modal-close">✕</button>
+    </div>
+    <div class="modal-body codex-graph-body">
+      <div id="codex-graph-svg" class="codex-graph-svg"></div>
+      <div class="codex-graph-legend">
+        <span class="codex-graph-legend-item"><span class="codex-graph-legend-dot codex-graph-legend-person"></span>人物</span>
+        <span class="codex-graph-legend-item"><span class="codex-graph-legend-dot codex-graph-legend-faction"></span>势力</span>
+        <span class="codex-graph-legend-item"><span class="codex-graph-legend-dot codex-graph-legend-place"></span>地点</span>
+        <span class="codex-graph-legend-hint">点人物节点打开详情；边粗细 = 强度（无向为灰）</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- C3 二期：角色档案（八区块只读展示）。
+     挂在角色抽屉的详情里 —— 当前阶段只读，
+     写回走 /characters/:id/profile，但 UI 不提供编辑入口（
+     因为八区块按推断实现，原图未校；提供写入口等于提前定形）。
+     数据来源：当前角色卡 + extensions.profile + codex 引用拼接。 -->
+<div id="char-profile-modal" class="modal hidden">
+  <div class="modal-content modal-fullscreen">
+    <div class="modal-header">
+      <h2 id="char-profile-title">角色档案</h2>
+      <span class="char-profile-disclaimer">版面按推断，待校准</span>
+      <button id="char-profile-close" type="button" class="btn btn-ghost btn-sm modal-close">✕</button>
+    </div>
+    <div class="modal-body codex-graph-body">
+      <div id="char-profile-body" class="char-profile-body"></div>
     </div>
   </div>
 </div>

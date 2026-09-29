@@ -30,6 +30,7 @@ import { bindIllustrate } from "./illustrate.js";
 import { bindAppearance, loadAppearance } from "./appearance.js";
 import { bindCommand, bindScrollBottom } from "./command.js";
 import { saveRegexRule, deleteRegexRule, bindRegex } from "./regex.js";
+import { bindCharProfile } from "./char-profile.js";
 
 
 // ── 通用弹窗 ──────────────────────────────────────────
@@ -300,6 +301,8 @@ export async function init() {
 
   // 正则规则抽屉内的按钮
   bindRegex();
+// C3 二期：角色档案（八区块展示）。按钮在「当前角色」抽屉的工具条上。
+bindCharProfile();
 
   // 快捷键：Ctrl/Cmd+B 折侧栏
   document.addEventListener("keydown", (e) => {
