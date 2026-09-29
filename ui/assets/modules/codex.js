@@ -747,14 +747,26 @@ function renderRadar(axes, opts = {}) {
 
 // ── 图谱主区视图（静态环形布局，无向边灰、有向边带箭头） ──
 
-function openGraph(focusPersonId) {
-  const { svg, stats } = renderGraph(focusPersonId);
+async function openGraph(focusPersonId) {
+  const modal = $("codex-graph-modal");
   const box = $("codex-graph-svg");
   const statsEl = $("codex-graph-stats");
+  if (box) box.innerHTML = `<div class="codex-graph-loading">图谱加载中…</div>`;
+  if (statsEl) statsEl.textContent = "";
+  if (modal) modal.classList.remove("hidden");
+
+  // 图谱需要五张表全齐（relations 里 from/to 引用 p_ / pl_ / f_，
+  // 缺一张表就漏一堆节点）；loadOne 是幂等的，重复拉一次也就多一次往返。
+  try {
+    await Promise.all(["persons", "places", "factions", "relations"].map(loadOne));
+  } catch (e) {
+    if (box) box.innerHTML = `<div class="codex-graph-loading codex-graph-loading-err">加载失败：${escapeHtml(String(e?.message || e))}</div>`;
+    return;
+  }
+
+  const { svg, stats } = renderGraph(focusPersonId);
   if (box) box.innerHTML = svg;
   if (statsEl) statsEl.textContent = stats;
-  const modal = $("codex-graph-modal");
-  if (modal) modal.classList.remove("hidden");
   // 节点点击 → 打开该人物的详情
   if (box) {
     box.querySelectorAll("[data-node-id]").forEach(el => {
@@ -818,13 +830,13 @@ function renderGraph(focusPersonId) {
       if (info.obj) seen.set(id, info);
     }
   }
-  // 也收孤立的人——图谱里也画出来，不然点不到
-  if (!focusPersonId) {
-    for (const p of persons) if (!seen.has(p.id)) seen.set(p.id, { type: "person", obj: p });
-  } else {
-    const focus = persons.find(x => x.id === focusPersonId);
-    if (focus && !seen.has(focus.id)) seen.set(focus.id, { type: "person", obj: focus });
-  }
+  // 也收孤立的实体——AIRP 那张图全部实体都在图上，
+  // 孤点本身就是信息（「这个人还没和任何人发生关系」）。
+  // 人物、地点、势力都要收，不管有没有 focusPersonId；
+  // focus 只控制视觉高亮，不控制是否入图。
+  for (const p of persons) if (!seen.has(p.id)) seen.set(p.id, { type: "person", obj: p });
+  for (const pl of places) if (!seen.has(pl.id)) seen.set(pl.id, { type: "place", obj: pl });
+  for (const f of factions) if (!seen.has(f.id)) seen.set(f.id, { type: "faction", obj: f });
 
   const nodes = [...seen.values()].filter(x => x.obj);
 
