@@ -4987,7 +4987,7 @@ main.ctx-open .drawer:not(.hidden) {
   gap: var(--sp-6);
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--bg); /* 与抽屉同底——--surface 在移动端宿主主题下是白色，会撞色成一条白条 */
   flex-shrink: 0;
   white-space: nowrap; /* 防「面板」竖排：窄宽度下不许逐字折行 */
   overflow: hidden;
@@ -7377,7 +7377,7 @@ html.has-app-bg .shell {
 }
 .ops-pending-item .mini:hover { border-color: var(--danger, #c66); color: var(--danger, #c66); }
 
-/* 底部语法提示 */
+/* 底部语法提示：默认折叠成一行，点开才展开——常驻展开在小屏上太突兀 */
 .ops-note {
   margin: 8px 12px 0;
   padding: 8px 10px;
@@ -7387,6 +7387,13 @@ html.has-app-bg .shell {
   color: var(--fg-muted);
   font-size: var(--fs-xs);
   line-height: 1.6;
+}
+.ops-note summary {
+  cursor: pointer;
+  color: var(--fg-muted);
+}
+.ops-note[open] summary {
+  margin-bottom: 6px;
 }
 .ops-note code {
   padding: 1px 4px;

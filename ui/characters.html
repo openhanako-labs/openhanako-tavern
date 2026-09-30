@@ -639,13 +639,14 @@
           <div id="ops-pending-list" class="ops-pending-list"></div>
         </div>
 
-        <div class="ops-note">
+        <details class="ops-note">
+          <summary>结算语法说明</summary>
           写完后模型会在正文里写 <code>[结算 操作名 …]</code> 标记；
           管线自动吃掉标记并把变量写回。语法：<br>
           <code>[结算 攻击 delta:hp=-20]</code>（增量）<br>
           <code>[结算 攻击 set:mp=0]</code>（直设）<br>
           <code>[结算 攻击 失败:体力不足]</code>（不改变量）
-        </div>
+        </details>
       </div>
     </div>
 
