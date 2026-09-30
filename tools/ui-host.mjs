@@ -145,7 +145,7 @@ const apps = {
   tts: makeApp(), codex: makeApp(), models: makeApp(), memory: makeApp(), ops: makeApp()
 };
 registerCharacterRoutes(apps.characters, charRepo, transfer, setRepo);
-registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo, { opsRepo });
+registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo, { opsRepo, codexRepo });
 registerSettingRoutes(apps.settings, setRepo, convRepo);
 registerVariableRoutes(apps.variables, varRepo, convRepo, charRepo);
 registerPresetRoutes(apps.presets, presetRepo);

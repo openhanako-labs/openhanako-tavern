@@ -73,19 +73,25 @@ export function renderCodexList() {
   }
 
   // 关系按 kind、体系按 system 排序（名称型）；其它三张表按 name。
-  const sorted = (currentTab === "relations" || currentTab === "powers")
-    ? list.slice().sort((a, b) => {
+  // 待确认的条目一律置底：它们还处在「能不能进图鉴」的审判阶段，不该跟已确认的混排。
+  const comparePrimary = (currentTab === "relations" || currentTab === "powers")
+    ? (a, b) => {
         const k = currentTab === "relations" ? "kind" : "system";
         const r = String(a?.[k] || "").localeCompare(String(b?.[k] || ""));
         return r !== 0 ? r : String(a?.id || "").localeCompare(String(b?.id || ""));
-      })
-    : list.slice().sort((a, b) =>
-        String(a?.name || "").localeCompare(String(b?.name || ""))
-      );
+      }
+    : (a, b) => String(a?.name || "").localeCompare(String(b?.name || ""));
+
+  const sorted = list.slice().sort((a, b) => {
+    const pa = a?.pending === true ? 1 : 0;
+    const pb = b?.pending === true ? 1 : 0;
+    if (pa !== pb) return pa - pb;   // 已确认在前，待确认置底
+    return comparePrimary(a, b);
+  });
 
   box.innerHTML = sorted.map(renderItem).join("");
 
-  // 事件委托（幂等）：编辑 / 删除 / 详情
+  // 事件委托（幂等）：编辑 / 删除 / 详情 / 确认 / 丢弃
   if (!box.dataset.bound) {
     box.dataset.bound = "1";
     box.addEventListener("click", async (e) => {
@@ -97,6 +103,8 @@ export function renderCodexList() {
       if (act === "edit") openEditor(id);
       else if (act === "del") deleteOne(id);
       else if (act === "detail") openDetail(id);
+      else if (act === "confirm") confirmOne(id);
+      else if (act === "discard") discardOne(id);
     });
   }
 }
@@ -174,6 +182,12 @@ function renderItem(item) {
     ? `<span class="codex-life codex-life-chat">这场</span>`
     : `<span class="codex-life codex-life-world">世界级</span>`;
 
+  // 待确认标识（C1-2）：黄点 + 文字徽章。颜色走 CSS 变量，不写死。
+  const isPending = item.pending === true;
+  const pendingBadge = isPending
+    ? `<span class="codex-pending" title="模型抽出来的候选，未确认"><span class="codex-pending-dot"></span>待确认</span>`
+    : "";
+
   // 关系与体系没有 name，hd 里拿 kind / system 或 id 尾号顶。人物/地点/势力照旧。
   const hdText = (tab === "relations")
     ? (item.kind || "未定关系")
@@ -181,18 +195,29 @@ function renderItem(item) {
       ? `${item.system || "（未命名）"} · ${item.axis || "（未定轴）"}`
       : name;
 
-  return `<div class="codex-item" data-id="${escapeHtml(item.id)}">
+  // 待确认行：主行为是“确认 / 丢弃”（确认 = 删 pending 标记；丢弃 = 删条目）。
+  // 编辑 / 删除 在待确认阶段不提供——确认之前先看看，确认之后走正常 CRUD。
+  const acts = isPending
+    ? `<div class="codex-acts">
+         <button class="mini codex-act-confirm" data-act="confirm" data-id="${escapeHtml(item.id)}">确认</button>
+         <button class="mini codex-act-discard" data-act="discard" data-id="${escapeHtml(item.id)}">丢弃</button>
+         <button class="mini" data-act="detail" data-id="${escapeHtml(item.id)}">详情</button>
+       </div>`
+    : `<div class="codex-acts">
+         <button class="mini" data-act="detail" data-id="${escapeHtml(item.id)}">详情</button>
+         <button class="mini" data-act="edit" data-id="${escapeHtml(item.id)}">编辑</button>
+         <button class="mini codex-del" data-act="del" data-id="${escapeHtml(item.id)}">删除</button>
+       </div>`;
+
+  return `<div class="codex-item${isPending ? ' codex-item-pending' : ''}" data-id="${escapeHtml(item.id)}">
     <div class="codex-hd">
       <span class="codex-name">${escapeHtml(hdText)}</span>
+      ${pendingBadge}
       ${lifeBadge}
     </div>
     ${tagHtml}
     ${meta}
-    <div class="codex-acts">
-      <button class="mini" data-act="detail" data-id="${escapeHtml(item.id)}">详情</button>
-      <button class="mini" data-act="edit" data-id="${escapeHtml(item.id)}">编辑</button>
-      <button class="mini codex-del" data-act="del" data-id="${escapeHtml(item.id)}">删除</button>
-    </div>
+    ${acts}
   </div>`;
 }
 
@@ -430,6 +455,42 @@ export async function deleteOne(id) {
   }
 }
 
+/** 确认（C1-2）：删掉 pending 标记，条目才真正进图鉴。走现有 PUT，不新开口子。 */
+export async function confirmOne(id) {
+  if (!id) return;
+  try {
+    await apiFetch(`codex/${currentTab}/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify({ pending: false, conversationId: state.currentConv?.id || null })
+    });
+    toast("已确认", "success");
+    if (detail?.id === id) renderDetail();
+    await loadOne(currentTab);
+    renderCodexList();
+  } catch (e) {
+    toast("确认失败：" + friendlyError(e), "error");
+  }
+}
+
+/** 丢弃（C1-2）：对待确认条目而言，“丢弃”就是删。走现有 DELETE。 */
+export async function discardOne(id) {
+  if (!id) return;
+  const ok = await confirmDialog(`丢弃这条待确认条目？`);
+  if (!ok) return;
+  try {
+    await apiFetch(`codex/${currentTab}/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      body: JSON.stringify({ conversationId: state.currentConv?.id || null })
+    });
+    if (detail?.id === id) closeDetail();
+    toast("已丢弃", "success");
+    await loadOne(currentTab);
+    renderCodexList();
+  } catch (e) {
+    toast("丢弃失败：" + friendlyError(e), "error");
+  }
+}
+
 // ── 详情（人物详情含追加制记录） ───────────────────
 
 export function openDetail(id) {
@@ -456,7 +517,9 @@ function renderDetail() {
     : detail.tab === "powers"
       ? `${one.system || "（未命名）"} · ${one.axis || "（未定轴）"}`
       : one.name || "（未命名）";
-  $("codex-detail-title").textContent = `${TAB_LABEL[detail.tab]}：${titleSuffix}`;
+  const isPending = one.pending === true;
+  const pendingTag = isPending ? "（待确认）" : "";
+  $("codex-detail-title").textContent = `${TAB_LABEL[detail.tab]}：${titleSuffix}${pendingTag}`;
   const body = $("codex-detail-body");
   if (!body) return;
 
@@ -556,6 +619,10 @@ function renderDetail() {
   if (appendBtn) appendBtn.hidden = detail.tab !== "persons";
   const graphBtn = $("codex-detail-graph");
   if (graphBtn) graphBtn.hidden = detail.tab !== "persons";
+
+  // 待确认阶段：删除按钮文案改成“丢弃”——语义更准确（不是删掉已收录的，是丢弃一个未确认的候选）。
+  const delBtn = $("codex-detail-delete");
+  if (delBtn) delBtn.textContent = isPending ? "丢弃" : "删除";
 }
 
 function row(k, v) {

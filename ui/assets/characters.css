@@ -7045,6 +7045,32 @@ html.has-app-bg .shell {
 .codex-life-chat { color: var(--fg); border-color: var(--accent-line); }
 .codex-life-world { color: var(--fg-muted); }
 
+/* 待确认（C1-2）：黄点 + 文字徽章。颜色走 --warn 变量（不写死）。
+   行本身也带一个 codex-item-pending 标记，左边加一根细黄条作为提示。 */
+.codex-pending {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+.codex-pending-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+.codex-item-pending {
+  border-left: 3px solid var(--warn);
+}
+.codex-acts .codex-act-confirm:hover { border-color: var(--success, #5a9e6f); color: var(--success, #5a9e6f); }
+.codex-acts .codex-act-discard:hover { border-color: var(--warn); color: var(--warn); }
+
 .codex-tags {
   display: flex;
   flex-wrap: wrap;
