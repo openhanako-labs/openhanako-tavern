@@ -88,12 +88,12 @@ eleckoi-tavern/
    ├─ rail.html            # functionPanel 页
    └─ assets/
       ├─ characters.css
-      ├─ icon-photo.png    # Card face（宿主读 ui/ 树）
+      ├─ cover.png         # Card face（宿主读 ui/ 树）
       └─ modules/          # 前端模块
 ```
 
-> 路径基准分两套，容易踩：`icon` 从 **App 根** 解析（`assets/icon.svg`）；
-> `face.image` 从 **`ui/` 树** 解析（写 `assets/icon-photo.png`，实际读 `ui/assets/icon-photo.png`）。
+> 路径基准分两套，容易踩：`icon` 从 **App 根** 解析（`assets/icon.png`）；
+> `face.image` 从 **`ui/` 树** 解析（写 `assets/cover.png`，实际读 `ui/assets/cover.png`）。
 
 ## 下一步
 

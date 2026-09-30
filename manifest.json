@@ -5,7 +5,7 @@
   "version": "0.2.0-m8",
   "description": "夜航船 · Night Ferry Tavern · Hana v2 App — 角色卡、对话、LLM、变量、设定库、提示词预设、工具、迁移。",
   "entry": "index.js",
-  "icon": "assets/icon.svg",
+  "icon": "assets/icon.png",
   "minAppVersion": "0.982.0",
   "capabilities": [
     "app/tools.expose-to-model",
