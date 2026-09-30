@@ -135,8 +135,9 @@ else ok("顶栏菜单 → 抽屉的事件源存在");
 //   ① #apprail 在，且**每个抽屉都能从左轨走到**（有面板没门 = 永远找不到）
 //   ② 每个入口都有图标**也有文字**——只给图标、靠 hover 才知道是什么，
 //      是把“不顺手”换个地方，所以这条也当成硬要求
-//   ③ #panel-head 在且带收起键（标签条没了，收起不能跟着没了）
-//   ④ **#ctx-tabs 不许回来**——它就是这次要消掉的那套重复
+//   ③ #panel-head 不许回来——它曾与抽屉自带 drawer-head 是同一句标题说两遍，
+//      2026-09-30 整条移除；收起键的职责归每个抽屉自己的 drawer-head ✕（在下面验）
+//   ④ **#ctx-tabs 不许回来**——它就是那次要消掉的那套重复
 const cssSrc = fs.readFileSync(path.join(root, "ui/assets/characters.css"), "utf8");
 
 const apprail = html.match(/<nav class="apprail"[\s\S]*?<\/nav>/);
@@ -176,10 +177,20 @@ if (html.includes('id="ctx-tabs"')) {
   fail("#ctx-tabs 又回来了——它和左轨重复，正是这一轮要消掉的那套导航");
 } else ok("#ctx-tabs 未复活（重复导航的回归护栏）");
 
-if (!/id="panel-head"/.test(html)) fail("缺面板抬头 #panel-head");
-else if (!/id="panel-title"/.test(html)) fail("面板抬头缺名字槽 #panel-title");
-else if (!/class="drawer-close ctx-close"/.test(html)) fail("面板抬头缺收起键（.ctx-close）");
-else ok("面板抬头：名字槽 + 收起键齐备");
+if (/id="panel-head"/.test(html)) {
+  fail("#panel-head 又回来了——抬头条与抽屉自带 drawer-head 重复，已于 2026-09-30 移除");
+} else if (/id="panel-title"/.test(html)) {
+  fail("#panel-title 残迹——抬头条已整条移除，别留零件");
+} else ok("#panel-head 未复活（重复标题的回归护栏）");
+
+// 抬头条没了，收起职责归抽屉自己的头：每个抽屉容器都必须带 drawer-close。
+{
+  const drawers = html.match(/class="drawer[\s"]/g) || [];
+  const closers = html.match(/class="[^"]*drawer-close/g) || [];
+  if (closers.length < drawers.length) {
+    fail(`抽屉收起键不够：${drawers.length} 个抽屉只有 ${closers.length} 个 drawer-close`);
+  } else ok(`收起键齐备：${drawers.length} 个抽屉 / ${closers.length} 个 drawer-close`);
+}
 
 // 左轨宽度必须有单一来源（.shell 的 --rail-w）。读不出说明骨架规则被改动过。
 const railW = (cssSrc.match(/--rail-w,\s*(\d+)px/) || [])[1];
@@ -209,7 +220,7 @@ const mustHave = [
   // sidebar / collapse / expand / characters-list / conversations-list
   // 五项随设计移除——测试断言的是结构，结构变了断言跟着变。
   ["左轨（唯一导航）", 'id="apprail"'],
-  ["面板抬头", 'id="panel-head"'],
+  // 「面板抬头」已从 mustHave 移除并翻转为反向护栏（见上方 #panel-head 检查）
   ["顶栏 ⋯", 'id="app-more-btn"'],
   ["多存档选择器", 'id="conv-picker-modal"'],
   ["预设编辑器", 'id="preset-editor-modal"']
