@@ -3,7 +3,7 @@
 - 日期：2026-09-29
 - 方案：奥菲莉娅
 - 决策：月曦夜
-- 状态：**v2.5 · R1/Q1/Q2/Q3/S1/S2/C1 一期、C2、C3 后端、C3 UI 二期 已完成**（C1 `1ef4268` + fix `b3f37c9`，经真实 UI 点击测试验收；C2 `0497887`；C3 `004ad82`；C3 UI `661183e` + fix `c133c43` + fix2 `22cbbe3`）。剩：图01原图校准八区块版面
+- 状态：**v2.6 · R1/Q1/Q2/Q3/S1/S2/S3/C1 一期、C2、C3 后端、C3 UI 二期 已完成**（C1 `1ef4268` + fix `b3f37c9`，经真实 UI 点击测试验收；C2 `0497887`；C3 `004ad82`；C3 UI `661183e` + fix `c133c43` + fix2 `22cbbe3`；S3 `34242df`）。剩：图01原图校准八区块版面
 - 制定流程：调度协议（dispatching-protocol）——已核实源码、标出修正项、按复杂度分级、给出分工建议
 
 ---
@@ -199,7 +199,7 @@ C 线关系边已定（独立表），C1 可在我出完数据模型一页纸后
 |---|---|---|
 | 预设与 API | `lib/presets/` | 半有（缺多套 API 预设、按用途分选） |
 | 正文与选择 | `suggestions.js` | 九成（差每轮自动 → Q2） |
-| 剧情规划 + 记忆 | `director.freeform` + `allocateBudget` | 三成（→ S2） |
+| 剧情规划 + 记忆 | `director.freeform` + `director.pacing` + `allocateBudget` | ✅ 已落地（S2 + S3 `34242df` → 节奏四选项注入） |
 | 资源/操作/结算 | `lib/board/` | ✅ 已落地（C2 `0497887` → `lib/ops/`） |
 | 地图与人物图鉴 | 无 | ✅ 一期已落地（C1 `1ef4268` → `lib/codex/` 三表） |
 | 状态栏 | `status-block` + `diffVars` + var-chip | ✅ 已落地（S1） |
