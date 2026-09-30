@@ -1,101 +1,134 @@
-# ElecKoi Tavern · M0 探针
+# 夜航船 · Night Ferry Tavern
 
-Hana v2 App · 用于验证宿主能力（B11-B20）
+Hana v2 上的角色扮演伴侣 App —— 角色卡、对话、设定库、变量、提示词预设、图鉴、插图、语音，以及基于倒排索引 + 预算账本的记忆召回。
 
-**阶段**：M0 · 骨架 + 探针  
-**版本**：0.1.0-probe  
-**宿主版本**：≥ 0.982.0
+## 功能
 
----
-
-## 目标
-
-M0 是 ElecKoi Tavern 的第一阶段：不写业务，只验证 Hana v2 宿主 API。
-
-`04-open-questions.md` 里的 **B 类问题**（B11-B20）都需要实测：
-
-| 编号 | 探针项 |
+| 功能 | 说明 |
 |---|---|
-| B11 | `defineApp` 生命周期是否按预期触发 |
-| B12 | install-confirmed grants 是否真的在 defineApp 前生效 |
-| B13 | `sdk.dataDir` 卸载是否保留 |
-| B14 | `contributes.cards[].face` 图片要求是否满足 |
-| B15 | `hana.ui.resize` 是否有上限 |
-| B16 | `sdk.bus.subscribe` 是否是只读投影 |
-| B17 | `sdk.config` 时机（本探针暂未涉及） |
-| B18 | `sdk.agents` / `contributes.agentTypes` 存在性 |
-| B19 | `contributes.ui.inputStatus` 输入栏控件（已声明一个） |
-| B20 | `contributes.messageRenderers`（本探针暂未涉及） |
+| **角色卡** | CRUD、外观、头像、性格、背景，本地 JSON 存储 |
+| **对话** | 多角色会话，流式回复，历史持久化，前情提要压缩 |
+| **设定库 / 世界书** | 条目按触发条件注入提示词，跨对话生效 |
+| **变量** | 定义 + 运行时赋值，注入对话提示词 |
+| **提示词预设** | 系统提示词的拼接顺序数据化，可编辑 |
+| **图鉴** | 人物 / 地点 / 势力三张表，对话中可增量登记 |
+| **黑板** | 世界的实时状态记录，三个正交标签（地点 / 时间 / 视角） |
+| **规则引擎** | 用户手编的 JSON 规则，条件求值 + 效果结算（自研 AST，不用 eval） |
+| **插图 / 生成** | 角色立绘、场景插图，走宿主 `media.generate` |
+| **文字转语音** | 多提供商（OpenAI / Azure），凭据走宿主 `provider.credentials` |
+| **记忆召回** | 倒排索引预热 + ReAct 轻循环，命中高置信直注，失败静默降级 |
+| **多导演** | 分镜式对话流，多角色按规则接管发言 |
 
 ## 安装
 
+1. 把目录放进 `<HANA_HOME>/apps/eleckoi-tavern/`。**目录名必须一字不差等于 `manifest.id`。**
+2. 打开 Market → Installed App，批准该应用（会列出 capabilities）。
+3. 最低 Hana 版本：`0.982.0`。
+
+装完后改代码在详情页 Reload 即可；`tools/` 与 `index.js` 改动需重启宿主。
+
+## 工具接口
+
+对外暴露 15 个工具（`app/tools.expose-to-model`）：
+
+```
+tavern_list_characters          tavern_get_character
+tavern_compose_card             tavern_apply_avatar
+tavern_generate_portrait
+tavern_create_conversation      tavern_list_conversations
+tavern_send_message
+tavern_list_variables           tavern_set_variable
+tavern_list_settings            tavern_get_active_settings
+tavern_embed                    tavern_embed_status
+```
+
+角色卡 / 对话 / 变量 / 设定工具按组注册（`characters` / `conversations` / `variables` / `settings` / `media` / `embed` / `gen`）。
+
+## 网络访问
+
+`manifest.network` 白名单里放的是：
+
+- 硅基流动 API（`api.siliconflow.cn`）—— 文字/图像生成
+- Azure / OpenAI TTS
+- 萌娘百科、arXiv —— 用于文档 / 引用抓取
+
+未列入的域名一律不通。`allowLocalhost: true` 允许连本机服务。
+
+## 数据存储
+
+所有数据都落在 `<HANA_HOME>/app-data/eleckoi-tavern/`，不进本仓库（`.gitignore` 已挡）。
+
+结构大致是：
+
+```
+characters/         # 角色卡
+conversations/      # 对话历史 + 前情提要
+codex/              # 图鉴：persons / places / factions
+board-cells.json    # 黑板
+presets/            # 提示词预设
+variables/          # 变量定义
+settings/           # 世界书条目
+memory.json         # App 级偏好（记忆开关、召回预算等）
+```
+
+**角色卡和对话数据不会公开。** 本仓库只包含源码。
+
+## 目录结构
+
+```
+manifest.json       # Hana v2 manifest（capabilities / network / contributes）
+index.js            # defineApp 入口
+lib/                # 26 个业务模块
+  characters/       # 角色卡
+  conversations/    # 对话
+  codex/            # 图鉴（人物 / 地点 / 势力）
+  board/            # 黑板
+  lore/             # 世界书
+  director/         # 规则引擎（自研 AST）
+  presets/          # 提示词预设
+  variables/        # 变量
+  settings/         # 世界书条目
+  appearance/       # 头像 / 立绘
+  gen/              # 文本生成
+  illustration/    # 场景插图
+  media/            # 媒体上传 / 存储
+  memory/           # 记忆面板配置
+  recall/           # 记忆召回（倒排索引 + ReAct 轻循环）
+  tts/              # 语音
+  llm/              # LLM 服务封装
+  models/           # 模型管理
+  embed/            # 向量化
+  macros/           # 宏
+  regex/            # 正则规则
+  migration/        # 数据迁移
+  probe/            # 宿主能力探针（工具注册入口）
+  tools/            # 后端路由聚合
+ui/                 # 前端
+  characters.html   # 主卡片
+  rail.html         # 侧栏
+  assets/           # CSS / 模块 / 图片
+tools/              # 本地开发脚本（构建、审计、抽取）
+sdk/                # 宿主 bundle 的本地副本（调试用）
+```
+
+## 本地开发
+
 ```powershell
-# 1. 拷贝到 HANA_HOME/apps/
-$devDir = "W:\Games\Hanako\Work\开发\eleckoi-tavern"
-$installDir = "$env:USERPROFILE\.hanako\apps\eleckoi-tavern"
-Copy-Item $devDir $installDir -Recurse -Force
+# 依赖
+npm install
 
-# 2. 重启 Hana（或触发 App 加载）
-# 3. 在设置页批准安装（会列出 capabilities）
+# 前端热更新
+npm run ui-watch
 
-# 4. 打开探针卡片
-#    在聊天里输入："打开 ElecKoi Tavern 探针面板"
-#    或者调用工具：eleckoi_tavern_probe
+# 后端跑测试
+node --test test/**/*.mjs
+
+# 全量回归
+node scripts/regression-all.mjs
 ```
 
-## 验证步骤
+项目内自带一套 `check-*.mjs` 静态检查（CSS 引用完整性、DOM 引用、导入图、路由健康等），共 25 项，全绿是发布前的硬门槛。
 
-1. **App 加载成功**：Hana 设置 → App 列表里出现 `eleckoi-tavern`，状态是 `active`
-2. **capabilities 批准**：安装时弹窗列出 3 个能力，全部批准
-3. **卡片能打开**：右键聊天流"打开卡片"或调用工具
-4. **输入栏出现 Probe 按钮**：如果 Hana ≥ 0.970.9
-5. **调用 `eleckoi_tavern_probe` 工具**：模型能拿到 probe 状态 JSON
-6. **dataDir 落盘**：`%USERPROFILE%\.hanako\apps\eleckoi-tavern\userdata\probe-state.json` 存在
+## 许可
 
-## 交付物
-
-**M0 探针报告**：`W:\Games\Hanako\Work\计划\ElecKoi-Hanako-Tavern\M0-host-probe.md`
-
-跑完后按以下模板填写：
-
-```markdown
-## M0 宿主能力实测报告
-
-| B 编号 | 探针项 | 结果 | 备注 |
-|---|---|---|---|
-| B11 | defineApp 生命周期 | ✅ / ❌ | … |
-| B12 | install-confirmed grants | … | … |
-| … | … | … | … |
-
-## 结论
-
-- 已确认能力：…
-- 需绕行：…
-- M1 可以开工 / M1 需等待
-```
-
-## 文件结构
-
-```
-eleckoi-tavern/
-├─ manifest.json           # V2 manifest · 3 个 capabilities
-├─ index.js                # defineApp 入口 · 探针逻辑
-├─ assets/
-│  └─ icon.svg             # App icon（宿主读 App 根下的 assets/）
-├─ sdk/                    # 宿主 bundle 的本地副本
-└─ ui/
-   ├─ characters.html      # 主页面（卡片 route 指向它）
-   ├─ rail.html            # functionPanel 页
-   └─ assets/
-      ├─ characters.css
-      ├─ cover.png         # Card face（宿主读 ui/ 树）
-      └─ modules/          # 前端模块
-```
-
-> 路径基准分两套，容易踩：`icon` 从 **App 根** 解析（`assets/icon.png`）；
-> `face.image` 从 **`ui/` 树** 解析（写 `assets/cover.png`，实际读 `ui/assets/cover.png`）。
-
-## 下一步
-
-- M0 探针跑通 → 填 M0-host-probe.md → 交月曦夜拍板 A1
-- A1 拍板后 → M1（角色卡 CRUD）开工
+AGPL-3.0，跟组织其他 App 保持一致。

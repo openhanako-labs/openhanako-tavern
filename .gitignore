@@ -4,6 +4,9 @@ _recovery/
 node_modules/
 *.log
 
+# 内部工作文档（方案 / 规格 / 笔记），不公开
+docs/
+
 # 宿主侧布局配置的备份快照（调试时从宿主目录抄出来的，不是 App 源码）
 host-backups/
 
