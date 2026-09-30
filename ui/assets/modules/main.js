@@ -26,6 +26,7 @@ import { bindMemory } from "./memory.js";
 import { bind as bindVarDiffModal } from "./var-diff-modal.js";
 import { bindImage } from "./image.js";
 import { bindScene } from "./scene.js";
+import { bindModels } from "./models.js";
 import { bindIllustrate } from "./illustrate.js";
 import { bindAppearance, loadAppearance } from "./appearance.js";
 import { bindCommand, bindScrollBottom } from "./command.js";
@@ -202,6 +203,10 @@ bindVarDiffModal();
 
 // 记忆面板（S2）：短期轮数 / 总结字数 / 总结提示词。入口在工具抽屉。
 bindMemory();
+
+// 模型分选面板：按用途二态下拉。漏绑过——只动态 import 了 openModels，
+// bindModels 从没被调，弹窗打开后 × / 取消 / 遮罩全是摆设（2026-09-30 补上）。
+bindModels();
 
 // 出图设置（同样在 ⋯ 菜单里）：宿主供应商 / 本机 ComfyUI 两条路
 bindImage();
