@@ -52,33 +52,9 @@ export function toggleBoardColumn(force) {
 }
 
 /**
- * 右栏面板的名字。抬头上的字就取这里。
- *
- * 为什么要抬头：左轨搬到左边之后，右栏只剩“从右边滑出来的一条”，
- * 不写名字就不知道开的是哪一个；而原来的四个标签（与左轨重复）已删，
- * 不能靠“哪颗标签亮着”来认路了。
+ * PANEL_TITLES 与 syncPanelTitle 已随抬头条一起删——抬头条和抽屉自带的
+ * drawer-head 是同一句标题说两遍。抽屉自己的头（标题 + ✕）就是认路标记。
  */
-const PANEL_TITLES = {
-  character: "角色",
-  settings: "设定库",
-  director: "剧情公式",
-  board: "世界",
-  variables: "变量",
-  codex: "图鉴",
-  ops: "操作",
-  gallery: "图库",
-  presets: "提示词预设",
-  regex: "正则规则",
-  tools: "工具",
-  migration: "迁移"
-};
-
-/** 面板抬头：跟着 openDrawerName 走。 */
-function syncPanelTitle() {
-  const el = document.getElementById("panel-title");
-  if (!el) return;
-  el.textContent = openDrawerName ? (PANEL_TITLES[openDrawerName] || openDrawerName) : "";
-}
 
 /**
  * 高亮跟着当前面板走。
@@ -102,7 +78,6 @@ function syncTabs() {
     else on = !!openDrawerName && key === openDrawerName;
     btn.classList.toggle("on", on);
   });
-  syncPanelTitle();
   syncRailBadges();
 }
 

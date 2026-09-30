@@ -251,21 +251,7 @@ main.board-open .board-col { display: flex; }
 .board-toggle:hover { border-color: var(--accent-line); color: var(--accent); }
 main.board-open .board-toggle { border-color: var(--accent-line); color: var(--accent); }
 
-.ctx-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--fg-muted);
-  font: inherit;
-  font-size: var(--fs-md);
-  cursor: pointer;
-}
-
-.ctx-close:hover { background: var(--surface-2); color: var(--fg); }
+/* .ctx-close 已删——它只属于被移除的面板抬头条。 */
 
 #view-chat {
   grid-column: 2;
@@ -4980,45 +4966,8 @@ main.ctx-open .drawer:not(.hidden) {
 /* 侧栏弹性：让侧栏内容撑满高度 */
 .rail-grow { flex: 1 1 auto; min-height: 0; }
 
-/* 面板头：抽屉/侧栏的标题栏 */
-.panel-head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-6);
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg); /* 与抽屉同底——--surface 在移动端宿主主题下是白色，会撞色成一条白条 */
-  flex-shrink: 0;
-  white-space: nowrap; /* 防「面板」竖排：窄宽度下不许逐字折行 */
-  overflow: hidden;
-}
-
-/*
- * 面板抬头只在右栏真的开着时才存在。
- *
- * 右栏收起时它仍在网格里：第一列宽度是 var(--board-w, 0px)，
- * 于是它被压成 24px 宽的一条，配上 .panel-head 的 overflow:hidden
- * 与 white-space:nowrap，「面板」两个字被裁成一道竖边 ——
- * 屏幕左上角那块说不清是什么的白方块。
- *
- * 判据用 main.ctx-open：它由 shell.js 的 openDrawer/closeDrawer 加减，
- * 就是「右栏开着」这个事实的既有表示，不新造状态。
- */
-#panel-head { display: none; }
-
-main.ctx-open #panel-head { display: flex; }
-
-/* 面板标题 */
-.panel-title {
-  font-size: var(--fs-md);
-  font-weight: 600;
-  color: var(--fg);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* .panel-head / #panel-head / .panel-title 已删——抬头条与抽屉自带的 drawer-head
+ * 是同一句标题说两遍，整个移除（HTML 里的 nav#panel-head 也同步删了）。 */
 
 /* 页脚：右下角的版权/状态行 */
 .foot {
