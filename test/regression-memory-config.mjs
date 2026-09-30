@@ -46,13 +46,30 @@ console.log("\n=== 记忆配置（S2） ===\n");
 // ── 默认值 ────────────────────────────────────────────
 
 ok("DEFAULTS 与仓库现状一致（改这些默认值就等于改现状）", () => {
-  assert.deepEqual(DEFAULTS, { keepRecent: 4, summaryMaxChars: 500, summaryPrompt: "" });
+  // 基线更新（2026-09-30）：新增 recallEnabled/recallBudget/recallMaxLoops 三格（S3 预热召回）。
+  // 旧基线只包含 keepRecent/summaryMaxChars/summaryPrompt；新增三格均为“开”（与现状对齐）。
+  assert.deepEqual(DEFAULTS, {
+    keepRecent: 4,
+    summaryMaxChars: 500,
+    summaryPrompt: "",
+    recallEnabled: true,
+    recallBudget: 8000,
+    recallMaxLoops: 3
+  });
   assert.equal(SUMMARY_MAX_CHARS, 500, "summaryMaxChars 默认对齐 summary-llm 常量");
 });
 
 ok("emptyConfig：等价于「什么都没配」", () => {
   const c = emptyConfig();
-  assert.deepEqual(c, { keepRecent: 4, summaryMaxChars: 500, summaryPrompt: "" });
+  // 基线更新（2026-09-30）：新增 recall* 三格。
+  assert.deepEqual(c, {
+    keepRecent: 4,
+    summaryMaxChars: 500,
+    summaryPrompt: "",
+    recallEnabled: true,
+    recallBudget: 8000,
+    recallMaxLoops: 3
+  });
 });
 
 // ── 归一化 ────────────────────────────────────────────
@@ -147,7 +164,15 @@ await okAsync("readConfig：文件不存在时返回默认（不炸）", async (
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "eleckoi-memory-"));
   try {
     const r = await readConfig(tmp);
-    assert.deepEqual(r, { keepRecent: 4, summaryMaxChars: 500, summaryPrompt: "" });
+    // 基线更新（2026-09-30）：新增 recall* 三格。
+    assert.deepEqual(r, {
+      keepRecent: 4,
+      summaryMaxChars: 500,
+      summaryPrompt: "",
+      recallEnabled: true,
+      recallBudget: 8000,
+      recallMaxLoops: 3
+    });
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
