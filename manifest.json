@@ -57,7 +57,7 @@
         },
         "closable": false,
         "face": {
-          "image": "assets/icon-photo.png"
+          "image": "assets/cover.png"
         }
       }
     ],
