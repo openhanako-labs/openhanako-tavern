@@ -5976,6 +5976,48 @@ main.ctx-open #panel-head { display: flex; }
 }
 .de-field-tags { flex: 2 1 0; }
 
+/* 节奏四选项 chip 行（S3 / AIRP 图 07）。
+   与 speaker-chip 同族：虚线边框、选中态 accent 描边 + 加粗。
+   多选叠加，空 = 不注入。 */
+.de-pacing {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  flex-shrink: 0;
+}
+.de-pacing-label {
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  flex: 0 0 auto;
+}
+.de-pacing-chips {
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.dir-pacing-chip {
+  padding: 3px 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: border-color var(--t) var(--ease), color var(--t) var(--ease), background var(--t) var(--ease);
+}
+.dir-pacing-chip:hover {
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+.dir-pacing-chip.on {
+  border-style: solid;
+  border-color: var(--accent-line);
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
 /* 列表行的优先级徽章。
    照设定库的规矩：**只在非默认（100）时才画**——
    每条都挂一个「普通」等于没信息。 */

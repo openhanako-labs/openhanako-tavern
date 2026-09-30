@@ -86,8 +86,8 @@ export function renderGraph(data, focusPersonId) {
   const nodes = [...seen.values()].filter(x => x.obj);
 
   const W = 900, H = 520;
-  const cx = W / 2, cy = H / 2 + 20;
-  const R = Math.min(W, H) * 0.36;
+  const cx = W / 2, cy = H / 2;
+  const R = Math.min(W, H) * 0.42;
   const n = nodes.length;
 
   // 环形布局

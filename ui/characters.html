@@ -1996,6 +1996,19 @@
           <input id="dir-tags" type="text" placeholder="节奏, 日常">
         </div>
       </div>
+      <!--
+        节奏四选项（S3 / AIRP 图 07）。
+        多选叠加，空 = 不注入。选中态用 accent，与 speaker-chip 同族。
+      -->
+      <div class="de-pacing">
+        <span class="de-pacing-label">节奏</span>
+        <div id="dir-pacing-chips" class="de-pacing-chips">
+          <button type="button" class="dir-pacing-chip" data-pacing="daily">更日常</button>
+          <button type="button" class="dir-pacing-chip" data-pacing="drama">更戏剧</button>
+          <button type="button" class="dir-pacing-chip" data-pacing="cast">更多人物</button>
+          <button type="button" class="dir-pacing-chip" data-pacing="bond">更多感情线</button>
+        </div>
+      </div>
       <div class="de-json">
         <div id="dir-editor-host" class="dir-editor-host"></div>
       </div>

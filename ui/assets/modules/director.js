@@ -265,6 +265,13 @@ function renderEditor() {
   const tagsEl = $("dir-tags");
   if (tagsEl) tagsEl.value = Array.isArray(d.tags) ? d.tags.join(", ") : "";
 
+  // 节奏四选项（S3）：从 draft 读到 chips
+  const pacing = Array.isArray(d.pacing) ? d.pacing : [];
+  document.querySelectorAll(".dir-pacing-chip").forEach(chip => {
+    const key = chip.dataset.pacing;
+    chip.classList.toggle("on", pacing.includes(key));
+  });
+
   // 删除/试算只在已存的条目上有意义（新配方还没 id）
   const del = $("dir-del");
   const sim = $("dir-sim");
@@ -416,6 +423,11 @@ function readEditor() {
     .map(s => s.trim())
     .filter(Boolean);
 
+  // 节奏四选项（S3）：从 chips 读到数组
+  const pacing = [...document.querySelectorAll(".dir-pacing-chip.on")]
+    .map(chip => chip.dataset.pacing)
+    .filter(Boolean);
+
   let parsed;
   try {
     parsed = currentDraft();
@@ -430,6 +442,7 @@ function readEditor() {
     order,
     priority,
     tags,
+    pacing,
     state: parsed.state && typeof parsed.state === "object" ? parsed.state : {},
     rules: Array.isArray(parsed.rules) ? parsed.rules : [],
     freeform: typeof parsed.freeform === "string" ? parsed.freeform : ""

@@ -111,6 +111,12 @@ document.getElementById("dir-cancel")?.addEventListener("click", closeDirectorEd
 document.getElementById("director-editor-close")?.addEventListener("click", closeDirectorEditor);
 document.getElementById("dir-del")?.addEventListener("click", deleteEditingDirector);
 document.getElementById("dir-sim")?.addEventListener("click", simulateDirector);
+// 节奏四选项 chip 点击（S3）
+document.getElementById("dir-pacing-chips")?.addEventListener("click", (e) => {
+  const chip = e.target.closest(".dir-pacing-chip");
+  if (!chip) return;
+  chip.classList.toggle("on");
+});
 
 // 设定库搜索：改一个字就重渲染。106 条重排不卡，不必防抖。
 // 重渲染用的是内存里那份 state.settingList——不重拉网络。
