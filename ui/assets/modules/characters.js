@@ -421,6 +421,26 @@ export async function commitImport() {
 
     closeImportModal();
     await refreshCharacters();
+
+    // 导完下一步是开聊，不是散场——（月曦夜真机反馈：导完要自己找新卡在哪）。
+    // 只导了一张就直开；多张导成功就问从哪张开始。
+    if (ok.length > 0) {
+      const fresh = (await apiFetch("conversations").catch(() => null));
+      const okIds = ok.map(r => r.id).filter(Boolean);
+      let targetId = okIds[0];
+      if (okIds.length > 1) {
+        const { choiceDialog } = await import("./core.js");
+        const picked = await choiceDialog({
+          title: "导入了多张卡，先开哪一场？",
+          options: ok.map(r => ({ value: r.id, label: r.name || "（未命名）" }))
+        });
+        if (picked) targetId = picked;
+      }
+      if (targetId) {
+        const { startNewConversation } = await import("./shell.js");
+        await startNewConversation(targetId);
+      }
+    }
   } catch (e) {
     console.error("[Import] commit failed:", e);
     toast("导入失败: " + friendlyError(e), "error");
