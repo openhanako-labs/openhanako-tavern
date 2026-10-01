@@ -79,6 +79,11 @@ const DYNAMIC_CLASSES = [
   "core", "common", "rare",   // settings.js 常用度三档（PRIORITY_TIERS.cls）
   "section-head",   // settings.js 分组抬头（整个是变量 headCls）
   "is-portrait",    // gallery.js 图库格子「这是立绘」标记
+  // 2026-10-01 补 3 条 —— 书视图（settings.js renderBookSection）：
+  //   class="${cls}" 整个是变量，静态扫不到；三类的开关都是书头里的布尔字段拼的。
+  "setting-book",   // settings.js 书容器（顶节）
+  "book-off",       // settings.js 书已关状态
+  "is-orphan",      // settings.js 未归档书（bookId 空 / 指向已删书）
 ];
 
 let pass = 0;

@@ -7886,3 +7886,116 @@ html.has-app-bg .shell {
 #convs .item:hover .conv-del,
 #convs .item:focus-within .conv-del { opacity: 1; }
 #convs .conv-del:hover { background: var(--surface-2); color: var(--fg); }
+
+/* ═════════ 世界书（2026-10-01）· 书 → 条目 两级视图 ═════════
+   书视图是「书 = 顶节，书头带开关 + 计数 + 更多」；
+   书已关时整节压暗，条目开关隐藏（书关优先，不误导）。
+   旧维度（trigger / category / priority）保留为平铺备选，
+   书视图之外不出书头。 */
+
+#settings-list .setting-book {
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--panel, #1c1c1c) 65%, transparent);
+}
+#settings-list .setting-book:last-child { margin-bottom: 0; }
+
+/* 书头 */
+#settings-list .book-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: color-mix(in srgb, var(--panel-2, #262626) 55%, transparent);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+#settings-list .book-head .book-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  color: var(--fg);
+}
+#settings-list .book-head .book-count {
+  flex: none;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+#settings-list .book-head .book-scope-badge {
+  flex: none;
+  font-size: var(--fs-2xs);
+  color: var(--fg-muted);
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--panel-3, #2a2a2a);
+}
+#settings-list .book-head .book-scope-badge.mine {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent, #7dd3fc) 18%, transparent);
+}
+#settings-list .book-head .book-more {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: var(--fs-sm);
+  line-height: 1;
+}
+#settings-list .book-head .book-more:hover {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent, #7dd3fc) 15%, transparent);
+}
+
+/* 书已关：整节压暗；条目开关隐藏（书关优先） */
+#settings-list .setting-book.book-off {
+  opacity: 0.55;
+}
+#settings-list .setting-book.book-off .book-title {
+  color: var(--fg-muted);
+}
+#settings-list .setting-book.book-off .setting-card .switch {
+  display: none;
+}
+#settings-list .setting-book.book-off .setting-card {
+  opacity: 0.85;
+}
+
+/* 书内子节（常驻/触发/已停用） */
+#settings-list .book-section {
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--border);
+}
+#settings-list .book-section:last-child { border-bottom: none; }
+/* 书内的 section-head 不吸顶（外层已经有书头了） */
+#settings-list .book-section .section-head {
+  position: static;
+  padding: 4px 0 3px;
+  background: transparent;
+}
+#settings-list .book-section .section-title { font-size: var(--fs-xs); font-weight: 600; }
+#settings-list .book-section .section-hint { font-size: var(--fs-2xs); }
+#settings-list .book-section .section-n { font-size: var(--fs-2xs); }
+
+/* 「未归档」书（回填前或删书后的兜底）——用虚线框表示临时状态 */
+#settings-list .setting-book.is-orphan {
+  border-style: dashed;
+  opacity: 0.7;
+}
+
+/* 书视图的空态提示（本卡相关书全无） */
+#settings-list .book-empty-hint {
+  padding: 12px 14px;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+  text-align: center;
+}

@@ -120,7 +120,8 @@ function charNameOf(id) {
  */
 const view = {
   page: 1,
-  groupBy: "trigger",
+  groupBy: "book",   // 2026-10-01 默认改为书视图（书 → 条目 两级）；
+                     // trigger / category / priority 保留为平铺备选
   sortBy: "order",
   selected: new Set(),
   /*
@@ -129,6 +130,9 @@ const view = {
    * 不需要跨模块共享。
    */
   scopeFilter: "relevant",
+  // 书表：loadSettings 时与条目一起拉。book 视图直接用它渲染，
+  // 其余视图（trigger / category / priority）不依赖它。
+  books: [],
   // 类目表 —— loadSettings 时从后端拉
 };
 
@@ -153,6 +157,16 @@ export async function loadSettings() {
         // 后端未注册 categoryStore（老版本）时留空数组，界面上就全是「未分类」
         state.categoryList = [];
       }
+    }
+
+    // 书表：每条一次都拉（轻量，后端已附 entryCount），UI 依赖它渲染书视图。
+    // 拿不到不阻断：退化成「未归档」单组。
+    try {
+      const booksRes = await apiFetch("settings/books");
+      const booksData = booksRes.data || booksRes;
+      view.books = Array.isArray(booksData) ? booksData : [];
+    } catch {
+      view.books = [];
     }
 
     const res = await apiFetch("settings");
@@ -275,6 +289,15 @@ export function renderSettings(list) {
 
   // 分组
   const dim = GROUP_BY[view.groupBy] || GROUP_BY.trigger;
+
+  // ═══ 书视图分支（2026-10-01）═════════════════════
+  // 书视图不共享下面的平铺分组逻辑：它把条目先按 bookId 归集，
+  // 再把每本书内的条目按 SETTING_SECTIONS 分子节。不分页——
+  // 书数很少（4~几十本），子节内自己就够短。
+  if (view.groupBy === "book") {
+    return renderBookView(shown);
+  }
+
   const sectionOf = dim.sectionOf;
   const groupMap = new Map();
   for (const s of shown) {
@@ -320,6 +343,374 @@ export function renderSettings(list) {
 
   // 批量条
   renderBatchBar();
+}
+
+// ═══════ 书视图（2026-10-01）═════════════
+//
+// 书 → 条目 两级：
+//   · 顶节 = 一本书
+//   · 书头 = [开关] [书名] [条目数] [本卡/全局徽] [⋯：重命名/删除书]
+//   · 书内 = 常驻 / 触发 / 已停用 三子节（复用 SETTING_SECTIONS）
+//
+// 范围过滤在书视图下的口径（C5）：本卡的书 + 全局书留下，其他卡的书收起来。
+// 「全部」scope 下才会把别卡的书也摊开。
+
+/** 当前上下文角色 id。与 currentCharacterId 同名，避免重复 import。 */
+function _bookCurrentCharId() { return currentCharacterId(); }
+
+/** 书视图渲染。不分页；直接扫全量条目。 */
+function renderBookView(shown) {
+  const curId = _bookCurrentCharId();
+  const scopeAll = view.scopeFilter === "all";
+
+  // 本卡相关的书（本卡 + 全局）
+  const relatedBookIds = new Set();
+  for (const b of view.books) {
+    const bid = String(b.id);
+    const isGlobal = !String(b.characterId || "").trim();
+    const isMine = curId && String(b.characterId) === curId;
+    if (isMine || isGlobal) relatedBookIds.add(bid);
+  }
+
+  // 按 bookId 归集条目
+  const byBook = new Map();
+  for (const b of view.books) byBook.set(String(b.id), { book: b, items: [] });
+  // 未归档：bookId 空 / 指向已不存在的书
+  const orphan = { book: { id: "__orphan__", name: "（未归档）", characterId: "", source: "", enabled: true }, items: [] };
+  for (const s of shown) {
+    const bid = String(s.bookId || "").trim();
+    if (bid && byBook.has(bid)) byBook.get(bid).items.push(s);
+    else if (bid) orphan.items.push(s);  // 指向已删的书，也归“未归档”
+    else orphan.items.push(s);           // 空 bookId
+  }
+
+  // scope 过滤：relevant 只留本卡 + 全局；all 展示全部
+  const sections = [];
+  for (const [bookId, { book, items }] of byBook) {
+    if (!scopeAll && !relatedBookIds.has(bookId)) continue;
+    sections.push({ book, items, orphan: false });
+  }
+  // 未归档也遵 scope：它不属于任何卡，归全局，relevant 下就保留
+  // （因为池过滤已经处理了 charId 属于别卡的条目，能到这里的都是本卡/全局）
+  if (orphan.items.length > 0) {
+    sections.push({ book: orphan.book, items: orphan.items, orphan: true });
+  }
+
+  // 排序：本卡的书 → 全局书 → 其他卡的书（按卡名）
+  sections.sort((a, b) => {
+    const rankA = bookRank(a.book);
+    const rankB = bookRank(b.book);
+    if (rankA !== rankB) return rankA - rankB;
+    return String(a.book.name || "").localeCompare(String(b.book.name || ""), "zh-Hans-CN");
+  });
+
+  if (sections.length === 0) {
+    dom.settingsListEl.innerHTML = emptyHtml({
+      ico: "▤",
+      title: "本卡未绑定世界书条目",
+      desc: "本场相关（本卡 + 全局）是 0 条。把上面切到「全部」看别卡的书。"
+    });
+    dom.settingsListEl.nextElementSibling?.classList.add("hidden");
+    dom.settingsPagerEl?.classList.add("hidden");
+    renderBatchBar();
+    return;
+  }
+
+  const parts = [];
+  for (const sec of sections) {
+    parts.push(renderBookSection(sec));
+  }
+  dom.settingsListEl.innerHTML = parts.join("");
+
+  bindCards(dom.settingsListEl);
+  bindBookActions(dom.settingsListEl, sections);
+
+  // 书视图不分页——隐藏分页条
+  dom.settingsPagerEl?.classList.add("hidden");
+
+  renderBatchBar();
+}
+
+/** 书在列表中的优先级。本卡 < 全局 < 其他卡。 */
+function bookRank(book) {
+  const curId = _bookCurrentCharId();
+  const cid = String(book?.characterId || "").trim();
+  if (!cid) return 1;              // 全局
+  if (curId && cid === curId) return 0;  // 本卡
+  return 2;                         // 其他卡
+}
+
+/** 渲染一本书（头 + 子节）。 */
+function renderBookSection({ book, items, orphan }) {
+  const enabled = book.enabled !== false;
+  const scopeBadge = book.characterId
+    ? (String(book.characterId) === _bookCurrentCharId()
+        ? `<span class="book-scope-badge mine" title="仅本卡对话生效">本卡</span>`
+        : `<span class="book-scope-badge" title="仅该卡对话生效">${escapeHtml(charNameOf(book.characterId))}</span>`)
+    : `<span class="book-scope-badge" title="所有对话可见">全局</span>`;
+
+  const switchHtml = orphan ? "" : `
+    <label class="switch" title="开/关整本书">
+      <input type="checkbox" data-act="book-toggle" data-book-id="${escapeHtml(book.id)}" ${enabled ? "checked" : ""}>
+      <span></span>
+    </label>`;
+
+  const head = `
+    <div class="book-head">
+      ${switchHtml}
+      <span class="book-title">${escapeHtml(book.name || "（未命名书）")}</span>
+      <span class="book-count">${items.length}</span>
+      ${scopeBadge}
+      ${orphan ? "" : `<button class="book-more" data-act="book-more" data-book-id="${escapeHtml(book.id)}" title="重命名 / 删除书">⋯</button>`}
+    </div>`;
+
+  // 书内子节
+  const sortFn = (SORT_BY[view.sortBy] || SORT_BY.order).fn;
+  const subSections = SETTING_SECTIONS.map(sec => ({
+    ...sec,
+    items: items.filter(s => settingBucket(s) === sec.key)
+  })).filter(sec => sec.items.length > 0);
+  for (const ss of subSections) {
+    // 书关时不展示子开关（书关优先）；排序同平铺视图
+    ss.items.sort(sortFn);
+  }
+
+  const subsHtml = subSections.length === 0
+    ? `<div class="book-empty-hint">空书</div>`
+    : subSections.map(sub => `
+        <div class="book-section">
+          <div class="section-head">
+            <span class="section-title">${escapeHtml(sub.title)}</span>
+            <span class="section-hint">${escapeHtml(sub.hint || "")}</span>
+            <span class="section-n">${sub.items.length}</span>
+          </div>
+          ${sub.items.map(s => renderCard(s, false)).join("")}
+        </div>
+      `).join("");
+
+  const cls = `setting-book${enabled ? "" : " book-off"}${orphan ? " is-orphan" : ""}`;
+  return `<div class="${cls}" data-book-id="${escapeHtml(book.id)}">${head}${subsHtml}</div>`;
+}
+
+/** 给书头里的控件绑事件：开关、更多菜单。 */
+function bindBookActions(root, sections) {
+  root.querySelectorAll('[data-act="book-toggle"]').forEach(sw => {
+    sw.addEventListener("change", (e) => {
+      const id = sw.dataset.bookId;
+      if (id) toggleBook(id, e.target.checked);
+    });
+  });
+  root.querySelectorAll(".book-more").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.bookId;
+      if (id) openBookMenu(btn, id);
+    });
+  });
+}
+
+// ═══════ 书 CRUD（前端薄壳，后端路由已到位）═══════════
+
+/**
+ * 小弹窗：拿一个输入（重命名、新建名字）。
+ * confirmDialog 不支持输入，这里另搭一个；样式与 confirmDialog 同频。
+ * @returns {Promise<string|null>} 确认时回输入值；取消/点底回 null
+ */
+function promptDialog({ title, label, defaultValue = "", okText = "确定", cancelText = "取消" } = {}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;";
+    const box = document.createElement("div");
+    box.style.cssText = "background:var(--hana-bg,#1e1e1e);border:1px solid var(--hana-border,#333);border-radius:8px;padding:18px;min-width:320px;max-width:90vw;";
+    if (title) {
+      const t = document.createElement("div");
+      t.textContent = title;
+      t.style.cssText = "margin-bottom:12px;font-weight:600;font-size:14px;";
+      box.appendChild(t);
+    }
+    if (label) {
+      const l = document.createElement("label");
+      l.textContent = label;
+      l.style.cssText = "display:block;margin-bottom:6px;font-size:12px;color:var(--hana-fg-muted,#aaa);";
+      box.appendChild(l);
+    }
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = defaultValue;
+    input.style.cssText = "width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid var(--hana-border,#333);border-radius:4px;background:transparent;color:var(--hana-fg,#e0e0e0);font-size:14px;";
+    box.appendChild(input);
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex;gap:8px;justify-content:flex-end;margin-top:14px;";
+    const okBtn = document.createElement("button");
+    okBtn.textContent = okText;
+    okBtn.style.cssText = "padding:6px 16px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = cancelText;
+    cancelBtn.style.cssText = "padding:6px 16px;background:var(--hana-border,#333);color:var(--hana-fg,#e0e0e0);border:none;border-radius:4px;cursor:pointer;font-size:13px;";
+    actions.appendChild(cancelBtn);
+    actions.appendChild(okBtn);
+    box.appendChild(actions);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    setTimeout(() => input.focus(), 0);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); resolve(input.value); overlay.remove(); }
+      else if (e.key === "Escape") { resolve(null); overlay.remove(); }
+    });
+    okBtn.onclick = () => { const v = input.value; overlay.remove(); resolve(v); };
+    cancelBtn.onclick = () => { overlay.remove(); resolve(null); };
+    overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(null); } };
+  });
+}
+
+/** 新建书：名字 + 归属（全局 / 本卡）。 */
+export async function createBook() {
+  const curId = _bookCurrentCharId();
+  const curName = curId ? charNameOf(curId) : "";
+  const name = await promptDialog({ title: "新建世界书", label: "书名", okText: "创建" });
+  if (name === null) return;
+  const trimmed = (name || "").trim();
+  if (!trimmed) { toast("书名不能为空", "error"); return; }
+  // 归属：当前有卡就默认本卡，否则全局。不弹选择器——直接看归属。
+  // 用户想建全局书？先新建一条全局条目（“新建条目”里默认书就是未归档）。
+  // 这比多弹一个选择器少一步点击。
+  const characterId = curId || "";
+  try {
+    await apiFetch("settings/books", {
+      method: "POST",
+      body: JSON.stringify({ name: trimmed, characterId, source: "native" })
+    });
+    toast(`已建《${trimmed}》`, "success");
+    await loadSettings();
+  } catch (e) {
+    toast("创建失败: " + friendlyError(e), "error");
+  }
+}
+
+/** 重命名书。 */
+async function renameBook(bookId, currentName) {
+  const name = await promptDialog({ title: "重命名世界书", label: "书名", defaultValue: currentName || "", okText: "重命名" });
+  if (name === null) return;
+  const trimmed = (name || "").trim();
+  if (!trimmed) { toast("书名不能为空", "error"); return; }
+  try {
+    await apiFetch(`settings/books/${encodeURIComponent(bookId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ name: trimmed })
+    });
+    toast("已重命名", "success");
+    await loadSettings();
+  } catch (e) {
+    toast("重命名失败: " + friendlyError(e), "error");
+  }
+}
+
+/** 删除书（连带删条目）：确认弹窗 + 显示条数。 */
+async function deleteBook(bookId) {
+  const book = (view.books || []).find(b => String(b.id) === String(bookId));
+  const name = book?.name || "这书";
+  const n = book?.entryCount ?? 0;
+  const ok = await confirmDialog(`删除《${name}》及其 ${n} 条条目？删除后不可恢复。`);
+  if (!ok) return;
+  try {
+    const res = await apiFetch(`settings/books/${encodeURIComponent(bookId)}`, { method: "DELETE" });
+    const data = res.data || res;
+    toast(`已删《${name}》及 ${data?.removedEntries ?? 0} 条条目`, "success");
+    await loadSettings();
+  } catch (e) {
+    toast("删除失败: " + friendlyError(e), "error");
+  }
+}
+
+/** 开/关整书。 */
+async function toggleBook(bookId, enabled) {
+  try {
+    await apiFetch(`settings/books/${encodeURIComponent(bookId)}/toggle`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled })
+    });
+    // 局部更新开关状态（避免重拉全部）
+    const book = (view.books || []).find(b => String(b.id) === String(bookId));
+    if (book) book.enabled = enabled;
+    // 重拉列表刷一下「未生效条目」的隐藏（listEffective 只在服务端算）
+    await loadSettings();
+  } catch (e) {
+    toast("切换失败: " + friendlyError(e), "error");
+  }
+}
+
+/** 书头「⋯」按钮的小菜单。 */
+function openBookMenu(anchorBtn, bookId) {
+  const book = (view.books || []).find(b => String(b.id) === String(bookId));
+  if (!book) return;
+  // 先关掉别的
+  document.querySelectorAll(".book-more-menu").forEach(el => el.remove());
+  const menu = document.createElement("div");
+  menu.className = "more-menu book-more-menu";
+  menu.style.position = "absolute";
+  menu.innerHTML = `
+    <button data-act="book-rename" role="menuitem">重命名</button>
+    <button data-act="book-delete" role="menuitem" style="color:var(--danger, #f87171)">删除</button>
+  `;
+  // 定位在按钮右侧
+  const rect = anchorBtn.getBoundingClientRect();
+  const doc = document.createElement("div");
+  doc.style.position = "fixed";
+  doc.style.left = "0";
+  doc.style.top = "0";
+  doc.style.width = "100vw";
+  doc.style.height = "100vh";
+  doc.style.pointerEvents = "none";
+  doc.appendChild(menu);
+  menu.style.pointerEvents = "auto";
+  menu.style.left = (rect.right - 8) + "px";
+  menu.style.top = rect.bottom + "px";
+  // .more-menu 默认是相对定位，这里覆盖为绝对（相对到 fixed 容器）
+  menu.style.position = "absolute";
+  document.body.appendChild(doc);
+
+  const close = () => { doc.remove(); document.removeEventListener("mousedown", outside); };
+  const outside = (e) => { if (!doc.contains(e.target)) close(); };
+  setTimeout(() => document.addEventListener("mousedown", outside), 0);
+
+  menu.querySelector("[data-act='book-rename']")?.addEventListener("click", () => {
+    close();
+    renameBook(bookId, book.name);
+  });
+  menu.querySelector("[data-act='book-delete']")?.addEventListener("click", () => {
+    close();
+    deleteBook(bookId);
+  });
+}
+
+/** 填 sf-book 下拉：列出所有书 + “未归档”默认项。选中项默认 bookId。 */
+function populateBookDropdown(selectedId) {
+  const sel = document.getElementById("sf-book");
+  if (!sel) return;
+  const curId = _bookCurrentCharId();
+  const books = view.books || [];
+  const opts = [`<option value="">（未归档）</option>`];
+  // 本卡的 → 全局的 → 其他卡的
+  const sorted = books.slice().sort((a, b) => bookRank(a) - bookRank(b));
+  for (const b of sorted) {
+    const scope = b.characterId
+      ? (String(b.characterId) === curId ? "本卡" : `· ${charNameOf(b.characterId)}`)
+      : "全局";
+    opts.push(`<option value="${escapeHtml(b.id)}">${escapeHtml(b.name)}（${scope}）</option>`);
+  }
+  sel.innerHTML = opts.join("");
+  if (selectedId) sel.value = String(selectedId);
+}
+
+/** 刷新书表（书 CRUD 后调用）。 */
+async function refreshBooks() {
+  try {
+    const res = await apiFetch("settings/books");
+    const data = res.data || res;
+    view.books = Array.isArray(data) ? data : [];
+  } catch {
+    view.books = [];
+  }
 }
 
 /**
@@ -795,6 +1186,8 @@ function fillSettingForm(s) {
   if (document.getElementById("sf-category")) set("sf-category", s.category || "");
   const en = document.getElementById("sf-enabled");
   if (en) en.checked = s.enabled !== false;
+  // 所属书：先填下拉，再把当前条目的 bookId 选上。书视图下默认当前节的书，这里靠 s.bookId 回填。
+  populateBookDropdown(s.bookId || "");
   updateTriggerFields(String(s.tier || "core"));
 }
 
@@ -815,7 +1208,9 @@ export async function saveSetting() {
     order: Number(val("sf-order")) || 100,
     priority: Number(val("sf-priority")) || 100,
     probability: Number(val("sf-probability")) || 100,
-    enabled: document.getElementById("sf-enabled")?.checked !== false
+    enabled: document.getElementById("sf-enabled")?.checked !== false,
+    // 所属书（2026-10-01）：空串 = 未归档（书视图下会归到“未归档”那组）
+    bookId: val("sf-book") || ""
   };
   // category 是本地字段，只在前端表单里存在时才带过去
   const catEl = document.getElementById("sf-category");
@@ -968,6 +1363,8 @@ export async function runAutocategorize() {
 export function bindSettingsControls() {
   const s = dom;
   s.createSettingBtn?.addEventListener("click", () => openSettingEditor(null));
+  // 新建世界书（2026-10-01）：收进⋯菜单，不进工具条主位
+  document.getElementById("create-book-btn")?.addEventListener("click", () => createBook());
   s.importStBtn?.addEventListener("click", () => importSTWorldBook());
   s.exportStBtn?.addEventListener("click", () => exportSTWorldBook());
   s.autocategorizeBtn?.addEventListener("click", () => runAutocategorize());

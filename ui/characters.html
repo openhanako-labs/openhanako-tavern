@@ -349,10 +349,11 @@
         「刷新」删掉：抽屉每次打开都会重载，它从来不需要被按。
       -->
       <div class="drawer-toolbar">
-        <button id="create-setting-btn" class="btn btn-primary btn-sm">+ 新建</button>
+        <button id="create-setting-btn" class="btn btn-primary btn-sm">+ 新建条目</button>
         <div class="more-toggle">
           <button id="settings-more-btn" class="btn btn-ghost btn-sm" aria-haspopup="menu" aria-expanded="false" title="更多">⋯</button>
           <div id="settings-more-menu" class="more-menu" hidden role="menu">
+            <button id="create-book-btn" role="menuitem">+ 新建世界书</button>
             <button id="import-st-btn" role="menuitem">导入 ST</button>
             <button id="export-st-btn" role="menuitem">导出 ST</button>
             <button id="autocategorize-btn" role="menuitem" title="跑一次启发式分类（只填高置信三类）">自动分类</button>
@@ -381,6 +382,7 @@
         </select>
         <input id="settings-search" type="search" placeholder="搜名字、内容或触发词…" spellcheck="false" autocomplete="off">
         <select id="settings-groupby" title="分组维度">
+          <option value="book" selected>分组：世界书</option>
           <option value="trigger">分组：生效方式</option>
           <option value="category">分组：分类</option>
           <option value="priority">分组：常用度</option>
@@ -844,6 +846,7 @@
         <div class="form-sec open">
           <div class="fs-head"><span class="fs-t">是什么</span></div>
           <div class="fs-body">
+              <div class="field"><label>所属书</label><select id="sf-book"><option value="">（未归档）</option></select></div>
             <div class="field"><label>名称 <span class="req">*</span></label><input type="text" id="sf-name" required></div>
             <div class="field"><label>内容 <span class="req">*</span></label><textarea id="sf-content" rows="5" required></textarea></div>
           </div>
