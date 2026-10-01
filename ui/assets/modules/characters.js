@@ -1,6 +1,6 @@
 // characters.js — 由 characters.js 按功能拆分（B5）
 
-import { apiAvatarBlobUrl, apiFetch, apiUrl, bindAvatarZoom, confirmDialog, escapeHtml, extractArray, formatDate, friendlyError, toast } from "./core.js";
+import { apiAvatarBlobUrl, apiFetch, apiUrl, bindAvatarZoom, confirmDialog, escapeHtml, extractArray, formatDate, friendlyError, toast, unwrap } from "./core.js";
 import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
 import { askRailRefresh } from "./nav-bus.js";

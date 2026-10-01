@@ -80,13 +80,14 @@ function renderPanel(battle) {
 async function encounter() {
   const conv = state.currentConv;
   if (!conv) { toast("先打开一场对话", "error"); return; }
-  const enemyDesc = prompt("遭遇什么敌人？（描述一下，留空 = 随机）") ?? "";
+  const inputEl = el("battle-encounter-input");
+  const enemyDesc = inputEl?.value?.trim() ?? "";
   const btn = el("battle-encounter-btn");
   if (btn) { btn.disabled = true; btn.textContent = "遭遇中…"; }
   try {
     const env = await apiFetch(`conversations/${encodeURIComponent(conv.id)}/battle/encounter`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enemyDesc: enemyDesc.trim() || undefined })
+      body: JSON.stringify({ enemyDesc: enemyDesc || undefined })
     });
     const d = unwrap(env) || {};
     el("battle-modal")?.classList.remove("hidden");
@@ -127,6 +128,8 @@ export function bindBattle() {
   el("battle-open")?.addEventListener("click", async () => {
     if (!state.currentConv) { toast("先打开一场对话", "error"); return; }
     el("battle-modal")?.classList.remove("hidden");
+    // 遭遇输入区常驻：随时能输敌人（或留空随机），不再用 prompt()（沙箱禁）
+    el("battle-encounter-input")?.focus();
     renderPanel({ status: "none" });
     // 有进行中的战斗就拉回来
     try {
@@ -140,6 +143,9 @@ export function bindBattle() {
     if (e.target.id === "battle-modal") el("battle-modal")?.classList.add("hidden");
   });
   el("battle-encounter-btn")?.addEventListener("click", () => void encounter());
+  el("battle-encounter-input")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") void encounter();
+  });
 }
 
 export default { bindBattle };

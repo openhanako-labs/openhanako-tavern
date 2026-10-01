@@ -146,6 +146,15 @@ const apps = {
 };
 registerCharacterRoutes(apps.characters, charRepo, transfer, setRepo);
 registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo, { opsRepo, codexRepo });
+// 新增各期路由（与 index.js 同布局挂 conversations 域）——
+// 少挂的代价：ui-host 上点「朋友圈/战斗/经营/点击反应」全是 no route，
+// 而 index.js 里它们是有的——两处注册清单必须同走。
+const { registerSocialRoutes } = await import("../lib/social/routes.js");
+registerSocialRoutes(apps.conversations, { dataDir: DATA, characterRepo: charRepo, conversationRepo: convRepo, llm: fakeLlm });
+const { registerSimulationRoutes } = await import("../lib/simulation/routes.js");
+registerSimulationRoutes(apps.conversations, { conversationRepo: convRepo });
+const { registerSpriteRoutes } = await import("../lib/sprite/routes.js");
+registerSpriteRoutes(apps.characters, { characterRepo: charRepo, llm: fakeLlm, dataDir: DATA });
 registerSettingRoutes(apps.settings, setRepo, convRepo);
 registerVariableRoutes(apps.variables, varRepo, convRepo, charRepo);
 registerPresetRoutes(apps.presets, presetRepo);

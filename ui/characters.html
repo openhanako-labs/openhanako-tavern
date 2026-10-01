@@ -2274,8 +2274,11 @@
       <h2>战斗</h2>
       <button id="battle-close" class="btn btn-ghost btn-sm">✕</button>
     </div>
-    <div class="modal-body">
-      <button id="battle-encounter-btn" class="btn btn-primary btn-sm" type="button">遭遇战</button>
+      <div class="modal-body">
+      <div class="bg-row" style="align-items:center;gap:8px">
+        <input id="battle-encounter-input" type="text" placeholder="遭遇什么敌人？（留空 = 随机，如：雪原雪影）" style="flex:1;font:inherit;padding:6px 10px">
+        <button id="battle-encounter-btn" class="btn btn-primary btn-sm" type="button">遭遇战</button>
+      </div>
       <div id="battle-body" style="margin-top:10px"></div>
     </div>
   </div>
