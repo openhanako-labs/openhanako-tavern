@@ -147,6 +147,7 @@ function renderConvs() {
         <div class="nm">${esc(c.title || "（无标题）")}</div>
         <div class="mt">${c.messageCount || 0} 条 · ${fmtDate(c.updatedAt)}</div>
       </div>
+      <button class="conv-del" data-del="${c.id}" title="删除这场对话" aria-label="删除这场对话">✕</button>
     </div>
   `).join("");
   el.querySelectorAll(".item").forEach(item => {
@@ -158,6 +159,44 @@ function renderConvs() {
       }
     });
   });
+  // 删除：stopPropagation 别触发 openConv。确认走 window.confirm——
+  // rail 不在 iframe 沙箱里，原生 confirm 可用（card 页的 confirmDialog 是沙箱替代）。
+  el.querySelectorAll(".conv-del").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.del;
+      const c = convs.find(x => String(x.id) === String(id));
+      const title = c?.title || "这场对话";
+      const n = c?.messageCount || 0;
+      if (!window.confirm(`删掉「${title}」？\n里面的 ${n} 条消息会一起删掉，不可恢复。`)) return;
+      void deleteConv(id);
+    });
+  });
+}
+
+async function deleteConv(id) {
+  try {
+    await API(`conversations/${encodeURIComponent(id)}`, { method: "DELETE" });
+  } catch (err) {
+    console.error("[rail] 删除对话失败:", err);
+    window.alert("删除失败，请重试");
+    return;
+  }
+  const wasActive = String(activeConv) === String(id);
+  convs = convs.filter(c => String(c.id) !== String(id));
+  if (wasActive) {
+    activeConv = null;
+    try { localStorage.removeItem(ACTIVE_KEY); } catch { /* ignore */ }
+  }
+  renderConvs();
+  renderChars();
+  // 删的是当前正看的那场：通知 card 页回空态（它自己清 state.currentConv）。
+  // 没在看就只发刷新——card 页的 state 不被动。
+  if (wasActive) {
+    nav({ t: "conv-deleted", id });
+  } else {
+    nav({ t: "rail-refresh" });
+  }
 }
 
 function avatar(c) {

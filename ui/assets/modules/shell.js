@@ -550,6 +550,10 @@ export function bindShell() {
       // 左栏的「✧ AI 生成」：生成台在主视图，弹窗由那边开
       const { openGen } = await import("./gen.js");
       openGen();
+    } else if (msg.t === "conv-deleted" && msg.id) {
+      // 左栏删掉了当前正看的那场：回空态，别留着一个已不存在的对话
+      const { closeDeletedConversation } = await import("./chat.js");
+      await closeDeletedConversation(msg.id);
     } else if (msg.t === "rail-refresh") {
       // 左栏要求刷新它自己的列表，主区不动（主区有自己的 loadCharacters）
     } else {

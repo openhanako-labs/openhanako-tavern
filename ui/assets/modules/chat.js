@@ -940,14 +940,29 @@ export async function deleteConversation() {
   try {
     await apiFetch(`conversations/${state.currentConv.id}`, { method: "DELETE" });
     toast("已删除", "success");
-    state.currentConv = null;
-    await loadConversations();
-    dom.messagesContainer.innerHTML = '<div class="empty">选择或创建对话开始聊天</div>';
-    dom.chatInputArea.classList.add("hidden");
-    dom.chatTitle.textContent = "选择对话";
+    await resetAfterConvGone();
   } catch (e) {
     toast(`删除失败: ${friendlyError(e)}`, "error");
   }
+}
+
+/** 对话没了之后的收尾：清空当前场、重拉列表、回空态。 */
+async function resetAfterConvGone() {
+  state.currentConv = null;
+  await loadConversations();
+  dom.messagesContainer.innerHTML = '<div class="empty">选择或创建对话开始聊天</div>';
+  dom.chatInputArea.classList.add("hidden");
+  dom.chatTitle.textContent = "选择对话";
+}
+
+/**
+ * 左栏删掉了当前正看的那场（nav 消息 conv-deleted 过来）。
+ * 删除本身已在 rail 那边发生，这里只负责收掉自己手里的现场——
+ * 删的不是当前场就不动（state 里那场还活着）。
+ */
+export async function closeDeletedConversation(id) {
+  if (!state.currentConv || String(state.currentConv.id) !== String(id)) return;
+  await resetAfterConvGone();
 }
 
 export function exportChat() {
