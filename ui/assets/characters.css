@@ -6184,6 +6184,11 @@ main.ctx-open .drawer:not(.hidden) {
 #settings-scope { flex: 0 0 auto; }
 .drawer-filter input[type="search"] { flex: 1 1 auto; min-width: 0; }
 .drawer-filter select { flex: 1 1 0; min-width: 0; }
+/* 2026-10-01：分组/排序强制第二行。
+   默认 flex:1 1 0 让 basis=0——scope+搜索挤下第一行后，它们俩被硬塞进
+   剩余空间，option 文本被切成一个箭头（真机截图）。给它们 45% 的 basis，
+   两个合计 90% > 第一行剩余宽度，flex-wrap 会把它们一起挪到第二行平分。 */
+#settings-groupby, #settings-sortby { flex: 1 1 45%; min-width: 0; }
 
 
 

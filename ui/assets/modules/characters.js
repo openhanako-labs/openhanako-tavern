@@ -4,6 +4,7 @@ import { apiAvatarBlobUrl, apiFetch, apiUrl, bindAvatarZoom, confirmDialog, esca
 import { dom, showEditForm } from "./dom.js";
 import { state } from "./state.js";
 import { askRailRefresh } from "./nav-bus.js";
+import { renderOpening } from "./markdown.js";
 
 
 /**
@@ -469,7 +470,7 @@ export async function renderCharContext(greetIdx = 0) {
             <button id="greet-next" title="下一条">›</button>
           </span>
         </div>
-        <div class="greet-text" id="greet-text">${escapeHtml(preview(greets[gi]))}</div>
+        <div class="greet-text" id="greet-text">${renderOpening(preview(greets[gi]))}</div>
       </div>`
     : "";
 
