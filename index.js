@@ -138,7 +138,22 @@ export default defineApp(async (sdk) => {
   if (dataDir) {
     settingRepo = new SettingRepo(dataDir);
     await probe.safe(() => settingRepo.init(), "settingRepo.init");
-    s.settings = { repoInitialized: true, settingsFile: path.join(dataDir, "settings.json") };
+    // 世界书回填（幂等）：把 source=character_book 的条目归到卡的书、全局条目归到「散置条目」。
+    // 卡名从 characterRepo 取（前面已初始化），取不到则退化为短 id。
+    // 失败不阻断启动：books.json 已建空数组，bookId 为空时 listEffective 当「开」处理，不崩。
+    await probe.safe(async () => {
+      const charNameOf = characterRepo
+        ? async (cid) => {
+            const c = await characterRepo.getSummary(cid).catch(() => null);
+            return c?.name || "";
+          }
+        : undefined;
+      const r = await settingRepo.backfillBooks(charNameOf);
+      if (r.createdBooks > 0 || r.updatedEntries > 0) {
+        console.log(`[settings] 世界书回填：新建书 ${r.createdBooks}、归档条目 ${r.updatedEntries}`);
+      }
+    }, "settingRepo.backfillBooks");
+    s.settings = { repoInitialized: true, settingsFile: path.join(dataDir, "settings.json"), booksFile: path.join(dataDir, "books.json") };
   }
 
   // 类目表。单独一个 store，因为它有自己的生命周期（新建/并/改/删），

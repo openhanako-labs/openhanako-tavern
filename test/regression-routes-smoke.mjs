@@ -240,7 +240,10 @@ const EXPECTED = {
     "POST /settings/autocategorize",
     "GET /settings/cast-candidates",
     // 与 import-st 对称的那一半：世界书得进得来、也出得去
-    "GET /settings/export-st"
+    "GET /settings/export-st",
+    // 世界书（书 → 条目 两级） CRUD（2026-10-01 新增）
+    "GET /settings/books", "POST /settings/books", "PUT /settings/books/:id",
+    "PUT /settings/books/:id/toggle", "DELETE /settings/books/:id"
   ],
   variables: [
     "GET /variables", "GET /variables/:id", "POST /variables", "PUT /variables/:id",
