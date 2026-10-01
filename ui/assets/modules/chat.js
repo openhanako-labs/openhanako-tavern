@@ -995,6 +995,9 @@ export async function confirmNewConversation() {
     await loadConversations();
     await openConversation(conv.id);
     closeNewConvModal();
+    // 左栏「最近会话」同步（操作 B：中间「新对话」建了场，左栏不刷）
+    const { askRailRefresh } = await import("./nav-bus.js");
+    askRailRefresh();
     toast(picked.length > 1 ? `群聊已创建（${picked.length} 位）` : "对话已创建", "success");
   } catch (e) {
     toast(`创建对话失败: ${friendlyError(e)}`, "error");

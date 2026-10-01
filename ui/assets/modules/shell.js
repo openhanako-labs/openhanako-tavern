@@ -303,6 +303,9 @@ export async function startNewConversation(characterId, persona = {}) {
     const { openConversation, loadConversations } = await import("./chat.js");
     await loadConversations();
     await openConversation(conv.id);
+    // 左栏「最近会话」同步刷新——新建后列表不更新是月曦夜点出的状态不同步
+    // （操作 A：点头像开新场，主界面更新了但左栏没刷）。
+    askRailRefresh();
     return conv;
   } catch (e) {
     toast(`创建失败: ${friendlyError(e)}`, "error");

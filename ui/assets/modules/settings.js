@@ -486,16 +486,19 @@ function renderBookSection({ book, items, orphan }) {
 
   const subsHtml = subSections.length === 0
     ? `<div class="book-empty-hint">空书</div>`
-    : subSections.map(sub => `
-        <div class="book-section">
-          <div class="section-head">
+    : subSections.map(sub => {
+        const subFolded = isFolded("booksub", `${book.id}:${sub.key}`);
+        return `
+        <div class="book-section${subFolded ? " sub-folded" : ""}">
+          <div class="section-head" data-act="book-sub-fold" data-book-id="${escapeHtml(book.id)}" data-key="${escapeHtml(String(sub.key))}">
+            <span class="section-car">${subFolded ? "▸" : "▾"}</span>
             <span class="section-title">${escapeHtml(sub.title)}</span>
             <span class="section-hint">${escapeHtml(sub.hint || "")}</span>
             <span class="section-n">${sub.items.length}</span>
           </div>
-          ${sub.items.map(s => renderCard(s, false)).join("")}
-        </div>
-      `).join("");
+          ${subFolded ? "" : sub.items.map(s => renderCard(s, false)).join("")}
+        </div>`;
+      }).join("");
 
   const folded = isBookFolded(book.id);
   const cls = `setting-book${enabled ? "" : " book-off"}${orphan ? " is-orphan" : ""}${folded ? " book-folded" : ""}`;
@@ -519,7 +522,14 @@ function bindBookActions(root, sections) {
       if (e.target.closest(".switch, .book-more")) return;
       const id = head.dataset.bookId;
       if (id) toggleBookFold(id);
-      // 重画：折叠状态在 localStorage，下次 renderBookView 会读到
+      renderSettings(state.settingList || []);
+    });
+  });
+  // 书内子分类（常驻/触发/已停用）折叠——月曦夜点出「展开后内部条目无法折叠」
+  root.querySelectorAll('[data-act="book-sub-fold"]').forEach(head => {
+    head.addEventListener("click", () => {
+      const id = head.dataset.bookId, key = head.dataset.key;
+      if (id != null && key != null) toggleFold("booksub", `${id}:${key}`);
       renderSettings(state.settingList || []);
     });
   });

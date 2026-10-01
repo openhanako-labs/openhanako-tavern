@@ -7898,7 +7898,9 @@ html.has-app-bg .shell {
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
-  background: color-mix(in srgb, var(--panel, #1c1c1c) 65%, transparent);
+  /* 2026-10-01 配色修复：曾用 var(--panel, #1c1c1c)——App 没定义 --panel，
+     回退成深灰，书区在暖纸界面里像一块黑斑。改用暖纸变量。 */
+  background: var(--surface);
 }
 #settings-list .setting-book:last-child { margin-bottom: 0; }
 
@@ -7908,7 +7910,7 @@ html.has-app-bg .shell {
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  background: color-mix(in srgb, var(--panel-2, #262626) 55%, transparent);
+  background: var(--surface-2);
   border-bottom: 1px solid var(--border);
   user-select: none;
 }
@@ -7934,11 +7936,11 @@ html.has-app-bg .shell {
   color: var(--fg-muted);
   padding: 1px 6px;
   border-radius: 3px;
-  background: var(--panel-3, #2a2a2a);
+  background: var(--sunken);
 }
 #settings-list .book-head .book-scope-badge.mine {
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent, #7dd3fc) 18%, transparent);
+  background: var(--accent-soft);
 }
 #settings-list .book-head .book-more {
   flex: none;
@@ -7953,7 +7955,7 @@ html.has-app-bg .shell {
 }
 #settings-list .book-head .book-more:hover {
   color: var(--fg);
-  background: color-mix(in srgb, var(--accent, #7dd3fc) 15%, transparent);
+  background: var(--accent-soft);
 }
 
 /* 书已关：整节压暗；条目开关隐藏（书关优先） */
@@ -8236,3 +8238,6 @@ html.has-app-bg .shell {
   color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
+/* 书内子分类折叠箭头 + 子节折叠态 */
+#settings-list .book-section .section-head { cursor: pointer; }
+#settings-list .book-section .section-car { font-size: 11px; color: var(--fg-muted); margin-right: 2px; }

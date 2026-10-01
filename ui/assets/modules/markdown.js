@@ -146,6 +146,10 @@ function stripPromptMarkers(text) {
   s = s.replace(/<!--[\s\S]*$/g, "");
   // 3. opening 标签壳（带属性也认；壳之间的内容不动）
   s = s.replace(/<\/?opening(?:\s[^>]*)?>/gi, "");
+  // 3.5 老酒馆扩展占位符：如 <StatusPlaceHolderImpl/> ——
+  // ST 生态里一堆扩展往卡里塞这种自闭合标签，运行时由对应扩展填内容，
+  // 本 App 没有那个扩展，留着就是给用户看一串 XML。
+  s = s.replace(/<[A-Z][A-Za-z0-9]*\s*\/>/g, "");
   // 4. 整行 // 注释（连换行一起删，不留下空行）
   s = s.replace(/^[ \t]*\/\/.*(?:\n|$)/gm, "");
   // 5. 箭头残片：单独成行的 <--- / <--> / -->，注释块被半路消费后剩下的开头
