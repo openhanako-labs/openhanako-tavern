@@ -31,6 +31,7 @@ import { bindIllustrate } from "./illustrate.js";
 import { bindAppearance, loadAppearance } from "./appearance.js";
 import { bindSocial } from "./social.js";
 import { bindBattle } from "./battle.js";
+import { bindSimulation } from "./simulation.js";
 import { bindCommand, bindScrollBottom } from "./command.js";
 import { saveRegexRule, deleteRegexRule, bindRegex } from "./regex.js";
 import { bindCharProfile } from "./char-profile.js";
@@ -299,6 +300,7 @@ export async function init() {
   bindAppearance();
   bindSocial();
   bindBattle();
+  bindSimulation();
   bindSocial();
   loadAppearance().catch((e) => console.error("[bg] 初始化失败:", e));
 

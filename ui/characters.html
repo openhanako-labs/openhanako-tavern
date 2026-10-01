@@ -99,6 +99,10 @@
       <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="3.4" width="10.8" height="9.2" rx="1.4"/><path d="M2.6 10.4 6 7.6l3 2.4 2.2-1.8 2.2 1.8"/></svg>
       <span>背景</span>
     </button>
+    <button type="button" class="rail-item" id="sim-open" title="模拟经营">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="2.6" width="4.2" height="4.2" rx="0.8"/><rect x="9.2" y="2.6" width="4.2" height="4.2" rx="0.8"/><rect x="2.6" y="9.2" width="4.2" height="4.2" rx="0.8"/><rect x="9.2" y="9.2" width="4.2" height="4.2" rx="0.8"/></svg>
+      <span>经营</span>
+    </button>
     <button type="button" class="rail-item" id="battle-open" title="战斗">
       <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13l7-7 3-3v4l-7 7H3v-1z"/><path d="M9 7l2 2"/></svg>
       <span>战斗</span>
@@ -2248,6 +2252,18 @@
     </div>
     <div class="modal-body codex-graph-body">
       <div id="char-profile-body" class="char-profile-body"></div>
+    </div>
+  </div>
+</div>
+
+<div id="sim-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>经营</h2>
+      <button id="sim-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="sim-body"></div>
     </div>
   </div>
 </div>
