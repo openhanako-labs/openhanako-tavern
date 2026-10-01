@@ -15,6 +15,7 @@
 // 而不是原图的十几 MB。后端那边超限守卫只是兜底。
 
 import { apiFetch, toast, friendlyError, unwrap } from "./core.js";
+import { state } from "./state.js";
 
 // 默认 0.78：0.86 时纸面只透 14%，选了背景几乎看不出变化；
 // 0.78 透 22%，正文对纯黑照片的 WCAG 对比度 7.09:1（AA 门槛 4.5），仍安全。
@@ -222,6 +223,67 @@ async function clearImage() {
   }
 }
 
+// ── AI 生成背景（第 4 期）──────────────────────────
+// 场景文本 → 后端 /background/generate（LLM 写提示词禁人物 → 出图 →
+// AppearanceRepo.saveImage）→ 本地重拉配置刷新 #app-bg 层。
+function bindBackgroundAI() {
+  const enabled = $("bg-ai-enabled");
+  const statusEl = $("bg-ai-status");
+  const genBtn = $("bg-ai-generate");
+  const sceneEl = $("bg-ai-scene");
+  const promptEl = $("bg-ai-prompt");
+  if (!enabled || !genBtn) return;
+
+  // 打开抽屉时拉一次配置，回填总闸状态
+  $("bg-open")?.addEventListener("click", async () => {
+    try {
+      const env = await apiFetch("background/config");
+      enabled.checked = unwrap(env)?.enabled === true;
+    } catch { /* 拉不到就保持默认不勾 */ }
+  });
+
+  enabled?.addEventListener("change", async () => {
+    try {
+      await apiFetch("background/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: enabled.checked })
+      });
+      toast(enabled.checked ? "AI 生成背景已开启" : "AI 生成背景已关闭", "success");
+    } catch (e) {
+      toast(`没存下：${friendlyError(e)}`, "error");
+    }
+  });
+
+  genBtn.addEventListener("click", async () => {
+    if (genBtn.disabled) return;
+    genBtn.disabled = true;
+    if (statusEl) statusEl.textContent = "正在生成（写提示词 → 出图，约半分钟）…";
+    try {
+      const sceneText = String(sceneEl?.value || "").trim();
+      const env = await apiFetch("background/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneText: sceneText || undefined,
+          conversationId: sceneText ? undefined : (state.currentConv?.id || undefined)
+        })
+      });
+      const d = unwrap(env) || {};
+      // 应用到本层：重拉配置 + 图
+      await loadAppearance();
+      if (promptEl) promptEl.textContent = `提示词（${d.via ?? "?"}）：${d.prompt ?? ""}`;
+      if (statusEl) statusEl.textContent = "已应用";
+      toast("背景图已生成并应用", "success");
+    } catch (e) {
+      if (statusEl) statusEl.textContent = "";
+      toast(`生成失败：${friendlyError(e)}`, "error");
+    } finally {
+      genBtn.disabled = false;
+    }
+  });
+}
+
 /** 绑定。幂等。 */
 export function bindAppearance() {
   if (bound) return;
@@ -231,6 +293,8 @@ export function bindAppearance() {
   $("bg-close")?.addEventListener("click", closeBgModal);
   // 「关闭」按钮已删：标题栏的 ✕ 就能关，页脚不再放一个重复的。
   $("bg-modal")?.addEventListener("click", (e) => { if (e.target.id === "bg-modal") closeBgModal(); });
+
+  bindBackgroundAI();
 
   const file = $("bg-file");
   const drop = $("bg-drop");

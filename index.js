@@ -347,7 +347,7 @@ export default defineApp(async (sdk) => {
   // 与 media 分开注册：media 需要 characterTransfer（写头像），
   // illustration 需要 conversationRepo（追加消息）与 scene-config。
   if (conversationRepo && characterRepo) {
-    registerIllustrationRoutes(app, { sdk, dataDir, conversationRepo, characterRepo });
+    registerIllustrationRoutes(app, { sdk, dataDir, conversationRepo, characterRepo, llm: llmService });
   }
 
   // 语音合成。管子做在 App 里、水由用户自己填（参见 lib/tts/providers.js 开头）。

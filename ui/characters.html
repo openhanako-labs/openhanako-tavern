@@ -2270,6 +2270,28 @@
         遮罩就是铺在图上的一层纸。自定义背景一进来，所有颜色的对比度就不再有任何保证，
         所以这层不能关到底——它保的是字能不能读，而不是好不好看。
       </p>
+
+      <!--
+        AI 生成背景（第 4 期）：场景文本 → LLM 写提示词（禁人物）→ 现有出图引擎 →
+        自动应用为本层背景。默认关（后端 background.json enabled=false），
+        要先在下面打开总闸——与场景插图（scene.json）同一条纪律：花钱动作默认关。
+      -->
+      <div class="bg-ai" id="bg-ai" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+        <div class="bg-row" style="align-items:center">
+          <label for="bg-ai-enabled" style="min-width:72px">AI 生成</label>
+          <input type="checkbox" id="bg-ai-enabled" style="width:auto">
+          <span class="hint" style="margin:0">关着时点生成会提示先开总闸</span>
+        </div>
+        <div class="bg-row" style="align-items:flex-start;margin-top:8px">
+          <label for="bg-ai-scene" style="min-width:72px;padding-top:6px">场景</label>
+          <textarea id="bg-ai-scene" rows="2" style="flex:1;font:inherit" placeholder="留空 = 自动取当前对话剧情卡的场景行（如：北境哨塔 · 夜 · 雨）"></textarea>
+        </div>
+        <div class="bg-row" style="margin-top:8px;gap:8px">
+          <button id="bg-ai-generate" class="btn btn-primary btn-sm" type="button">生成背景图</button>
+          <span id="bg-ai-status" class="hint" style="margin:0"></span>
+        </div>
+        <p class="hint" id="bg-ai-prompt" style="margin-top:6px;word-break:break-all"></p>
+      </div>
     </div>
     <div class="modal-footer">
       <!--
