@@ -225,6 +225,9 @@ const EXPECTED = {
     "POST /social/feed/post", "POST /social/feed/:id/like",
     "POST /social/feed/:id/comment", "DELETE /social/feed/:id",
     "POST /conversations/:id/proactive",
+    // 第 8 期：战斗（三条）
+    "POST /conversations/:id/battle/encounter", "GET /conversations/:id/battle",
+    "POST /conversations/:id/battle/action",
     "PUT /conversations/:id/messages/:messageId",
     "DELETE /conversations/:id/messages/:messageId",
     "PUT /conversations/:id/messages/:messageId/variant",

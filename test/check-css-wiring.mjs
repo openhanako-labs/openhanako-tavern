@@ -89,7 +89,10 @@ const DYNAMIC_CLASSES = [
   //   但 down/set 只由 `cls` 变量插值拼出，静态扫不到。chat 同因：presets.js
   //   `class="pe-zone ${zone}"` 的 zone 值插值。四者都是活的（有 CSS 规则、有渲染调用）。
   "chat",           // presets.js 对话分区（pe-zone 的 zone 值之一）
-  "up", "down", "set"  // story-card.js 效果 chips 的三档（与 var-chip 同套语义）
+  "up", "down", "set",  // story-card.js 效果 chips 的三档（与 var-chip 同套语义）
+  // 2026-10-01 第 7/8 期：同为模板串插值类。
+  "is-char",        // social.js 角色回应评论标记
+  "mid", "player", "enemy",  // battle.js HP 条三档（mid）+ 日志 side（player/enemy，源码字面量在 LOG_SIDES）
 ];
 
 let pass = 0;

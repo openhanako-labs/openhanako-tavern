@@ -30,6 +30,7 @@ import { bindModels } from "./models.js";
 import { bindIllustrate } from "./illustrate.js";
 import { bindAppearance, loadAppearance } from "./appearance.js";
 import { bindSocial } from "./social.js";
+import { bindBattle } from "./battle.js";
 import { bindCommand, bindScrollBottom } from "./command.js";
 import { saveRegexRule, deleteRegexRule, bindRegex } from "./regex.js";
 import { bindCharProfile } from "./char-profile.js";
@@ -297,6 +298,7 @@ export async function init() {
   // 自定义背景：先绑事件，再拉配置（拉不到就按“没背景”跑，不拦整屏）
   bindAppearance();
   bindSocial();
+  bindBattle();
   bindSocial();
   loadAppearance().catch((e) => console.error("[bg] 初始化失败:", e));
 

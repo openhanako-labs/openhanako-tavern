@@ -8122,3 +8122,38 @@ html.has-app-bg .shell {
 .social-comment { font-size: 12px; color: var(--fg-muted); }
 .social-comment b { color: var(--fg); font-weight: 600; }
 .social-comment.is-char { color: var(--fg); }
+/* ── 战斗（第 8 期）────────────────────────────────── */
+.battle-hp { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.battle-hp-label { font-size: 12px; font-weight: 600; min-width: 72px; }
+.battle-hp-bar {
+  flex: 1; height: 10px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  overflow: hidden;
+}
+.battle-hp-fill { height: 100%; border-radius: 999px; transition: width .3s var(--ease); }
+.battle-hp-fill.up { background: #7fae7a; }
+.battle-hp-fill.mid { background: var(--accent); }
+.battle-hp-fill.down { background: #b0483e; }
+.battle-hp-num { font-size: 11px; color: var(--fg-muted); min-width: 52px; text-align: right; }
+.battle-acts { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.battle-log {
+  margin-top: 8px; padding-top: 8px;
+  border-top: 1px dashed var(--border);
+  max-height: 180px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.battle-log-line { font-size: 12px; color: var(--fg-muted); }
+.battle-log-line.player { color: var(--fg); }
+.battle-story {
+  font-size: 13px; color: var(--fg-muted); line-height: 1.6;
+  margin-bottom: 8px; padding: 6px 10px;
+  border-left: 2px solid var(--accent-soft);
+}
+.battle-result {
+  font-size: 14px; font-weight: 600; text-align: center;
+  padding: 6px; margin-bottom: 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.battle-result.win { color: #4a7c46; background: rgba(127,174,122,.15); }
+.battle-result.lose { color: #b0483e; background: rgba(176,72,62,.12); }

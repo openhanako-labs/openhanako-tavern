@@ -99,6 +99,10 @@
       <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="3.4" width="10.8" height="9.2" rx="1.4"/><path d="M2.6 10.4 6 7.6l3 2.4 2.2-1.8 2.2 1.8"/></svg>
       <span>背景</span>
     </button>
+    <button type="button" class="rail-item" id="battle-open" title="战斗">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13l7-7 3-3v4l-7 7H3v-1z"/><path d="M9 7l2 2"/></svg>
+      <span>战斗</span>
+    </button>
     <button type="button" class="rail-item" id="social-open" title="朋友圈 · 角色动态">
       <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="5" r="2.6"/><path d="M2.8 14c.6-2.8 2.7-4.4 5.2-4.4s4.6 1.6 5.2 4.4"/></svg>
       <span>朋友圈</span>
@@ -2244,6 +2248,19 @@
     </div>
     <div class="modal-body codex-graph-body">
       <div id="char-profile-body" class="char-profile-body"></div>
+    </div>
+  </div>
+</div>
+
+<div id="battle-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>战斗</h2>
+      <button id="battle-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <button id="battle-encounter-btn" class="btn btn-primary btn-sm" type="button">遭遇战</button>
+      <div id="battle-body" style="margin-top:10px"></div>
     </div>
   </div>
 </div>
