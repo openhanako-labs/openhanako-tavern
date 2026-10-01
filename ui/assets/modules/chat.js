@@ -6,6 +6,7 @@ import { splitFailure, detailIsShort } from "./illustration-failure.js";
 import { renderMarkdown, renderOpening, stripForDisplay } from "./markdown.js";
 import { splitStatusBlock } from "./status-block.js";
 import { envFromStatus, envText } from "./env-line.js";
+import { renderStoryCard } from "./story-card.js";
 // 宏引擎用 ui/assets/lib/macros.js（/ui/ 可达域内的镜像）。
 // 早期写成 ../../../lib/... —— URL 层级多 _surface/<token> 两级，且 lib/
 // 不在 /ui/ 暴露域：整张模块图 404，页面停在"加载中"的静态初始态。
@@ -495,9 +496,20 @@ export function renderMessages() {
       </div>`;
     }
     // assistant 正文开头的状态栏块要折起来——它压在叙述上面（见 splitStatusBlock）
-    const body = m.role === "assistant"
-      ? renderAssistantBody(expand(m.content))
-      : escapeHtml(expand(m.content));
+    // 剧情卡（cwv1）：msg.story.found 时用杂志分栏卡渲染，效果 chips 归卡片管；
+    // plainRemainder（混排的普通正文）照走气泡渲染。无 story 一律走原路径。
+    const hasStory = m.role === "assistant" && m.story && m.story.found;
+    const hasVarDiff = Array.isArray(m.varDiff) && m.varDiff.length > 0;
+    let body;
+    if (hasStory) {
+      const card = renderStoryCard(m.story, { hasVarDetail: hasVarDiff });
+      const rest = String(m.story.plainRemainder || "").trim();
+      body = card + (rest ? `<div class="sc-rest">${renderAssistantBody(expand(rest))}</div>` : "");
+    } else {
+      body = m.role === "assistant"
+        ? renderAssistantBody(expand(m.content))
+        : escapeHtml(expand(m.content));
+    }
     const acts = `<div class="msg-acts">
         <button class="mini" data-act="copy" data-id="${m.id}" title="复制">复制</button>
         <button class="mini" data-act="speak" data-id="${m.id}" title="读出来">朗读</button>
@@ -510,7 +522,9 @@ export function renderMessages() {
     // 服务端连显示用的字都拼好了（text）——前端只负责印，
     // 免得同一条拼字逻辑长成第二份双胞胎镜像。
     // 行末的「明细 ›」进 S1 面板——chips 行本身保留作速览，不删。
-    const varLine = Array.isArray(m.varDiff) && m.varDiff.length > 0
+    // 剧情卡已把效果 chips 收进卡片（hasStory），这里不再重复画一遍 varLine，
+    // 但「明细 ›」入口跟着卡片走（见 story-card.js）——账不丢。
+    const varLine = !hasStory && Array.isArray(m.varDiff) && m.varDiff.length > 0
       ? `<div class="msg-vars">${m.varDiff.map(d => `<span class="var-chip" data-change="${escapeHtml(d.change || "set")}">${escapeHtml(d.text || d.name || "")}</span>`).join("")}
            <button type="button" class="mini vars-detail" data-act="vars-detail" data-id="${m.id}" title="本轮发生了什么">明细 ›</button>
          </div>`
@@ -543,6 +557,14 @@ export function renderMessages() {
   dom.messagesContainer.querySelectorAll(".message").forEach(el => {
     const id = el.dataset.id;
     el.querySelector('[data-act="copy"]')?.addEventListener("click", () => copyMessage(id));
+    // 剧情卡选项：填进输入框并聚焦，不直接发——
+    // 与 suggest-chip 同一条哲学（候选项是起点不是命令，人常想改两个字再发）。
+    el.querySelectorAll(".sc-choice").forEach(btn => {
+      btn.addEventListener("click", () => {
+        dom.chatInput.value = btn.dataset.choice || "";
+        dom.chatInput.focus();
+      });
+    });
     // 变量账明细：S1 面板。动态 import 保持 chat.js 启动轻。
     el.querySelector('[data-act="vars-detail"]')?.addEventListener("click", () => {
       import("./var-diff-modal.js").then(m => m.open(m.findMessage(id) || null)).catch(e => {

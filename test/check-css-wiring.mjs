@@ -84,6 +84,12 @@ const DYNAMIC_CLASSES = [
   "setting-book",   // settings.js 书容器（顶节）
   "book-off",       // settings.js 书已关状态
   "is-orphan",      // settings.js 未归档书（bookId 空 / 指向已删书）
+  // 2026-10-01 补 3 条 —— 剧情卡（story-card.js）：
+  //   `.sc-fx up/down/set` 复合选择器末段；up 存量在 var-chip / suggest-chip 静态写死，
+  //   但 down/set 只由 `cls` 变量插值拼出，静态扫不到。chat 同因：presets.js
+  //   `class="pe-zone ${zone}"` 的 zone 值插值。四者都是活的（有 CSS 规则、有渲染调用）。
+  "chat",           // presets.js 对话分区（pe-zone 的 zone 值之一）
+  "up", "down", "set"  // story-card.js 效果 chips 的三档（与 var-chip 同套语义）
 ];
 
 let pass = 0;

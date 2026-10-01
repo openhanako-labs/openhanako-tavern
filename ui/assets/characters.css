@@ -7999,3 +7999,82 @@ html.has-app-bg .shell {
   color: var(--fg-muted);
   text-align: center;
 }
+
+/* ── 剧情卡（cwv1 协议，杂志分栏式）2026-10-01 ──────────────
+   消费 lib/story/protocol.js 的解析结果（msg.story）。
+   左栏：对话/旁白 + 效果 chips；右栏：场景数据 + 新增 + 选项。
+   窄于 520px 右栏折到底部（flex-wrap）。沿用全 App 的暖纸变量。 */
+.story-card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+.sc-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.sc-type {
+  font-size: 11px; font-weight: 600;
+  padding: 1px 7px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+  white-space: nowrap;
+}
+.sc-title { font-weight: 600; font-size: 13.5px; }
+
+.sc-cols { display: flex; flex-wrap: wrap; }
+.sc-main { flex: 1 1 320px; min-width: 0; padding: 6px 12px 10px; }
+.sc-side {
+  flex: 1 1 128px; min-width: 118px;
+  border-left: 1px solid var(--border);
+  background: var(--surface-2);
+  padding: 10px 10px;
+  font-size: 11.5px; color: var(--fg-muted);
+}
+@media (max-width: 520px) {
+  .sc-side { border-left: none; border-top: 1px solid var(--border); flex-basis: 100%; }
+}
+
+.sc-line { margin: 5px 0; font-size: 13.5px; line-height: 1.65; }
+.sc-who { font-weight: 600; color: var(--accent); }
+.sc-who .sc-emo { font-weight: 400; color: var(--fg-muted); font-size: 11px; }
+.sc-say { margin-left: 6px; }
+.sc-narr { margin: 7px 0; color: var(--fg-muted); font-size: 13px; line-height: 1.6; }
+.sc-narr::before { content: "· "; color: var(--border-strong); }
+
+.sc-fxrow {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  margin-top: 8px; padding-top: 7px;
+  border-top: 1px dashed var(--border);
+}
+.sc-fx {
+  font-size: 11.5px; padding: 1px 8px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.sc-fx.up { color: #4a7c46; }
+.sc-fx.down { color: #b0483e; }
+.sc-fx.set { color: var(--fg-muted); }
+
+.sc-sec { margin-bottom: 9px; }
+.sc-sec > b { display: block; color: var(--fg); font-size: 11px; margin-bottom: 3px; }
+.sc-upd { margin: 3px 0; }
+.sc-upd-k {
+  font-size: 10px; padding: 0 5px; border-radius: 3px;
+  background: var(--accent-soft); color: var(--accent); margin-right: 4px;
+}
+.sc-upd-n { color: var(--fg); }
+.sc-upd-d { color: var(--fg-muted); font-size: 11px; line-height: 1.5; }
+
+.sc-choices { display: flex; flex-direction: column; gap: 4px; }
+.sc-choice {
+  text-align: left; padding: 6px 9px;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--fg);
+  font-size: 12px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.sc-choice:hover { border-color: var(--accent); background: var(--accent-soft); }
+.sc-choice .sc-key { color: var(--accent); font-weight: 600; margin-right: 5px; }
+
+.sc-rest { margin-top: 8px; }
