@@ -57,6 +57,9 @@ const DYNAMIC_IDS = new Map([
   // 无选择时 .settings-batch-bar 是 hidden 且 innerHTML=""，选择后才有 #batch-cat-select。
   ["batch-cat-select", "ui/assets/modules/settings.js:557（renderBatchBar，勾选后动态生成）"],
   ["batch-prio-select", "ui/assets/modules/settings.js:557（renderBatchBar，勾选后动态生成）"],
+  // 羻绊推进按钮：renderHeaderMeta（chat.js）在 mode=bond 的对话里动态插入。
+  // 只在捵绊场出现，普通对话的 HTML 里没有它。
+  ["bond-advance-btn", "ui/assets/modules/chat.js（renderHeaderMeta，mode=bond 时动态生成）"],
   // 类目管理弹层：由 settings-cats.js 的 renderCatsModal() 弹层首次打开时拼出。
   // 平时 .cats-modal 根本不在 DOM 里，弹层打开才有 #cats-add-input。
   ["cats-add-input", "ui/assets/modules/settings-cats.js:85（renderCatsModal，弹层打开时动态生成）"],

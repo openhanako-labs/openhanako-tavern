@@ -581,6 +581,7 @@ export async function renderCharContext(greetIdx = 0) {
       <button class="btn btn-sm" id="ctx-portrait">生成立绘</button>
       <button class="btn btn-sm" id="ctx-sprite-click" title="让 AI 按卡描述设计点击热区与反应（有热区后点立绘会有反应）">点击反应</button>
       <button class="btn btn-sm" id="ctx-scene">场景插图</button>
+      <button class="btn btn-sm" id="ctx-bond" title="选另一位角色，生成你们之间的私下互动小剧场（你不在场，旁听）">发起羁绊</button>
       <button class="btn btn-sm" data-ctx="export">导出</button>
       <button class="btn btn-sm danger" data-ctx="delete">删除</button>
     </div>
@@ -726,6 +727,33 @@ export async function renderCharContext(greetIdx = 0) {
     } catch (e) {
       toast(`生成失败：${friendlyError(e)}`, "error");
       if (btn) { btn.disabled = false; btn.textContent = "点击反应"; }
+    }
+  });
+
+  // 发起羻绊（第 6 期）：选另一位角色 → 建捵绊对话 → 打开。
+  // 生成侧「推进」按钮在聊天区（对话 mode=bond 时出现）。
+  box.querySelector("#ctx-bond")?.addEventListener("click", async () => {
+    try {
+      const all = extractArray(await apiFetch("characters"));
+      const others = all.filter(x => String(x.id) !== String(c.id));
+      if (others.length === 0) { toast("只有一张卡，捵绊至少需要两位角色", "error"); return; }
+      const labels = others.map(x => `${x.name || "（未命名）"}（${x.id.slice(0, 8)}）`);
+      const picked = prompt(`选一位与「${c.name || "她"}」建立羻绊的角色：\n${labels.map((l, i) => `${i + 1}. ${l}`).join("\n")}\n输入序号：`);
+      if (!picked) return;
+      const idx = Number(picked) - 1;
+      if (!Number.isInteger(idx) || idx < 0 || idx >= others.length) { toast("序号无效", "error"); return; }
+      const other = others[idx];
+      const env = await apiFetch("bonds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characterIds: [c.id, other.id] })
+      });
+      const conv = unwrap(env) || {};
+      toast("羻绊已建立——在对话里点「推进」生成互动", "success");
+      const chat = await import("./chat.js");
+      await chat.openConversation(conv.id);
+    } catch (e) {
+      toast(`发起失败：${friendlyError(e)}`, "error");
     }
   });
 

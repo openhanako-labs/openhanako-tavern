@@ -215,6 +215,8 @@ const EXPECTED = {
     // 这一场的自动轮换开关（场景属性，不是全局设置）
     "PUT /conversations/:id/rotation",
     "DELETE /conversations/:id",
+    // 第 6 期：捵绊（两条）
+    "POST /bonds", "POST /bonds/:id/advance",
     "PUT /conversations/:id/messages/:messageId",
     "DELETE /conversations/:id/messages/:messageId",
     "PUT /conversations/:id/messages/:messageId/variant",

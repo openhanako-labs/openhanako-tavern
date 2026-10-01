@@ -613,6 +613,30 @@ export function renderMessages() {
 }
 
 
+/** 推进羻绊：调 /bonds/:id/advance，成功后重拉对话渲染。 */
+export async function advanceBond() {
+  const conv = state.currentConv;
+  if (!conv || conv.mode !== "bond" || state.isGenerating) return;
+  state.isGenerating = true;
+  const btn = document.getElementById("bond-advance-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "生成中…"; }
+  try {
+    const env = await apiFetch(`bonds/${conv.id}/advance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    });
+    const d = unwrap(env) || {};
+    await openConversation(conv.id);   // 重拉，把新段与阶段读数都刷上来
+    toast(`新的一段互动（关系阶段：${d.stage ?? "?"}）`, "success");
+  } catch (e) {
+    toast(`推进失败：${friendlyError(e)}`, "error");
+  } finally {
+    state.isGenerating = false;
+    if (btn) { btn.disabled = false; btn.textContent = "推进羻绊"; }
+  }
+}
+
 export async function sendMessage() {
   const content = dom.chatInput.value.trim();
   if (!content || !state.currentConv || state.isGenerating) return;
@@ -1478,11 +1502,41 @@ export function renderHeaderMeta() {
   if (!conv) { dom.chatMeta.classList.add("hidden"); return; }
 
   const n = conv.messages?.length || 0;
-  const parts = [n > 0 ? `第 ${Math.ceil(n / 2)} 轮` : "还没开始"];
+  const isBond = conv.mode === "bond";
+  const parts = [
+    isBond
+      ? `羁绊${conv.bondStage?.stage ? ` · ${conv.bondStage.stage}` : ""} · ${Math.floor(n / 2)} 段`
+      : (n > 0 ? `第 ${Math.ceil(n / 2)} 轮` : "还没开始")
+  ];
   // 世界格子数不写在这里了——它成了标题行里那颗**按钮**
   //（既是读数也是黑板列的开关，卡里那一格就是这个用法）。
   dom.chatMeta.textContent = parts.join(" · ");
   dom.chatMeta.classList.remove("hidden");
+
+  // 羁绊场：输入框换成「推进」——玩家不在场，不发言只旁听。
+  const area = document.getElementById("chat-input-area");
+  let bondBtn = document.getElementById("bond-advance-btn");
+  if (isBond && area) {
+    if (!bondBtn) {
+      bondBtn = document.createElement("button");
+      bondBtn.id = "bond-advance-btn";
+      bondBtn.className = "btn btn-primary";
+      bondBtn.type = "button";
+      bondBtn.textContent = "推进羁绊";
+      bondBtn.addEventListener("click", () => void advanceBond());
+      const sendBtn = document.getElementById("send-btn");
+      sendBtn?.parentElement?.insertBefore(bondBtn, sendBtn);
+    }
+    bondBtn.classList.remove("hidden");
+    // 羁绊场玩家不发言：藏起输入框，留推进按钮
+    const ta = document.getElementById("chat-input");
+    if (ta) ta.disabled = true;
+    if (ta) ta.placeholder = "羻绊小剧场——你不在场，点「推进羻绊」生成一段互动";
+  } else if (bondBtn) {
+    bondBtn.classList.add("hidden");
+    const ta = document.getElementById("chat-input");
+    if (ta) ta.disabled = false;
+  }
 
   // 那颗按钮：拉得到就报数，拉不到就不出场
   //（写「世界 0 格」会被读成“这一场真的没有格子”）。
