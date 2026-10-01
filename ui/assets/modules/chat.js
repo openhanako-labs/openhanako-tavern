@@ -3,7 +3,7 @@
 import { hana } from "../sdk.js";
 import { apiFetch, apiUrl, confirmDialog, escapeHtml, extractArray, formatTime, friendlyError, openImageViewer, toast, unwrap } from "./core.js";
 import { splitFailure, detailIsShort } from "./illustration-failure.js";
-import { renderMarkdown } from "./markdown.js";
+import { renderMarkdown, renderOpening, stripForDisplay } from "./markdown.js";
 import { splitStatusBlock } from "./status-block.js";
 import { envFromStatus, envText } from "./env-line.js";
 // 宏引擎用 ui/assets/lib/macros.js（/ui/ 可达域内的镜像）。
@@ -395,7 +395,9 @@ function statusBlockHtml(status, items) {
  * 都经过这个函数，所以一处打开，两条路一起生效。
  */
 function renderAssistantBody(text) {
-  const { status, body, items } = splitStatusBlock(text);
+  // 净化先于状态块拆分（计划 A2）：</opening>、注释块、整行 // 不先进拆分器，
+  // 不会被压进状态块误判；模型收到的原文不动，只净 UI 显示。
+  const { status, body, items } = splitStatusBlock(stripForDisplay(text));
   const env = envText(envFromStatus(status));
   return envLineHtml(env) + statusBlockHtml(status, items) + renderMarkdown(body, { dialogue: true });
 }
@@ -456,7 +458,7 @@ export function renderMessages() {
     dom.messagesContainer.innerHTML = opening
       ? `<div class="empty scene-empty">
            <div class="scene-kicker">开场${ids.length > 1 && card ? ` · ${escapeHtml(card.name || "")}` : ""}</div>
-           <div class="scene-body">${escapeHtml(opening)}</div>
+           <div class="scene-body">${renderOpening(opening)}</div>
            <div class="hint">发一条消息就开场；这一条会作为第一句发给模型</div>
          </div>`
       : '<div class="empty"><div class="empty-title">这一场还没有消息</div>' +

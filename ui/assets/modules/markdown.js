@@ -122,3 +122,52 @@ export function stripMarkdown(text) {
 export function renderPlain(text) {
   return esc(text).replace(/\n/g, "<br>");
 }
+
+/**
+ * 显示净化核心：剥掉提示词工程标记（计划 docs/plans/2026-10-01-opening-render-and-settings-filter）。
+ *
+ * 只用于 **UI 显示层**——模型收到的原文一字不动，净化不落盘。
+ * 剥的清单（按序）：
+ *   1. 完整 HTML 注释 <!-- … -->（非贪婪到最近的收尾，含 [Location Pool] 这类多行块）
+ *   2. 未闭合的注释开头：HTML 语义里注释一直吃到 EOF，残片连同后面一起剥
+ *   3. <opening> / </opening> 标签壳（壳之间的内容保留）
+ *   4. 整行 // 注释（行首可空白，连换行一起删；行内的 https:// 不动——
+ *      只删「除空白外整行都是注释」的行）
+ *   5. 单独成行的箭头残片（<--- / <-->，注释块被部分消费后剩下的开头）
+ *
+ * 已知代价（计划「风险与开放问题」1）：正文里正当的整行 //（引用歌词那种）会被误删。
+ * 缓解：只删整行，且只用于 opening / assistant 正文；误伤了再收。
+ */
+function stripPromptMarkers(text) {
+  let s = String(text ?? "");
+  // 1. 完整注释（非贪婪：就近配对，两个注释各吃各的）
+  s = s.replace(/<!--[\s\S]*?-->/g, "");
+  // 2. 未闭合注释到 EOF（HTML 语义：<!-- 之后全是注释体）
+  s = s.replace(/<!--[\s\S]*$/g, "");
+  // 3. opening 标签壳（带属性也认；壳之间的内容不动）
+  s = s.replace(/<\/?opening(?:\s[^>]*)?>/gi, "");
+  // 4. 整行 // 注释（连换行一起删，不留下空行）
+  s = s.replace(/^[ \t]*\/\/.*(?:\n|$)/gm, "");
+  // 5. 箭头残片：单独成行的 <--- / <--> / -->，注释块被半路消费后剩下的开头
+  s = s.replace(/^[ \t]*<!?-{2,}>?[ \t]*(?:\n|$)/gm, "");
+  s = s.replace(/^[ \t]*-{2,}>[ \t]*(?:\n|$)/gm, "");
+  // 收尾：删干净后的注释洞叠一层（3+ 连续换行压成两行），首尾裁齐
+  s = s.replace(/\n{3,}/g, "\n\n");
+  return s.trim();
+}
+
+/**
+ * 开场白渲染：净化 → esc → 换行转 <br>。
+ * 空对话的「开场」预览走这条——first_mes 里的提示词工程标记不该给玩家看。
+ */
+export function renderOpening(text) {
+  return renderPlain(stripPromptMarkers(text));
+}
+
+/**
+ * 纯文本版净化：与 renderOpening 共用 stripPromptMarkers，不各自长一份正则
+ * （两份正则迟早漂移）。供复制摘要等非 HTML 场景用。
+ */
+export function stripForDisplay(text) {
+  return stripPromptMarkers(text);
+}
