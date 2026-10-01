@@ -6178,7 +6178,11 @@ main.ctx-open .drawer:not(.hidden) {
    此前三者挤在同一行，344px 的栏宽装不下，最右边的「排序」被切掉。
    这里只用 CSS 分行：搜索框吃满一整行，两个 select 平分下一行。 */
 .drawer-filter { flex-wrap: wrap; }
-.drawer-filter input[type="search"] { flex: 1 1 100%; min-width: 0; }
+/* 本场相关过滤（2026-10-01）：scope 下拉与搜索框共用一行——
+   344px 装不下三个 select 一排（2026-09-28 的教训还挂着），
+   所以搜索框从吃满一整行改成与 scope 平分；分组/排序仍两个一行。 */
+#settings-scope { flex: 0 0 auto; }
+.drawer-filter input[type="search"] { flex: 1 1 auto; min-width: 0; }
 .drawer-filter select { flex: 1 1 0; min-width: 0; }
 
 

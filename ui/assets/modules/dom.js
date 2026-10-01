@@ -28,6 +28,8 @@ export const dom = {
   settingsBatchBarEl: document.getElementById("settings-batch-bar"),
   settingsGroupBy: document.getElementById("settings-groupby"),
   settingsSortBy: document.getElementById("settings-sortby"),
+  // 归属过滤（2026-10-01）：本场相关 / 全部
+  settingsScope: document.getElementById("settings-scope"),
   settingsCatsBtn: document.getElementById("settings-cats-btn"),
   settingsAutocategorizeBtn: document.getElementById("autocategorize-btn"),
   createSettingBtn: document.getElementById("create-setting-btn"),

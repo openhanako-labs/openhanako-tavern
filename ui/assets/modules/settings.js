@@ -123,6 +123,12 @@ const view = {
   groupBy: "trigger",
   sortBy: "order",
   selected: new Set(),
+  /*
+   * 归属过滤（2026-10-01）："relevant" = 本卡 + 全局，"all" = 整池。
+   * 放这里不放 state——它和 page / groupBy 一样属于抽屉本身，
+   * 不需要跨模块共享。
+   */
+  scopeFilter: "relevant",
   // 类目表 —— loadSettings 时从后端拉
 };
 
@@ -188,7 +194,17 @@ export function renderSettings(list) {
   const isOwn = (s) => !!curId && ownerOf(s) === curId;
   const rank = (s) => (isOwn(s) ? 0 : ownerOf(s) ? 2 : 1);
 
-  // 搜索
+  /*
+   * 归属过滤（2026-10-01）："relevant" 只留本卡 + 全局，"all" 显示全部。
+   *
+   * 背景：106 条里「其他」占 104 条——它们属于别的卡，默认也该让位。
+   * 徽章和排序只是把归属标出来，过滤才真正把别的卡的条目收起来。
+   * 定义照计划 B2：relevant = isOwn || !ownerOf（没选角色时退化成全局）。
+   */
+  const scopeOk = (s) => isOwn(s) || !ownerOf(s);
+  const pool = view.scopeFilter === "all" ? raw : raw.filter(scopeOk);
+
+  // 搜索（在过滤后的池子里搜——「全部」才搜得到别的卡的条目）
   const q = String(document.getElementById("settings-search")?.value || "").trim().toLowerCase();
   const hit = (s) => {
     if (!q) return true;
@@ -199,7 +215,7 @@ export function renderSettings(list) {
     ].map(x => String(x ?? "")).join("\n").toLowerCase();
     return hay.includes(q);
   };
-  const shown = raw.filter(hit);
+  const shown = pool.filter(hit);
 
   // 计数行
   const ownN = raw.filter(isOwn).length;
@@ -208,10 +224,14 @@ export function renderSettings(list) {
 
   if (dom.settingsCountEl) {
     if (raw.length === 0) dom.settingsCountEl.textContent = "";
-    else if (q) dom.settingsCountEl.textContent = `命中 ${shown.length} / 共 ${raw.length} 条`;
-    else dom.settingsCountEl.textContent = curId
+    else if (q) dom.settingsCountEl.textContent = `命中 ${shown.length} / 共 ${pool.length} 条`;
+    else if (view.scopeFilter === "all") dom.settingsCountEl.textContent = curId
       ? `${raw.length} 条 · 本卡 ${ownN} · 全局 ${globN} · 其他 ${otherN}`
       : `${raw.length} 条 · 全局 ${globN}`;
+    // relevant 口径：「其他」已经收起来了，计数也不再报它
+    else dom.settingsCountEl.textContent = curId
+      ? `${pool.length} 条 · 本卡 ${ownN} · 全局 ${globN}`
+      : `${pool.length} 条 · 全局 ${globN}`;
   }
 
   if (raw.length === 0) {
@@ -224,6 +244,20 @@ export function renderSettings(list) {
       act: "new"
     });
     dom.settingsListEl.querySelector('[data-act="new"]')?.addEventListener("click", () => openSettingEditor(null));
+    dom.settingsListEl.nextElementSibling?.classList.add("hidden");
+    renderPager(0, 1);
+    return;
+  }
+  if (pool.length === 0) {
+    /*
+     * relevant 为 0：本卡没绑条目、也没有全局——不是「空」，是「不在本场」。
+     * 库里还有别的卡的条目，文案要把路指出来（切「全部」）。
+     */
+    dom.settingsListEl.innerHTML = emptyHtml({
+      ico: "▤",
+      title: "本卡未绑定世界书条目",
+      desc: "本场相关（本卡 + 全局）是 0 条。库里还有别的卡的条目——把上面切到「全部」看。"
+    });
     dom.settingsListEl.nextElementSibling?.classList.add("hidden");
     renderPager(0, 1);
     return;
@@ -949,6 +983,12 @@ export function bindSettingsControls() {
   });
   s.settingsSortBy?.addEventListener("change", () => {
     view.sortBy = s.settingsSortBy.value;
+    renderSettings(state.settingList || []);
+  });
+  // 归属过滤（2026-10-01）：本场相关 / 全部。切了回首页——过滤后的第一屏应当是「最靠前的」
+  s.settingsScope?.addEventListener("change", () => {
+    view.scopeFilter = s.settingsScope.value === "all" ? "all" : "relevant";
+    view.page = 1;
     renderSettings(state.settingList || []);
   });
 }

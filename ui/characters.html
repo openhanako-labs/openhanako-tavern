@@ -369,7 +369,16 @@
 
         计数从工具条里挪出来单独一行——原来它和三个按钮挤一行，会折成三行。
       -->
+      <!--
+        归属过滤（2026-10-01）：默认「本场相关」只留本卡 + 全局，
+        「全部」才是旧的整池。它排在搜索框前面——scope 是这一页的正题
+        （图库抽屉同款纪律）；不跟分组/排序拼一行，344px 装不下三个 select。
+      -->
       <div class="drawer-filter">
+        <select id="settings-scope" title="看谁的设定">
+          <option value="relevant">本场相关</option>
+          <option value="all">全部</option>
+        </select>
         <input id="settings-search" type="search" placeholder="搜名字、内容或触发词…" spellcheck="false" autocomplete="off">
         <select id="settings-groupby" title="分组维度">
           <option value="trigger">分组：生效方式</option>
