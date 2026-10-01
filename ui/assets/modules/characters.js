@@ -579,6 +579,7 @@ export async function renderCharContext(greetIdx = 0) {
     <div class="char-ctx-actions">
       <button class="btn btn-sm" data-ctx="edit">编辑</button>
       <button class="btn btn-sm" id="ctx-portrait">生成立绘</button>
+      <button class="btn btn-sm" id="ctx-sprite-click" title="让 AI 按卡描述设计点击热区与反应（有热区后点立绘会有反应）">点击反应</button>
       <button class="btn btn-sm" id="ctx-scene">场景插图</button>
       <button class="btn btn-sm" data-ctx="export">导出</button>
       <button class="btn btn-sm danger" data-ctx="delete">删除</button>
@@ -602,6 +603,13 @@ export async function renderCharContext(greetIdx = 0) {
     // 0.1：点头像看大图。绑在 <img> 上而不是外层——外层包含回退后的文字内容，
     // 点文字放大没有意义，点图才说得通。
     bindAvatarZoom(avaImg, avaImg.dataset.ava);
+
+    /*
+     * 立绘点击反应（第 5 期）：立绘上有热区数据时，点击 = 按权重抽反应，
+     * 气泡显示。与「点开大图」共存：有热区时点击抽反应（更频繁的动作），
+     * 想看大图走右上角的放大按钮；没热区时保持原状（点开大图）。
+     */
+    import("./sprite-click-ui.js").then(m => m.attachSpriteClick(avaImg, c));
   }
 
   // 同场角色：异步拉候选名单，把骨架换成真正的内容。
@@ -705,6 +713,21 @@ export async function renderCharContext(greetIdx = 0) {
   // 生成立绘：按钮是每次重画重建的，所以绑定也要每次重来一趟
   const { bindPortraitButton } = await import("./media.js");
   bindPortraitButton();
+
+  // 点击反应：生成入口（第 5 期）。生成成功后重画面板，热区即生效。
+  box.querySelector("#ctx-sprite-click")?.addEventListener("click", async () => {
+    const btn = box.querySelector("#ctx-sprite-click");
+    if (btn) { btn.disabled = true; btn.textContent = "设计中…"; }
+    try {
+      const m = await import("./sprite-click-ui.js");
+      await m.generateSpriteReactions(c);
+      toast("点击反应已生成——点立绘试试", "success");
+      renderCharContext(0);
+    } catch (e) {
+      toast(`生成失败：${friendlyError(e)}`, "error");
+      if (btn) { btn.disabled = false; btn.textContent = "点击反应"; }
+    }
+  });
 
   /*
    * 场景插图：入口从工具抽屉那排「App 设置」里摆到它该在的地方。

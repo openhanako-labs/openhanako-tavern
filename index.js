@@ -52,6 +52,7 @@ import { registerMigrationRoutes } from "./lib/migration/routes.js";
 import { registerGenRoutes } from "./lib/gen/routes.js";
 import { registerMediaRoutes } from "./lib/media/routes.js";
 import { registerIllustrationRoutes } from "./lib/illustration/routes.js";
+import { registerSpriteRoutes } from "./lib/sprite/routes.js";
 import { registerTtsRoutes } from "./lib/tts/routes.js";
 import { registerAppearanceRoutes } from "./lib/appearance/routes.js";
 import { registerModelRoutes } from "./lib/models/routes.js";
@@ -348,6 +349,9 @@ export default defineApp(async (sdk) => {
   // illustration 需要 conversationRepo（追加消息）与 scene-config。
   if (conversationRepo && characterRepo) {
     registerIllustrationRoutes(app, { sdk, dataDir, conversationRepo, characterRepo, llm: llmService });
+    if (characterRepo) {
+      registerSpriteRoutes(app, { characterRepo, llm: llmService, dataDir });
+    }
   }
 
   // 语音合成。管子做在 App 里、水由用户自己填（参见 lib/tts/providers.js 开头）。

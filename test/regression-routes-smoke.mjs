@@ -296,7 +296,9 @@ const EXPECTED = {
   illustration: [
     "GET /illustration/config", "PUT /illustration/config",
     "POST /conversations/:id/illustrate",
-    "GET /conversations/:id/illustration/latest"
+    "GET /conversations/:id/illustration/latest",
+    // 第 4 期：AI 背景图（三条）
+    "GET /background/config", "PUT /background/config", "POST /background/generate"
   ],
   tts: [
     "GET /tts/providers", "GET /tts/config", "PUT /tts/config",

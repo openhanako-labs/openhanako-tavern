@@ -8080,3 +8080,25 @@ html.has-app-bg .shell {
 .sc-rest { margin-top: 8px; }
 /* AI 生成背景块（第 4 期）：布局用内联样式（一次性组合），这里只给分区感 */
 .bg-ai { background: var(--surface-2); border-radius: var(--r-sm); padding: 10px; }
+/* ── 立绘点击反应（第 5 期）──────────────────────────── */
+/* 可点击的立绘：光标变化提示可交互 */
+.sprite-clickable { cursor: pointer; }
+/* 反应气泡：绝对定位于立绘容器顶部，淡入淡出 */
+.sprite-bubble {
+  position: absolute;
+  top: 4px; left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  max-width: 92%;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-sm);
+  color: var(--fg);
+  font-size: 12.5px; line-height: 1.5;
+  box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  opacity: 0;
+  transition: opacity .25s var(--ease), transform .25s var(--ease);
+  pointer-events: none;
+  z-index: 5;
+}
+.sprite-bubble.show { opacity: 1; transform: translateX(-50%) translateY(0); }
