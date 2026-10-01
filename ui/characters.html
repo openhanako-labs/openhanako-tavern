@@ -99,6 +99,10 @@
       <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="3.4" width="10.8" height="9.2" rx="1.4"/><path d="M2.6 10.4 6 7.6l3 2.4 2.2-1.8 2.2 1.8"/></svg>
       <span>背景</span>
     </button>
+    <button type="button" class="rail-item" id="social-open" title="朋友圈 · 角色动态">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="5" r="2.6"/><path d="M2.8 14c.6-2.8 2.7-4.4 5.2-4.4s4.6 1.6 5.2 4.4"/></svg>
+      <span>朋友圈</span>
+    </button>
   </nav>
 
   <!--
@@ -2240,6 +2244,27 @@
     </div>
     <div class="modal-body codex-graph-body">
       <div id="char-profile-body" class="char-profile-body"></div>
+    </div>
+  </div>
+</div>
+
+<div id="social-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>朋友圈</h2>
+      <button id="social-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="bg-row" style="align-items:center">
+        <label for="social-enabled" style="min-width:88px">虚拟社交</label>
+        <input type="checkbox" id="social-enabled" style="width:auto">
+        <span class="hint" style="margin:0">关着时不能发动态/评论</span>
+      </div>
+      <div class="bg-row" style="gap:8px;margin-top:10px">
+        <button id="social-post-btn" class="btn btn-primary btn-sm" type="button">让 TA 发一条</button>
+        <button id="social-proactive-btn" class="btn btn-sm" type="button" title="当前对话的角色主动给你发一条消息">让 TA 主动发消息</button>
+      </div>
+      <div id="social-feed-list" style="margin-top:12px;display:flex;flex-direction:column;gap:10px"></div>
     </div>
   </div>
 </div>

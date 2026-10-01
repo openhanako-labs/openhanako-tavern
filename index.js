@@ -53,6 +53,7 @@ import { registerGenRoutes } from "./lib/gen/routes.js";
 import { registerMediaRoutes } from "./lib/media/routes.js";
 import { registerIllustrationRoutes } from "./lib/illustration/routes.js";
 import { registerSpriteRoutes } from "./lib/sprite/routes.js";
+import { registerSocialRoutes } from "./lib/social/routes.js";
 import { registerTtsRoutes } from "./lib/tts/routes.js";
 import { registerAppearanceRoutes } from "./lib/appearance/routes.js";
 import { registerModelRoutes } from "./lib/models/routes.js";
@@ -351,6 +352,9 @@ export default defineApp(async (sdk) => {
     registerIllustrationRoutes(app, { sdk, dataDir, conversationRepo, characterRepo, llm: llmService });
     if (characterRepo) {
       registerSpriteRoutes(app, { characterRepo, llm: llmService, dataDir });
+    }
+    if (characterRepo && conversationRepo) {
+      registerSocialRoutes(app, { dataDir, characterRepo, conversationRepo, llm: llmService });
     }
   }
 

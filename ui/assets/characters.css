@@ -8102,3 +8102,23 @@ html.has-app-bg .shell {
   z-index: 5;
 }
 .sprite-bubble.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* ── 朋友圈（第 7 期）──────────────────────────────── */
+.social-post {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 9px 11px;
+}
+.social-post-hd { display: flex; align-items: baseline; gap: 8px; }
+.social-post-hd b { font-size: 13px; }
+.social-post-at { margin-left: auto; font-size: 11px; color: var(--fg-muted); }
+.social-post-text { margin: 5px 0 7px; font-size: 13px; line-height: 1.6; }
+.social-post-acts { display: flex; gap: 6px; }
+.social-comments {
+  margin-top: 7px; padding-top: 7px;
+  border-top: 1px dashed var(--border);
+  display: flex; flex-direction: column; gap: 3px;
+}
+.social-comment { font-size: 12px; color: var(--fg-muted); }
+.social-comment b { color: var(--fg); font-weight: 600; }
+.social-comment.is-char { color: var(--fg); }

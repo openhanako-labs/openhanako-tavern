@@ -162,6 +162,9 @@ const fakeLlm = {
 
 registerCharacterRoutes(apps.characters, charRepo, transfer, setRepo);
 registerConversationRoutes(apps.conversations, convRepo, fakeLlm, charRepo, setRepo, regexRepo, presetRepo, boardRepo);
+// 第 7 期：社交路由也挂在 conversations 域（与 index.js 同布局）
+const { registerSocialRoutes } = await import("../lib/social/routes.js");
+registerSocialRoutes(apps.conversations, { dataDir: path.join(os.tmpdir(), "eleckoi-smoke-social-" + Date.now()), characterRepo: charRepo, conversationRepo: convRepo, llm: fakeLlm });
 registerSettingRoutes(apps.settings, setRepo, convRepo, null, charRepo);
 registerVariableRoutes(apps.variables, varRepo, convRepo, charRepo);
 registerPresetRoutes(apps.presets, presetRepo);
@@ -217,6 +220,11 @@ const EXPECTED = {
     "DELETE /conversations/:id",
     // 第 6 期：捵绊（两条）
     "POST /bonds", "POST /bonds/:id/advance",
+    // 第 7 期：虚拟社交（七条）+ 主动单聊
+    "GET /social/config", "PUT /social/config", "GET /social/feed",
+    "POST /social/feed/post", "POST /social/feed/:id/like",
+    "POST /social/feed/:id/comment", "DELETE /social/feed/:id",
+    "POST /conversations/:id/proactive",
     "PUT /conversations/:id/messages/:messageId",
     "DELETE /conversations/:id/messages/:messageId",
     "PUT /conversations/:id/messages/:messageId/variant",
