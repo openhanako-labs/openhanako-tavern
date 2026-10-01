@@ -103,6 +103,14 @@ function toggleFold(dim, groupKey) {
   return next;
 }
 
+/** 书视图折叠：同 toggleFold，但维度固定为 book（书 id 当 key）。 */
+function isBookFolded(bookId) {
+  return isFolded("book", String(bookId));
+}
+function toggleBookFold(bookId) {
+  return toggleFold("book", String(bookId));
+}
+
 /** 当前上下文的角色 id：优先对话绑定的角色，其次右栏选中的角色。 */
 function currentCharacterId() {
   return String(state.currentConv?.characterId || state.currentCharacter?.id || "").trim();
@@ -456,7 +464,8 @@ function renderBookSection({ book, items, orphan }) {
     </label>`;
 
   const head = `
-    <div class="book-head">
+    <div class="book-head" data-act="book-fold" data-book-id="${escapeHtml(book.id)}" title="点标题折叠/展开">
+      <span class="book-fold-car">▾</span>
       ${switchHtml}
       <span class="book-title">${escapeHtml(book.name || "（未命名书）")}</span>
       <span class="book-count">${items.length}</span>
@@ -488,16 +497,30 @@ function renderBookSection({ book, items, orphan }) {
         </div>
       `).join("");
 
-  const cls = `setting-book${enabled ? "" : " book-off"}${orphan ? " is-orphan" : ""}`;
-  return `<div class="${cls}" data-book-id="${escapeHtml(book.id)}">${head}${subsHtml}</div>`;
+  const folded = isBookFolded(book.id);
+  const cls = `setting-book${enabled ? "" : " book-off"}${orphan ? " is-orphan" : ""}${folded ? " book-folded" : ""}`;
+  return `<div class="${cls}" data-book-id="${escapeHtml(book.id)}">${head}${folded ? "" : subsHtml}</div>`;
 }
 
 /** 给书头里的控件绑事件：开关、更多菜单。 */
 function bindBookActions(root, sections) {
   root.querySelectorAll('[data-act="book-toggle"]').forEach(sw => {
     sw.addEventListener("change", (e) => {
+      e.stopPropagation();
       const id = sw.dataset.bookId;
       if (id) toggleBook(id, e.target.checked);
+    });
+    // 开关的 click 会冒泡到书头折叠——挡掉
+    sw.addEventListener("click", (e) => e.stopPropagation());
+  });
+  root.querySelectorAll('[data-act="book-fold"]').forEach(head => {
+    head.addEventListener("click", (e) => {
+      // 点在开关/更多按钮上就不折叠
+      if (e.target.closest(".switch, .book-more")) return;
+      const id = head.dataset.bookId;
+      if (id) toggleBookFold(id);
+      // 重画：折叠状态在 localStorage，下次 renderBookView 会读到
+      renderSettings(state.settingList || []);
     });
   });
   root.querySelectorAll(".book-more").forEach(btn => {

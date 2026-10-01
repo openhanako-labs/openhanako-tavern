@@ -166,12 +166,13 @@ function renderConvs() {
   // iframe，rail 这边跨不过去，所以只能本地两步。
   el.querySelectorAll(".conv-del").forEach(btn => {
     const armed = () => btn.dataset.armed === "1";
-    const disarm = () => { delete btn.dataset.armed; btn.textContent = "✕"; btn.title = "删除这场对话"; };
+    const disarm = () => { delete btn.dataset.armed; btn.classList.remove("armed"); btn.textContent = "✕"; btn.title = "删除这场对话"; };
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
       if (!armed()) {
         btn.dataset.armed = "1";
-        btn.textContent = "确认？";
+        btn.classList.add("armed");
+        btn.textContent = "?";   // 窄栏里「确认?」三个字挤不下——一个问号就是约定
         btn.title = "再点一次确认删除";
         setTimeout(() => { if (btn.isConnected && armed()) disarm(); }, 3000);
         return;

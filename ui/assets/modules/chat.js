@@ -936,7 +936,12 @@ export async function createConversation() {
     // 卡片点选（与角色抽屉同一套语言）。
     // 那个数字才是选卡时真正要看的：
     //   1 场 → 直接续   0 场 → 开新场   多条 → 弹选择器
-    // convCount 从 state.convList 里就地数——不向服务器多要一次。
+    // convCount 从 state.convList 里就地数——**打开弹窗时先重拉一次**，
+    // 否则 rail 那边删了对话，这边还拿着旧快照数（「删完了还显示 5 场」）。
+    try {
+      const convRes = await apiFetch("conversations");
+      state.convList = extractArray(convRes);
+    } catch { /* 拉不到就用手里那份，别拦着建对话 */ }
     const convs = state.convList || [];
     listEl.innerHTML = characters.map(c => {
       const convCount = convs.filter(x => x.characterId === c.id).length;
@@ -1549,6 +1554,7 @@ export function renderHeaderMeta() {
   dom.chatMeta.classList.remove("hidden");
 
   // 羁绊场：输入框换成「推进」——玩家不在场，不发言只旁听。
+  // 注：第 6 期入口已撤（月曦夜反馈），此分支现只服务已有 bond 对话的读。
   const area = document.getElementById("chat-input-area");
   let bondBtn = document.getElementById("bond-advance-btn");
   if (isBond && area) {
@@ -1557,13 +1563,12 @@ export function renderHeaderMeta() {
       bondBtn.id = "bond-advance-btn";
       bondBtn.className = "btn btn-primary";
       bondBtn.type = "button";
-      bondBtn.textContent = "推进羁绊";
+      bondBtn.textContent = "推进羻绊";
       bondBtn.addEventListener("click", () => void advanceBond());
       const sendBtn = document.getElementById("send-btn");
       sendBtn?.parentElement?.insertBefore(bondBtn, sendBtn);
     }
     bondBtn.classList.remove("hidden");
-    // 羁绊场玩家不发言：藏起输入框，留推进按钮
     const ta = document.getElementById("chat-input");
     if (ta) ta.disabled = true;
     if (ta) ta.placeholder = "羻绊小剧场——你不在场，点「推进羻绊」生成一段互动";

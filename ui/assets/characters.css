@@ -8207,3 +8207,32 @@ html.has-app-bg .shell {
   display: flex; align-items: center; justify-content: center;
 }
 .msg-ava-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 书折叠（2026-10-01）：书头可点，折叠时只留抬头一行 */
+#settings-list .book-head { cursor: pointer; user-select: none; }
+#settings-list .book-head:hover { background: var(--surface-2); }
+#settings-list .book-fold-car {
+  flex: 0 0 auto; font-size: 11px; color: var(--fg-muted);
+  transition: transform .15s var(--ease);
+}
+#settings-list .setting-book.book-folded .book-fold-car { transform: rotate(-90deg); }
+#settings-list .setting-book.book-folded .book-section { display: none; }
+/* 会话删除按钮：rail 窄栏里平时不存在——hover 才浮现（防误点）。
+   这是 rail 独立 iframe 的样式，与 characters.css 的样式不同源。 */
+.conv-del {
+  position: absolute; top: 6px; right: 6px;
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; border: none; border-radius: 5px;
+  background: transparent; color: var(--fg-muted);
+  font-size: 13px; line-height: 1; cursor: pointer;
+  opacity: 0; transition: opacity .15s var(--ease), color .15s var(--ease);
+}
+.conv-item:hover .conv-del,
+.conv-del:focus-visible { opacity: 1; }
+.conv-del:hover { color: var(--fg); background: var(--surface-2); }
+/* 已按下待确认：主色描边，两个字正好 */
+.conv-del.armed {
+  opacity: 1;
+  color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}

@@ -298,9 +298,8 @@ export async function init() {
 
   // 自定义背景：先绑事件，再拉配置（拉不到就按“没背景”跑，不拦整屏）
   bindAppearance();
-  bindSocial();
-  bindBattle();
-  bindSimulation();
+  // 第 7-9 期功能入口已撤（经营/战斗/朋友圈）——bindSocial/bindBattle/bindSimulation
+  // 留代码不挂事件。等后续想法。
   bindSocial();
   loadAppearance().catch((e) => console.error("[bg] 初始化失败:", e));
 

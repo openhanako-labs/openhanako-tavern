@@ -99,18 +99,9 @@
       <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="3.4" width="10.8" height="9.2" rx="1.4"/><path d="M2.6 10.4 6 7.6l3 2.4 2.2-1.8 2.2 1.8"/></svg>
       <span>背景</span>
     </button>
-    <button type="button" class="rail-item" id="sim-open" title="模拟经营">
-      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="2.6" width="4.2" height="4.2" rx="0.8"/><rect x="9.2" y="2.6" width="4.2" height="4.2" rx="0.8"/><rect x="2.6" y="9.2" width="4.2" height="4.2" rx="0.8"/><rect x="9.2" y="9.2" width="4.2" height="4.2" rx="0.8"/></svg>
-      <span>经营</span>
-    </button>
-    <button type="button" class="rail-item" id="battle-open" title="战斗">
-      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13l7-7 3-3v4l-7 7H3v-1z"/><path d="M9 7l2 2"/></svg>
-      <span>战斗</span>
-    </button>
-    <button type="button" class="rail-item" id="social-open" title="朋友圈 · 角色动态">
-      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="5" r="2.6"/><path d="M2.8 14c.6-2.8 2.7-4.4 5.2-4.4s4.6 1.6 5.2 4.4"/></svg>
-      <span>朋友圈</span>
-    </button>
+    <!-- 第 7-9 期功能（模拟经营/战斗/朋友圈）月曦夜反馈"完全不兼容"——入口撤下，lib 代码保留。等后续有想法再接。 -->
+    <!-- 第 8 期战斗入口撤下（同经营） -->
+    <!-- 第 7 期朋友圈入口撤下（同经营） -->
   </nav>
 
   <!--
@@ -362,10 +353,10 @@
       -->
       <div class="drawer-toolbar">
         <button id="create-setting-btn" class="btn btn-primary btn-sm">+ 新建条目</button>
+        <button id="create-book-btn" class="btn btn-sm" title="新建一本世界书（条目分组装进书里）">+ 新建书</button>
         <div class="more-toggle">
           <button id="settings-more-btn" class="btn btn-ghost btn-sm" aria-haspopup="menu" aria-expanded="false" title="更多">⋯</button>
           <div id="settings-more-menu" class="more-menu" hidden role="menu">
-            <button id="create-book-btn" role="menuitem">+ 新建世界书</button>
             <button id="import-st-btn" role="menuitem">导入 ST</button>
             <button id="export-st-btn" role="menuitem">导出 ST</button>
             <button id="autocategorize-btn" role="menuitem" title="跑一次启发式分类（只填高置信三类）">自动分类</button>
