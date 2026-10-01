@@ -116,8 +116,20 @@ export function bindSocial() {
 
   el("social-post-btn")?.addEventListener("click", async () => {
     const btn = el("social-post-btn");
-    const cid = state.currentCharacter?.id || state.pickerCharacterId;
-    if (!cid) { toast("先在右栏选一位角色", "error"); return; }
+    // 选角色发（choiceDialog 列出所有卡，不依赖当前面板选中）
+    let cid = state.currentCharacter?.id || state.pickerCharacterId;
+    if (!cid) {
+      try {
+        const all = unwrap(await apiFetch("characters")) || [];
+        if (!all.length) { toast("还没有角色卡", "error"); return; }
+        const { choiceDialog } = await import("./core.js");
+        cid = await choiceDialog({
+          title: "谁发这条动态？",
+          options: all.map(x => ({ value: String(x.id), label: x.name || "（未命名）" }))
+        });
+      } catch (e) { toast(`拉角色失败：${friendlyError(e)}`, "error"); return; }
+    }
+    if (!cid) return;
     if (btn) { btn.disabled = true; btn.textContent = "在想…"; }
     try {
       await apiFetch("social/feed/post", {

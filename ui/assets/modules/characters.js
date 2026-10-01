@@ -86,6 +86,19 @@ export async function openCharacterEditor(id) {
   
   const form = document.getElementById("character-form");
   form.reset();
+
+  // 折叠区（进阶等）：事件委托绑一次（绑在 form 上，重画不丢）。
+  // 这里的点击绑定从折叠样式写下那天就缺——「进阶点不了」就是因为
+  // 没有任何 JS 切换 .collapsed 类（CSS 只写了 collapsed 时隐藏）。
+  if (!form.dataset.foldBound) {
+    form.dataset.foldBound = "1";
+    form.addEventListener("click", (e) => {
+      const head = e.target.closest(".fs-head");
+      if (!head) return;
+      const sec = head.closest(".form-sec");
+      if (sec) sec.classList.toggle("collapsed");
+    });
+  }
   
   // 隐藏所有表单、只显示角色那张（这一步以前只写在这里，
   // 其余四个编辑器都缺——见 dom.js 的 showEditForm）
@@ -736,17 +749,18 @@ export async function renderCharContext(greetIdx = 0) {
     try {
       const all = extractArray(await apiFetch("characters"));
       const others = all.filter(x => String(x.id) !== String(c.id));
-      if (others.length === 0) { toast("只有一张卡，捵绊至少需要两位角色", "error"); return; }
-      const labels = others.map(x => `${x.name || "（未命名）"}（${x.id.slice(0, 8)}）`);
-      const picked = prompt(`选一位与「${c.name || "她"}」建立羻绊的角色：\n${labels.map((l, i) => `${i + 1}. ${l}`).join("\n")}\n输入序号：`);
+      if (others.length === 0) { toast("只有一张卡，羻绊至少需要两位角色", "error"); return; }
+      // window.prompt 在 iframe 沙箱里被禁——rail 删除“点了没反应”同一个坑。
+      const { choiceDialog } = await import("./core.js");
+      const picked = await choiceDialog({
+        title: `选一位与「${c.name || "她"}」建立羻绊的角色`,
+        options: others.map(x => ({ value: String(x.id), label: `${x.name || "（未命名）"}（${x.id.slice(0, 8)}）` }))
+      });
       if (!picked) return;
-      const idx = Number(picked) - 1;
-      if (!Number.isInteger(idx) || idx < 0 || idx >= others.length) { toast("序号无效", "error"); return; }
-      const other = others[idx];
       const env = await apiFetch("bonds", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ characterIds: [c.id, other.id] })
+        body: JSON.stringify({ characterIds: [c.id, picked] })
       });
       const conv = unwrap(env) || {};
       toast("羻绊已建立——在对话里点「推进」生成互动", "success");

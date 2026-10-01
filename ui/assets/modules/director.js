@@ -280,7 +280,7 @@ function renderEditor() {
 
   modal.classList.remove("hidden");
 
-  mountEditor({
+  void mountEditor({
     state: d.state || {},
     rules: Array.isArray(d.rules) ? d.rules : [],
     freeform: d.freeform || ""
@@ -319,10 +319,11 @@ function destroyEditor() {
  * 菜单栏留着——模式切换、撤销、排序都在那儿。navigationBar 关掉：
  * 那条面包屑是给深层嵌套的文档用的，一份配方没那个深度。
  */
-function mountEditor(initial) {
+async function mountEditor(initial) {
   destroyEditor();
   const host = $("dir-editor-host");
-  if (!host || typeof createJSONEditor !== "function") return;
+  if (!host) return;
+  const { createJSONEditor, Mode } = await loadJsonEditor();
   jsonEditor = createJSONEditor({
     target: host,
     props: {

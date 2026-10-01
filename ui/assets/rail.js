@@ -159,17 +159,25 @@ function renderConvs() {
       }
     });
   });
-  // 删除：stopPropagation 别触发 openConv。确认走 window.confirm——
-  // rail 不在 iframe 沙箱里，原生 confirm 可用（card 页的 confirmDialog 是沙箱替代）。
+  // 删除：stopPropagation 别触发 openConv。
+  // 确认用两步内联（✕ → 确认? → 再点才删，3s 不点回弹）——
+  // window.confirm 在 iframe 沙箱里被禁（返回 undefined → 直接 return），
+  // 就是“删除点了没效果”的原因；core.js 的 confirmDialog 在 card 页那个
+  // iframe，rail 这边跨不过去，所以只能本地两步。
   el.querySelectorAll(".conv-del").forEach(btn => {
-    btn.addEventListener("click", (e) => {
+    const armed = () => btn.dataset.armed === "1";
+    const disarm = () => { delete btn.dataset.armed; btn.textContent = "✕"; btn.title = "删除这场对话"; };
+    btn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const id = btn.dataset.del;
-      const c = convs.find(x => String(x.id) === String(id));
-      const title = c?.title || "这场对话";
-      const n = c?.messageCount || 0;
-      if (!window.confirm(`删掉「${title}」？\n里面的 ${n} 条消息会一起删掉，不可恢复。`)) return;
-      void deleteConv(id);
+      if (!armed()) {
+        btn.dataset.armed = "1";
+        btn.textContent = "确认？";
+        btn.title = "再点一次确认删除";
+        setTimeout(() => { if (btn.isConnected && armed()) disarm(); }, 3000);
+        return;
+      }
+      disarm();
+      void deleteConv(btn.dataset.del);
     });
   });
 }

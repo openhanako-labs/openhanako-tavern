@@ -15,15 +15,26 @@ export function toast(message, type = "info") {
 }
 
 // 自定义确认弹窗（iframe 沙箱阻止了 window.confirm）
+// message 可以是字符串，或 { title, body } 对象——对象时标题加粗、正文小字。
+// 曾经只认字符串：删角色时传了 {title, body}，弹窗里直接印出「[object Object]」。
 export function confirmDialog(message) {
+  const isObj = message && typeof message === "object";
+  const title = isObj ? String(message.title || "确认？") : "";
+  const body = isObj ? String(message.body || "") : String(message ?? "");
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;";
     const box = document.createElement("div");
     box.style.cssText = "background:var(--hana-bg,#1e1e1e);border:1px solid var(--hana-border,#333);border-radius:8px;padding:20px;min-width:300px;max-width:90vw;";
+    if (isObj) {
+      const t = document.createElement("p");
+      t.textContent = title;
+      t.style.cssText = "margin:0 0 8px;font-size:15px;font-weight:600;color:var(--hana-fg,#e0e0e0);";
+      box.appendChild(t);
+    }
     const msg = document.createElement("p");
-    msg.textContent = message;
-    msg.style.cssText = "margin:0 0 16px;font-size:14px;color:var(--hana-fg,#e0e0e0);";
+    msg.textContent = body;
+    msg.style.cssText = "margin:0 0 16px;font-size:13px;line-height:1.6;color:var(--hana-fg,#e0e0e0);white-space:pre-wrap;";
     const actions = document.createElement("div");
     actions.style.cssText = "display:flex;gap:8px;justify-content:flex-end;";
     const okBtn = document.createElement("button");
@@ -41,6 +52,41 @@ export function confirmDialog(message) {
     okBtn.onclick = () => { overlay.remove(); resolve(true); };
     cancelBtn.onclick = () => { overlay.remove(); resolve(false); };
     overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } };
+  });
+}
+
+/**
+ * 选项选择器：从列表里选一个（替代被沙箱禁的 window.prompt）。
+ * @param {{title: string, options: Array<{value: string, label: string}>}} spec
+ * @returns {Promise<string|null>} 选中的 value；取消返回 null
+ */
+export function choiceDialog({ title, options = [] }) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;";
+    const box = document.createElement("div");
+    box.style.cssText = "background:var(--hana-bg,#1e1e1e);border:1px solid var(--hana-border,#333);border-radius:8px;padding:20px;min-width:300px;max-width:90vw;max-height:80vh;overflow-y:auto;";
+    const t = document.createElement("p");
+    t.textContent = title || "选一个";
+    t.style.cssText = "margin:0 0 12px;font-size:15px;font-weight:600;color:var(--hana-fg,#e0e0e0);";
+    box.appendChild(t);
+    for (const opt of options) {
+      const btn = document.createElement("button");
+      btn.textContent = opt.label;
+      btn.style.cssText = "display:block;width:100%;text-align:left;padding:9px 12px;margin:4px 0;background:transparent;border:1px solid var(--hana-border,#333);border-radius:6px;color:var(--hana-fg,#e0e0e0);cursor:pointer;font-size:13px;";
+      btn.onmouseenter = () => { btn.style.borderColor = "#e08a3c"; };
+      btn.onmouseleave = () => { btn.style.borderColor = "var(--hana-border,#333)"; };
+      btn.onclick = () => { overlay.remove(); resolve(opt.value); };
+      box.appendChild(btn);
+    }
+    const cancelBtn = document.createElement("button");
+    cancelBtn.textContent = "取消";
+    cancelBtn.style.cssText = "display:block;width:100%;padding:8px;margin-top:10px;background:transparent;border:none;color:var(--hana-fg,#e0e0e0);cursor:pointer;font-size:12px;";
+    cancelBtn.onclick = () => { overlay.remove(); resolve(null); };
+    box.appendChild(cancelBtn);
+    overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(null); } };
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
   });
 }
 

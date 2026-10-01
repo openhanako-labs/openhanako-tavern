@@ -91,6 +91,27 @@ async function encounter() {
     const d = unwrap(env) || {};
     el("battle-modal")?.classList.remove("hidden");
     renderPanel(d.battle);
+    // 敌人配图（异步生成的）：media 台账的 id 拉字节填进面板顶部
+    if (d.enemyImage) {
+      try {
+        const env2 = await apiFetch(`media/${encodeURIComponent(d.enemyImage)}`);
+        const m = unwrap(env2) || {};
+        const b64 = m.base64 || m.bytes;
+        if (typeof b64 === "string" && b64) {
+          const bin = atob(b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i2 = 0; i2 < bin.length; i2++) bytes[i2] = bin.charCodeAt(i2);
+          const url = URL.createObjectURL(new Blob([bytes], { type: m.mime || "image/png" }));
+          const box = el("battle-body");
+          if (box) {
+            const img = document.createElement("img");
+            img.src = url;
+            img.className = "battle-enemy-img";
+            box.prepend(img);
+          }
+        }
+      } catch { /* 图拿不到就不展示，不挡战斗 */ }
+    }
   } catch (e) {
     toast(`遭遇失败：${friendlyError(e)}`, "error");
   } finally {
