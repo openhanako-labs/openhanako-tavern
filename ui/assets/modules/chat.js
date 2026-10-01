@@ -46,10 +46,18 @@ function msgAvaText(m) {
  *
  * system 是旁白式的居中提示，不属于任何人，不给。
  */
-/** 头像格。system 是居中旁白，不属于任何人，不给头像。 */
+/** 头像格。assistant 消息显示角色立绘（有的话），user 显示「你」。 */
 function avaHtml(m) {
   if (m.role === "system") return "";
-  return `<div class="msg-ava">${escapeHtml(msgAvaText(m))}</div>`;
+  if (m.role === "user") return `<div class="msg-ava">你</div>`;
+  const name = m.speakerId ? charNameOf(m.speakerId) : (state.currentCharacter?.name || "");
+  const id = m.speakerId ? String(m.speakerId) : String(state.currentCharacter?.id || "");
+  // 有角色卡 id 就拼立绘 <img>（apiAvatarBlobUrl 异步填 src，挂 attachSpriteClick）；
+  // 取不到就退回首字母——立绘是增强，不是门槛。
+  if (id && id !== "undefined") {
+    return `<div class="msg-ava msg-ava-img" data-ava="${escapeHtml(id)}" data-ava-name="${escapeHtml(name)}" title="${escapeHtml(name)}"></div>`;
+  }
+  return `<div class="msg-ava">${escapeHtml(name ? name.slice(0, 1) : "·")}</div>`;
 }
 
 function speakerLineHtml(m) {
@@ -552,6 +560,8 @@ export function renderMessages() {
   }).join("");
   // 插图消息里带 data-media-id 的 <img> 要填上真图（base64）
   loadIllustrationImages();
+  // 会话头像立绘：异步填 src + 挂点击反应
+  hydrateMsgAvatars();
 
   // 事件委托：消息多了逐个绑会很慢，而且重渲染后要重绑一遍
   dom.messagesContainer.querySelectorAll(".message").forEach(el => {
@@ -614,6 +624,31 @@ export function renderMessages() {
 
 
 /** 推进羻绊：调 /bonds/:id/advance，成功后重拉对话渲染。 */
+/** 会话头像立绘：为 .msg-ava-img 异步填 src，并挂点击反应（有热区时）。 */
+async function hydrateMsgAvatars() {
+  const imgs = dom.messagesContainer.querySelectorAll(".msg-ava-img[data-ava]");
+  for (const img of imgs) {
+    if (img.dataset.hydrated) continue;
+    img.dataset.hydrated = "1";
+    const id = img.dataset.ava;
+    const name = img.dataset.avaName || "";
+    try {
+      const url = await apiAvatarBlobUrl(id, { keepPrevious: true });
+      img.innerHTML = `<img src="${url}" alt="${escapeHtml(name)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+      // 点击反应：找该角色的 sprite_reactions 数据挂上
+      const card = (state.charList || []).find(x => String(x.id) === id) ||
+        (state.currentCharacter && String(state.currentCharacter.id) === id ? state.currentCharacter : null);
+      if (card?.sprite_reactions?.zones?.length) {
+        const m = await import("./sprite-click-ui.js");
+        m.attachSpriteClick(img, card);
+      }
+    } catch {
+      // 没立绘：填首字母占位
+      img.textContent = name ? name.slice(0, 1) : "·";
+    }
+  }
+}
+
 export async function advanceBond() {
   const conv = state.currentConv;
   if (!conv || conv.mode !== "bond" || state.isGenerating) return;

@@ -743,27 +743,41 @@ export async function renderCharContext(greetIdx = 0) {
     }
   });
 
-  // 发起羻绊（第 6 期）：选另一位角色 → 建捵绊对话 → 打开。
-  // 生成侧「推进」按钮在聊天区（对话 mode=bond 时出现）。
+  // 发起羻绊（第 6 期）：选对象 → 建羁绊对话 → 打开。
+  // 对象有两类：①角色卡本人 ②别的世界书里标了「角色」的条目
+  //（月曦夜点出的：世界书里很多角色，不该只限角色卡）。
   box.querySelector("#ctx-bond")?.addEventListener("click", async () => {
     try {
       const all = extractArray(await apiFetch("characters"));
       const others = all.filter(x => String(x.id) !== String(c.id));
-      if (others.length === 0) { toast("只有一张卡，羻绊至少需要两位角色", "error"); return; }
-      // window.prompt 在 iframe 沙箱里被禁——rail 删除“点了没反应”同一个坑。
+      let bookCast = [];
+      try {
+        const cand = unwrap(await apiFetch(`settings/cast-candidates?characterId=${encodeURIComponent(c.id)}`)) || {};
+        for (const book of cand.books || []) {
+          for (const ent of book.characters || []) {
+            bookCast.push({ label: `${book.name} · ${ent.name}`, value: `book:${ent.id}` });
+          }
+        }
+      } catch { /* 设定库没有角色条目就不拼 */ }
       const { choiceDialog } = await import("./core.js");
+      const options = [
+        ...others.map(x => ({ value: `card:${x.id}`, label: `角色卡 · ${x.name || "（未命名）"}` })),
+        ...bookCast
+      ];
+      if (options.length === 0) { toast("没有可选对象——先建新卡，或在世界书里把条目标「角色」", "error"); return; }
       const picked = await choiceDialog({
-        title: `选一位与「${c.name || "她"}」建立羻绊的角色`,
-        options: others.map(x => ({ value: String(x.id), label: `${x.name || "（未命名）"}（${x.id.slice(0, 8)}）` }))
+        title: `选一位与「${c.name || "她"}」建立羁绊的对象`,
+        options
       });
       if (!picked) return;
+      const otherId = picked.startsWith("card:") ? picked.slice(5) : picked.startsWith("book:") ? picked.slice(5) : picked;
       const env = await apiFetch("bonds", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ characterIds: [c.id, picked] })
+        body: JSON.stringify({ characterIds: [c.id, otherId] })
       });
       const conv = unwrap(env) || {};
-      toast("羻绊已建立——在对话里点「推进」生成互动", "success");
+      toast("羁绊已建立——在对话里点「推进」生成互动", "success");
       const chat = await import("./chat.js");
       await chat.openConversation(conv.id);
     } catch (e) {
