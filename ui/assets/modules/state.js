@@ -6,6 +6,9 @@ export const state = {
   currentCharacter: null,
   importData: null,
   currentConv: null,
+  // 全局用户人设（名字/人设/头像）。会话级的 userName/persona 优先于它；
+  // 它管的是「没设过的场」和「新角色的第一场」。
+  userProfile: null,
   convList: [],
   charList: [],
   settingList: null,

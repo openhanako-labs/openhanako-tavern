@@ -31,6 +31,7 @@ import { registerRegexRoutes } from "./lib/regex/routes.js";
 
 import { PresetRepo } from "./lib/presets/repo.js";
 import { registerPresetRoutes } from "./lib/presets/routes.js";
+import { initUserProfile, registerUserProfileRoutes } from "./lib/user-profile.js";
 
 import { BoardRepo } from "./lib/board/repo.js";
 import { DirectorRepo } from "./lib/director/repo.js";
@@ -185,6 +186,9 @@ export default defineApp(async (sdk) => {
     presetRepo = new PresetRepo(dataDir);
     await probe.safe(() => presetRepo.init(), "presetRepo.init");
     s.presets = { repoInitialized: true, presetsDir: path.join(dataDir, "presets") };
+
+    // 全局用户人设：早于路由注册初始化——conversations create 的兜底链会读它
+    initUserProfile(dataDir);
   }
 
   let boardRepo = null;
@@ -334,6 +338,9 @@ export default defineApp(async (sdk) => {
     }
 
     registerToolRoutes(app, sdk);
+
+    // 全局用户人设（GET/PUT /user-profile）——配置一次，新场自动继承
+    registerUserProfileRoutes(app);
 
     // 向量（与工具共用一个 service，纪律只有一份）
     registerEmbedRoutes(app, sdk);

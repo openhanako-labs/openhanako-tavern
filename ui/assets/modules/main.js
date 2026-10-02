@@ -13,6 +13,7 @@ import { loadConversations, renderConversations, openConversation, renderMessage
 import { bindChatMore, syncChatMore } from "./chat-more.js";
 import { bindShell, toggleSidebar } from "./shell.js";
 import { bindPresets } from "./presets.js";
+import { loadUserProfile, bindUserProfile } from "./user-profile.js";
 import { loadSettings, renderSettings, openSettingEditor, saveSetting, deleteSetting, toggleSetting, handleSettingAction, importSTWorldBook, exportSTWorldBook, handleSTImport, updateTriggerFields, runAutocategorize, bindSettingsControls, view as settingsView } from "./settings.js";
 import { openCatsModal } from "./settings-cats.js";
 import { newDirector, saveDirector, closeDirectorEditor, deleteEditingDirector, simulateDirector } from "./director.js";
@@ -231,6 +232,11 @@ document.getElementById("open-models-settings")?.addEventListener("click", async
   const m = await import("./models.js");
   await m.openModels();
 });
+document.getElementById("open-userprofile-settings")?.addEventListener("click", async () => {
+  const m = await import("./user-profile.js");
+  await m.loadUserProfile();
+  m.openUserProfile();
+});
 document.getElementById("open-memory-settings")?.addEventListener("click", async () => {
   const m = await import("./memory.js");
   await m.openMemory();
@@ -293,6 +299,10 @@ export async function init() {
   // 文字与字体：绑事件 + 把上次的选择落回界面（localStorage，拉不到按默认跑）
   bindDisplay();
   loadDisplay();
+
+  // 全局用户人设：绑弹窗 + 拉数据（对话里用户侧头像/称呼读它）
+  bindUserProfile();
+  loadUserProfile().catch(() => {});
 
   // 命令面板（Ctrl/⌘K）与“滚到底”
   bindCommand();

@@ -722,6 +722,7 @@
             这几项<b>配一次就不动</b>；原来只在聊天头的 ⋯ 菜单里，没开对话就进不去。
           </div>
           <div class="tools-appsec-btns">
+            <button type="button" id="open-userprofile-settings" class="btn btn-sm">用户人设</button>
             <button type="button" id="open-models-settings" class="btn btn-sm">模型分选</button>
             <button type="button" id="open-memory-settings" class="btn btn-sm">记忆</button>
             <button type="button" id="open-tts-settings" class="btn btn-sm">语音朗读</button>
@@ -1743,6 +1744,47 @@
     <div class="modal-footer right-align">
       <button id="persona-cancel" class="btn" type="button">取消</button>
       <button id="persona-save" class="btn btn-primary" type="button">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 全局用户人设（配置一次，新场自动继承）─── -->
+<div id="userprofile-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>用户人设（全局）</h2>
+      <button id="userprofile-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="userprofile-form" class="form">
+        <div class="field persona-hint-field">
+          <div class="hint">给「没有可继承来源」的新场兜底：新角色的第一场会带上这份；单场仍可在 ⋯ → 本场人设 里覆盖。</div>
+        </div>
+        <div class="field">
+          <label>我的称呼</label>
+          <input type="text" id="up-user-name" placeholder="User">
+          <p class="hint">{{user}} 宏的默认来源。</p>
+        </div>
+        <div class="field">
+          <label>我的人设</label>
+          <textarea id="up-persona" rows="4" placeholder="你是谁、在故事里是什么身份、说话什么风格"></textarea>
+          <p class="hint">新场没带人设时作为 persona 块发出；单场覆盖后以单场为准。</p>
+        </div>
+        <div class="field">
+          <label>我的头像</label>
+          <div class="up-avatar-row">
+            <div id="up-avatar-preview" class="up-avatar-preview">?</div>
+            <input type="file" id="up-avatar-input" accept="image/*" class="hidden">
+            <button type="button" id="up-avatar-pick" class="btn btn-sm">选图</button>
+            <button type="button" id="up-avatar-clear" class="btn btn-sm">清除</button>
+          </div>
+          <p class="hint">会自动缩到 128px；显示在对话里你那一侧的头像格。</p>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer right-align">
+      <button id="userprofile-cancel" class="btn" type="button">取消</button>
+      <button id="userprofile-save" class="btn btn-primary" type="button">保存</button>
     </div>
   </div>
 </div>

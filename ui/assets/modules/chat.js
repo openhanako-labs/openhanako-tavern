@@ -33,7 +33,10 @@ function charNameOf(id) {
  * 认不出名字时给一个点：空框看起来像「图没加载出来」，一个点只是「没有名字」。
  */
 function msgAvaText(m) {
-  if (m.role === "user") return "你";
+  if (m.role === "user") {
+    const un = state.currentConv?.userName || state.userProfile?.userName;
+    return un ? un.slice(0, 1) : "你";
+  }
   const name = m.speakerId ? charNameOf(m.speakerId) : (state.currentCharacter?.name || "");
   return name ? name.slice(0, 1) : "·";
 }
@@ -49,7 +52,14 @@ function msgAvaText(m) {
 /** 头像格。assistant 消息显示角色立绘（有的话），user 显示「你」。 */
 function avaHtml(m) {
   if (m.role === "system") return "";
-  if (m.role === "user") return `<div class="msg-ava">你</div>`;
+  if (m.role === "user") {
+    const un = state.currentConv?.userName || state.userProfile?.userName;
+    // 全局头像已配置 → 占位格留给 hydrate 填图；没配则维持字格
+    if (state.userProfile?.avatar) {
+      return `<div class="msg-ava msg-ava-uimg" data-uava="1" title="${escapeHtml(un || "你")}"></div>`;
+    }
+    return `<div class="msg-ava">${escapeHtml(un ? un.slice(0, 1) : "你")}</div>`;
+  }
   const name = m.speakerId ? charNameOf(m.speakerId) : (state.currentCharacter?.name || "");
   const id = m.speakerId ? String(m.speakerId) : String(state.currentCharacter?.id || "");
   // 有角色卡 id 就拼立绘 <img>（apiAvatarBlobUrl 异步填 src，挂 attachSpriteClick）；
@@ -62,7 +72,10 @@ function avaHtml(m) {
 
 function speakerLineHtml(m) {
   if (m.role === "system") return "";
-  if (m.role === "user") return '<div class="msg-speaker">你</div>';
+  if (m.role === "user") {
+    const un = state.currentConv?.userName || state.userProfile?.userName;
+    return `<div class="msg-speaker">${escapeHtml(un || "你")}</div>`;
+  }
   const name = m.speakerId ? charNameOf(m.speakerId) : (state.currentCharacter?.name || "");
   return name ? `<div class="msg-speaker">${escapeHtml(name)}</div>` : "";
 }
@@ -624,6 +637,19 @@ export function renderMessages() {
 
 
 /** 推进羻绊：调 /bonds/:id/advance，成功后重拉对话渲染。 */
+/** 角色头像的会话级记忆：同一角色全场只拉一次。
+ *  过去按元素去重，同角色 100 条消息就是 100 次 avatar.json——长对话卡顿的源头之一。 */
+const msgAvaCache = new Map();
+function avaUrlFor(id) {
+  if (!msgAvaCache.has(id)) {
+    msgAvaCache.set(id, apiAvatarBlobUrl(id, { keepPrevious: true }).catch((e) => {
+      msgAvaCache.delete(id);
+      throw e;
+    }));
+  }
+  return msgAvaCache.get(id);
+}
+
 /** 会话头像立绘：为 .msg-ava-img 异步填 src，并挂点击反应（有热区时）。 */
 async function hydrateMsgAvatars() {
   const imgs = dom.messagesContainer.querySelectorAll(".msg-ava-img[data-ava]");
@@ -633,7 +659,7 @@ async function hydrateMsgAvatars() {
     const id = img.dataset.ava;
     const name = img.dataset.avaName || "";
     try {
-      const url = await apiAvatarBlobUrl(id, { keepPrevious: true });
+      const url = await avaUrlFor(id);
       img.innerHTML = `<img src="${url}" alt="${escapeHtml(name)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
       // 点击反应：找该角色的 sprite_reactions 数据挂上
       const card = (state.charList || []).find(x => String(x.id) === id) ||
@@ -646,6 +672,16 @@ async function hydrateMsgAvatars() {
       // 没立绘：填首字母占位
       img.textContent = name ? name.slice(0, 1) : "·";
     }
+  }
+
+  // 全局 user 头像：一份 data URL，全场所有行共用同一引用，不逐条存图
+  const ua = state.userProfile?.avatar;
+  if (ua) {
+    dom.messagesContainer.querySelectorAll(".msg-ava-uimg[data-uava]").forEach((el) => {
+      if (el.dataset.hydrated) return;
+      el.dataset.hydrated = "1";
+      el.innerHTML = `<img src="${ua}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    });
   }
 }
 

@@ -98,5 +98,26 @@ await okAsync("⑤ 另一张卡开新场 → 不带薇拉那套（不跨卡串�
   assert.strictEqual(r.data.userName, "", `跨卡串了 userName：${JSON.stringify(r.data.userName)}`);
 });
 
+// ── ⑥⑦ 全局用户人设兜底（2026-10-02）─────
+// 兜底链最后一环：这张卡无场可抄时，落到全局 profile。
+// 放在 ①-⑤ 之后才初始化/写入全局，不影响既有判据。
+const { initUserProfile, setUserProfile } = await import("../lib/user-profile.js");
+initUserProfile(tmp);
+const nova = await charRepo.create({ name: "诺克斯", first_mes: "「……」" });
+
+await okAsync("⑥ 新卡第一场，无场可抄 → 落到全局 profile", async () => {
+  await setUserProfile({ userName: "夜航人", persona: "全局兜底人设" });
+  const r = await newConv({ characterId: nova.id });
+  assert.strictEqual(r.status, 200, `状态 ${r.status}：${r.error || ""}`);
+  assert.strictEqual(r.data.persona, "全局兜底人设", `实为 ${JSON.stringify(r.data.persona)}`);
+  assert.strictEqual(r.data.userName, "夜航人", `实为 ${JSON.stringify(r.data.userName)}`);
+});
+
+await okAsync("⑦ 全局兜底之上，显式空串仍是「明确清空」", async () => {
+  const r = await newConv({ characterId: nova.id, userName: "", persona: "" });
+  assert.strictEqual(r.data.persona, "", `实为 ${JSON.stringify(r.data.persona)}`);
+  assert.strictEqual(r.data.userName, "", `实为 ${JSON.stringify(r.data.userName)}`);
+});
+
 console.log(`\n${fail === 0 ? "✅" : "❌"} 人设继承：${pass} 过 / ${fail} 败\n`);
 process.exit(fail === 0 ? 0 : 1);
