@@ -1308,8 +1308,9 @@ h1 {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--spk-c) 30%, transparent);
   pointer-events: none;
 }
-/* 正文染色默认开；system 行（旁白提示）不属于任何人，豁免 */
-:root.spk-text-on .message:not(.system) .bubble { color: var(--spk-c); }
+/* 台词染色（默认开）：引号里的话染说话人色，旁白保持墨底色；system 行豁免。
+   「反了」的教训：用户要的是台词可辨，不是整段正文——旁白不属台词。 */
+:root.spk-text-on .message:not(.system) .say { color: var(--spk-c); }
 /* 卡片变量协议块：折叠展示，不参与染色 */
 .proto-block {
   margin: 6px 0;
