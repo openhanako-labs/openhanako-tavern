@@ -88,6 +88,27 @@ function saveSpkText(v) {
   try { localStorage.setItem(SPK_TEXT_KEY, v ? "1" : "0"); } catch { /* 同上 */ }
 }
 
+/**
+ * 把宿主/供应商的 usage 归一化成 { prompt, cached }。
+ *
+ * 宿主契约（实测 deepseek-flash）：input = 未命中缓存的输入，cacheRead = 命中部分
+ * ——真实上下文是两者之和；直接拿 input 当分母会出现「缓存 36913%」这种假读数。
+ * 兼容两系旧字段名（OpenAI / Anthropic）作兑底。
+ */
+export function normalizeUsage(u) {
+  if (!u || typeof u !== "object") return { prompt: null, cached: 0 };
+  const isHostShape = u.cacheRead !== undefined || u.cacheWrite !== undefined || u.totalTokens !== undefined;
+  if (isHostShape) {
+    const uncached = Number(u.input) || 0;
+    const cached = Number(u.cacheRead) || 0;
+    return { prompt: (uncached + cached) || null, cached };
+  }
+  return {
+    prompt: Number(u.prompt_tokens ?? u.input_tokens) || null,
+    cached: Number(u.cache_read_input_tokens ?? u.prompt_tokens_details?.cached_tokens) || 0
+  };
+}
+
 /** 说话人自定义色：{ speakerKey: "#rrggbb" }。chat.js 渲染时读，显示面板可一键清。 */
 export function getSpkColors() {
   try { return JSON.parse(localStorage.getItem(SPK_COLORS_KEY) || "{}") || {}; } catch { return {}; }

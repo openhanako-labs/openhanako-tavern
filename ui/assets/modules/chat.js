@@ -14,7 +14,7 @@ import { createMacroProcessor, contextFromCharacter } from "../lib/macros.js";
 import { openDrawer, boardColumnOpen } from "./shell.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
-import { getSpkColors, saveSpkColor } from "./display.js";
+import { getSpkColors, saveSpkColor, normalizeUsage } from "./display.js";
 import { extractProtocolBlocks } from "./protocol.js";
 
 
@@ -1543,15 +1543,15 @@ export function renderUsageBar() {
     .filter(m => m.role === "assistant" && m.usage)
     .pop();
   const u = state.lastUsage || lastWithUsage?.usage || null;
-  // 两系字段都认——Anthropic: cache_read_input_tokens；OpenAI 兼容: prompt_tokens_details.cached_tokens；
-  // 以及宿主契约的规范形状：{ input, output, cacheRead, cacheWrite, total }（app-contract models.d.ts）。
-  // 过去只认前两系，宿主形状永远映射不上——缓存读数结构性归零。
-  const prompt = u?.prompt_tokens ?? u?.input_tokens ?? u?.input ?? null;
-  const cached = u?.cache_read_input_tokens ?? u?.prompt_tokens_details?.cached_tokens ?? u?.cacheRead ?? 0;
+  // usage 归一化：宿主契约 input 是未命中部分、cacheRead 是命中部分，
+  // 真实上下文 = 两者之和（实测见 display.js normalizeUsage 注释与回归用例）
+  const { prompt, cached } = normalizeUsage(u);
 
   const tEl = document.getElementById("gen-tokens");
   const cEl = document.getElementById("gen-cache");
   bar.classList.remove("hidden");
+  // 原始读数挂 title——读数可疑时悬停对账，不用开 DevTools
+  bar.title = u ? JSON.stringify(u) : "";
 
   if (tEl) {
     const p = state.lastMeta?.pressure || null;
