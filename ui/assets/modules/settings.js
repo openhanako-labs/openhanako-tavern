@@ -215,6 +215,8 @@ export async function loadSettings() {
       view.books = [];
     }
     populateBookFilter();
+    // 本场书集（开着的对话用哪几本书）
+    await loadConvBooks();
 
     const res = await apiFetch("settings");
     const list = extractArray(res);
@@ -513,17 +515,22 @@ function bookRank(book) {
 /** 渲染一本书（头 + 子节）。 */
 function renderBookSection({ book, items, orphan }) {
   const enabled = book.enabled !== false;
+  // 有对话时开关 = 「本场启用」；没对话时退化为「全局开/关」
+  const hasConv = hasConvCtx();
+  const activeNow = hasConv ? bookActiveInConv(book.id) : enabled;
   const scopeBadge = book.characterId
     ? (String(book.characterId) === _bookCurrentCharId()
         ? `<span class="book-scope-badge mine" title="仅本卡对话生效">本卡</span>`
         : `<span class="book-scope-badge" title="仅该卡对话生效">${escapeHtml(charNameOf(book.characterId))}</span>`)
     : `<span class="book-scope-badge" title="所有对话可见">全局</span>`;
 
-  const switchHtml = orphan ? "" : `
-    <label class="switch" title="开/关整本书">
-      <input type="checkbox" data-act="book-toggle" data-book-id="${escapeHtml(book.id)}" ${enabled ? "checked" : ""}>
+  const switchHtml = orphan ? "" : (enabled === false
+    ? `<label class="switch" title="全局已停用——先在 ⋯ 里全局启用，才能在本场选它"><input type="checkbox" disabled><span></span></label>`
+    : `
+    <label class="switch" title="${hasConv ? "这一场是否启用这本书（不影响其他对话）" : "全局开/关这本书"}">
+      <input type="checkbox" data-act="book-toggle" data-book-id="${escapeHtml(book.id)}" ${activeNow ? "checked" : ""}>
       <span></span>
-    </label>`;
+    </label>`);
 
   const head = `
     <div class="book-head" data-act="book-fold" data-book-id="${escapeHtml(book.id)}" title="点标题折叠/展开">
@@ -531,8 +538,10 @@ function renderBookSection({ book, items, orphan }) {
       ${switchHtml}
       <span class="book-title">${escapeHtml(book.name || "（未命名书）")}</span>
       <span class="book-count">${items.length}</span>
+      ${hasConv && enabled && !activeNow ? `<span class="book-scope-badge" title="这一场没启用（书还在，只是本场不用）">本场关</span>` : ""}
+      ${enabled === false ? `<span class="book-scope-badge" title="全局已停用——所有对话都不用它">全局关</span>` : ""}
       ${scopeBadge}
-      ${orphan ? "" : `<button class="book-more" data-act="book-more" data-book-id="${escapeHtml(book.id)}" title="重命名 / 删除书">⋯</button>`}
+      ${orphan ? "" : `<button class="book-more" data-act="book-more" data-book-id="${escapeHtml(book.id)}" title="重命名 / 全局开关 / 删除书">⋯</button>`}
     </div>`;
 
   // 书内子节
@@ -563,17 +572,22 @@ function renderBookSection({ book, items, orphan }) {
       }).join("");
 
   const folded = isBookFolded(book.id);
-  const cls = `setting-book${enabled ? "" : " book-off"}${orphan ? " is-orphan" : ""}${folded ? " book-folded" : ""}`;
+  // 本场没启用的书压暗（自己卡的书默认亮）；没对话时按全局开关压暗
+  const dimmed = hasConv ? !activeNow : !enabled;
+  const cls = `setting-book${dimmed ? " book-off" : ""}${orphan ? " is-orphan" : ""}${folded ? " book-folded" : ""}`;
   return `<div class="${cls}" data-book-id="${escapeHtml(book.id)}">${head}${folded ? "" : subsHtml}</div>`;
 }
 
 /** 给书头里的控件绑事件：开关、更多菜单。 */
 function bindBookActions(root, sections) {
   root.querySelectorAll('[data-act="book-toggle"]').forEach(sw => {
-    sw.addEventListener("change", (e) => {
+    sw.addEventListener("change", async (e) => {
       e.stopPropagation();
       const id = sw.dataset.bookId;
-      if (id) toggleBook(id, e.target.checked);
+      if (!id) return;
+      // 有对话 → 本场开关；没对话 → 全局开关
+      if (hasConvCtx()) await setConvBook(id, e.target.checked);
+      else await toggleBook(id, e.target.checked);
     });
     // 开关的 click 会冒泡到书头折叠——挡掉
     sw.addEventListener("click", (e) => e.stopPropagation());
@@ -616,32 +630,35 @@ function promptDialog({ title, label, defaultValue = "", okText = "确定", canc
     const overlay = document.createElement("div");
     overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;";
     const box = document.createElement("div");
-    box.style.cssText = "background:var(--hana-bg,#1e1e1e);border:1px solid var(--hana-border,#333);border-radius:8px;padding:18px;min-width:320px;max-width:90vw;";
+    // 暖纸化（2026-10-02）：曾用 var(--hana-bg,#1e1e1e) 与蓝按钮 #3b82f6，
+    // 在暖纸界面里是一块黑窗（月曦夜：「UI 有点黑，不融合」）。
+    // 改用 App 自己的变量（characters.css:root 里定义），带暖色回退。
+    box.style.cssText = "background:var(--surface,#fffdf7);border:1px solid var(--border,#efe2c6);border-radius:12px;padding:18px;min-width:320px;max-width:90vw;box-shadow:0 12px 40px rgba(0,0,0,.18);color:var(--fg,#3d3427);";
     if (title) {
       const t = document.createElement("div");
       t.textContent = title;
-      t.style.cssText = "margin-bottom:12px;font-weight:600;font-size:14px;";
+      t.style.cssText = "margin-bottom:12px;font-weight:600;font-size:14px;color:var(--fg,#3d3427);";
       box.appendChild(t);
     }
     if (label) {
       const l = document.createElement("label");
       l.textContent = label;
-      l.style.cssText = "display:block;margin-bottom:6px;font-size:12px;color:var(--hana-fg-muted,#aaa);";
+      l.style.cssText = "display:block;margin-bottom:6px;font-size:12px;color:var(--fg-muted,#8a8071);";
       box.appendChild(l);
     }
     const input = document.createElement("input");
     input.type = "text";
     input.value = defaultValue;
-    input.style.cssText = "width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid var(--hana-border,#333);border-radius:4px;background:transparent;color:var(--hana-fg,#e0e0e0);font-size:14px;";
+    input.style.cssText = "width:100%;box-sizing:border-box;padding:6px 10px;border:1px solid var(--border,#efe2c6);border-radius:8px;background:var(--surface,#fffdf7);color:var(--fg,#3d3427);font-size:14px;";
     box.appendChild(input);
     const actions = document.createElement("div");
     actions.style.cssText = "display:flex;gap:8px;justify-content:flex-end;margin-top:14px;";
     const okBtn = document.createElement("button");
     okBtn.textContent = okText;
-    okBtn.style.cssText = "padding:6px 16px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;";
+    okBtn.style.cssText = "padding:6px 16px;background:var(--accent,#e08a3c);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;";
     const cancelBtn = document.createElement("button");
     cancelBtn.textContent = cancelText;
-    cancelBtn.style.cssText = "padding:6px 16px;background:var(--hana-border,#333);color:var(--hana-fg,#e0e0e0);border:none;border-radius:4px;cursor:pointer;font-size:13px;";
+    cancelBtn.style.cssText = "padding:6px 16px;background:var(--surface-2,#fdf6e6);color:var(--fg,#3d3427);border:1px solid var(--border,#efe2c6);border-radius:8px;cursor:pointer;font-size:13px;";
     actions.appendChild(cancelBtn);
     actions.appendChild(okBtn);
     box.appendChild(actions);
@@ -745,6 +762,8 @@ function openBookMenu(anchorBtn, bookId) {
   menu.style.position = "absolute";
   menu.innerHTML = `
     <button data-act="book-rename" role="menuitem">重命名</button>
+    <button data-act="book-global" role="menuitem">${book.enabled === false ? "全局启用这本书" : "全局停用这本书"}</button>
+    ${hasConvCtx() ? `<button data-act="book-reset" role="menuitem">回到默认（本卡的书）</button>` : ""}
     <button data-act="book-delete" role="menuitem" style="color:var(--danger, #f87171)">删除</button>
   `;
   // 定位在按钮右侧
@@ -772,10 +791,102 @@ function openBookMenu(anchorBtn, bookId) {
     close();
     renameBook(bookId, book.name);
   });
+  menu.querySelector("[data-act='book-global']")?.addEventListener("click", () => {
+    close();
+    toggleBook(bookId, book.enabled === false);   // 反着来：当前关→全局启用
+  });
+  menu.querySelector("[data-act='book-reset']")?.addEventListener("click", () => {
+    close();
+    void resetConvBooks();
+  });
   menu.querySelector("[data-act='book-delete']")?.addEventListener("click", () => {
     close();
     deleteBook(bookId);
   });
+}
+
+// ── 本场书选择（2026-10-02）──────────────────────────
+// 月曦夜：默认只启用本卡绑定的书（+全局），用户自己选这场开哪几本。
+
+/** 当前对话的显式书集（null = 未表态，用默认集）。 */
+function convBookIds() {
+  const vid = view.convBooks?.convId;
+  if (!vid || vid !== state.currentConv?.id) return null;
+  return view.convBooks.bookIds;
+}
+
+/** 当前对话的默认书集（本卡的书 + 全局书）。 */
+function defaultConvBookIds() {
+  const vid = view.convBooks?.convId;
+  if (!vid || vid !== state.currentConv?.id) return [];
+  return view.convBooks.defaultBookIds || [];
+}
+
+/** 有没有「本场」上下文（开着对话）。没对话时开关退化为全局语义。 */
+function hasConvCtx() {
+  return !!state.currentConv?.id;
+}
+
+/** 某本书在这一场是不是启用。 */
+function bookActiveInConv(bookId) {
+  const explicit = convBookIds();
+  const set = (explicit ?? defaultConvBookIds()).map(String);
+  return set.includes(String(bookId));
+}
+
+/** 拉本场书集（loadSettings 时调）。 */
+async function loadConvBooks() {
+  const convId = state.currentConv?.id;
+  view.convBooks = { convId: convId || null, bookIds: null, defaultBookIds: [] };
+  if (!convId) return;
+  try {
+    const r = await apiFetch(`conversations/${encodeURIComponent(convId)}/books`);
+    const d = r.data || r;
+    view.convBooks = {
+      convId,
+      bookIds: Array.isArray(d.bookIds) ? d.bookIds.map(String) : null,
+      defaultBookIds: Array.isArray(d.defaultBookIds) ? d.defaultBookIds.map(String) : []
+    };
+  } catch { /* 拉不到就按全局开关渲染，不阻断抽屉 */ }
+}
+
+/** 切换某本书在本场的启用。 */
+async function setConvBook(bookId, on) {
+  const convId = state.currentConv?.id;
+  if (!convId) return;
+  const set = new Set((convBookIds() ?? defaultConvBookIds()).map(String));
+  if (on) set.add(String(bookId)); else set.delete(String(bookId));
+  const ids = [...set];
+  try {
+    await apiFetch(`conversations/${encodeURIComponent(convId)}/books`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookIds: ids })
+    });
+    view.convBooks = { ...(view.convBooks || {}), convId, bookIds: ids };
+    renderSettings(state.settingList || []);
+    toast(on ? "这一场启用这本书" : "这一场停用这本书（书还在，只是本场不用）", "success");
+  } catch (e) {
+    toast(`没存下：${friendlyError(e)}`, "error");
+  }
+}
+
+/** 回到默认（本卡的书 + 全局）。 */
+async function resetConvBooks() {
+  const convId = state.currentConv?.id;
+  if (!convId) return;
+  try {
+    await apiFetch(`conversations/${encodeURIComponent(convId)}/books`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reset: true })
+    });
+    await loadConvBooks();
+    renderSettings(state.settingList || []);
+    toast("已回到默认（本卡的书 + 全局）", "success");
+  } catch (e) {
+    toast(`没恢复：${friendlyError(e)}`, "error");
+  }
 }
 
 /** 填 sf-book 下拉：列出所有书 + “未归档”默认项。选中项默认 bookId。 */

@@ -155,6 +155,9 @@ export default defineApp(async (sdk) => {
       if (r.createdBooks > 0 || r.updatedEntries > 0) {
         console.log(`[settings] 世界书回填：新建书 ${r.createdBooks}、归档条目 ${r.updatedEntries}`);
       }
+      if (r.migratedBooks > 0) {
+        console.log(`[settings] 世界书语义迁移：${r.migratedBooks} 本全局启用（本场选书改由对话决定，已备份）`);
+      }
     }, "settingRepo.backfillBooks");
     s.settings = { repoInitialized: true, settingsFile: path.join(dataDir, "settings.json"), booksFile: path.join(dataDir, "books.json") };
   }

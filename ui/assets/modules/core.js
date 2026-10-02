@@ -25,24 +25,24 @@ export function confirmDialog(message) {
     const overlay = document.createElement("div");
     overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;";
     const box = document.createElement("div");
-    box.style.cssText = "background:var(--hana-bg,#1e1e1e);border:1px solid var(--hana-border,#333);border-radius:8px;padding:20px;min-width:300px;max-width:90vw;";
+    box.style.cssText = "background:var(--surface,#fffdf7);border:1px solid var(--border,#efe2c6);border-radius:12px;padding:20px;min-width:300px;max-width:90vw;box-shadow:0 12px 40px rgba(0,0,0,.18);color:var(--fg,#3d3427);";
     if (isObj) {
       const t = document.createElement("p");
       t.textContent = title;
-      t.style.cssText = "margin:0 0 8px;font-size:15px;font-weight:600;color:var(--hana-fg,#e0e0e0);";
+      t.style.cssText = "margin:0 0 8px;font-size:15px;font-weight:600;color:var(--fg,#3d3427);";
       box.appendChild(t);
     }
     const msg = document.createElement("p");
     msg.textContent = body;
-    msg.style.cssText = "margin:0 0 16px;font-size:13px;line-height:1.6;color:var(--hana-fg,#e0e0e0);white-space:pre-wrap;";
+    msg.style.cssText = "margin:0 0 16px;font-size:13px;line-height:1.6;color:var(--fg-muted,#8a8071);white-space:pre-wrap;";
     const actions = document.createElement("div");
     actions.style.cssText = "display:flex;gap:8px;justify-content:flex-end;";
     const okBtn = document.createElement("button");
     okBtn.textContent = "确认";
-    okBtn.style.cssText = "padding:6px 16px;background:#e74c3c;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;";
+    okBtn.style.cssText = "padding:6px 16px;background:var(--accent,#e08a3c);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;";
     const cancelBtn = document.createElement("button");
     cancelBtn.textContent = "取消";
-    cancelBtn.style.cssText = "padding:6px 16px;background:var(--hana-border,#333);color:var(--hana-fg,#e0e0e0);border:none;border-radius:4px;cursor:pointer;font-size:13px;";
+    cancelBtn.style.cssText = "padding:6px 16px;background:var(--surface-2,#fdf6e6);color:var(--fg,#3d3427);border:1px solid var(--border,#efe2c6);border-radius:8px;cursor:pointer;font-size:13px;";
     actions.appendChild(cancelBtn);
     actions.appendChild(okBtn);
     box.appendChild(msg);
@@ -65,23 +65,23 @@ export function choiceDialog({ title, options = [] }) {
     const overlay = document.createElement("div");
     overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;";
     const box = document.createElement("div");
-    box.style.cssText = "background:var(--hana-bg,#1e1e1e);border:1px solid var(--hana-border,#333);border-radius:8px;padding:20px;min-width:300px;max-width:90vw;max-height:80vh;overflow-y:auto;";
+    box.style.cssText = "background:var(--surface,#fffdf7);border:1px solid var(--border,#efe2c6);border-radius:12px;padding:20px;min-width:300px;max-width:90vw;max-height:80vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.18);color:var(--fg,#3d3427);";
     const t = document.createElement("p");
     t.textContent = title || "选一个";
-    t.style.cssText = "margin:0 0 12px;font-size:15px;font-weight:600;color:var(--hana-fg,#e0e0e0);";
+    t.style.cssText = "margin:0 0 12px;font-size:15px;font-weight:600;color:var(--fg,#3d3427);";
     box.appendChild(t);
     for (const opt of options) {
       const btn = document.createElement("button");
       btn.textContent = opt.label;
-      btn.style.cssText = "display:block;width:100%;text-align:left;padding:9px 12px;margin:4px 0;background:transparent;border:1px solid var(--hana-border,#333);border-radius:6px;color:var(--hana-fg,#e0e0e0);cursor:pointer;font-size:13px;";
-      btn.onmouseenter = () => { btn.style.borderColor = "#e08a3c"; };
-      btn.onmouseleave = () => { btn.style.borderColor = "var(--hana-border,#333)"; };
+      btn.style.cssText = "display:block;width:100%;text-align:left;padding:9px 12px;margin:4px 0;background:var(--surface,#fffdf7);border:1px solid var(--border,#efe2c6);border-radius:8px;color:var(--fg,#3d3427);cursor:pointer;font-size:13px;";
+      btn.onmouseenter = () => { btn.style.borderColor = "var(--accent,#e08a3c)"; };
+      btn.onmouseleave = () => { btn.style.borderColor = "var(--border,#efe2c6)"; };
       btn.onclick = () => { overlay.remove(); resolve(opt.value); };
       box.appendChild(btn);
     }
     const cancelBtn = document.createElement("button");
     cancelBtn.textContent = "取消";
-    cancelBtn.style.cssText = "display:block;width:100%;padding:8px;margin-top:10px;background:transparent;border:none;color:var(--hana-fg,#e0e0e0);cursor:pointer;font-size:12px;";
+    cancelBtn.style.cssText = "display:block;width:100%;padding:8px;margin-top:10px;background:transparent;border:none;color:var(--fg-muted,#8a8071);cursor:pointer;font-size:12px;";
     cancelBtn.onclick = () => { overlay.remove(); resolve(null); };
     box.appendChild(cancelBtn);
     overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(null); } };

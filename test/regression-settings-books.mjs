@@ -316,6 +316,99 @@ await test("listBooks：空 bookId 的条目不进任何书的 entryCount", asyn
   assert.equal(books[0].entryCount, 1, "只有书内的算，书外的不算");
 });
 
+await test("listEffectiveFor：默认只开本卡的书 + 全局书（别的卡的不进）", async () => {
+  const { repo } = await freshRepoTracked();
+
+  const mine = await repo.createBook({ name: "本卡书", characterId: CHAR, source: "character_book" });
+  const other = await repo.createBook({ name: "别卡书", characterId: OTHER, source: "character_book" });
+  const glob = await repo.createBook({ name: "全局书", source: "native" });
+  await repo.create({ name: "本卡条目", characterId: CHAR, bookId: mine.id });
+  await repo.create({ name: "别卡条目", characterId: OTHER, bookId: other.id });
+  await repo.create({ name: "全局条目", bookId: glob.id, source: "native" });
+  await repo.create({ name: "未归档条目", source: "native" });
+
+  // 未表态（conv.bookIds 缺）= 默认集：本卡书 + 全局书
+  const conv = { characterId: CHAR };
+  const eff = await repo.listEffectiveFor(conv);
+  const names = eff.map(s => s.name).sort();
+  assert.deepEqual(names, ["全局条目", "本卡条目", "未归档条目"].sort(),
+    `默认集应是本卡+全局+未归档，实际 ${JSON.stringify(names)}`);
+  assert.ok(!names.includes("别卡条目"), "别的卡的书不该默认进本场");
+});
+
+await test("listEffectiveFor：显式选书后只留选中集（含别的卡的书）", async () => {
+  const { repo } = await freshRepoTracked();
+
+  const mine = await repo.createBook({ name: "本卡书", characterId: CHAR, source: "character_book" });
+  const other = await repo.createBook({ name: "别卡书", characterId: OTHER, source: "character_book" });
+  await repo.create({ name: "本卡条目", characterId: CHAR, bookId: mine.id });
+  await repo.create({ name: "别卡条目", characterId: OTHER, bookId: other.id });
+
+  // 用户显式“只看别卡那本”：本卡书反而不进
+  const conv = { characterId: CHAR, bookIds: [other.id] };
+  const eff = await repo.listEffectiveFor(conv);
+  const names = eff.map(s => s.name);
+  assert.ok(names.includes("别卡条目"), "显式选中的别卡条目应在");
+  assert.ok(!names.includes("本卡条目"), "未选中的本卡条目应被排除");
+
+  // 空数组 = 全关（书的条目都进不了）
+  const none = await repo.listEffectiveFor({ characterId: CHAR, bookIds: [] });
+  assert.ok(!none.some(s => s.name === "本卡条目" && s.bookId), "空数组 = 全关");
+});
+
+await test("listEffectiveFor：全局停用的书即使是本卡书也不进", async () => {
+  const { repo } = await freshRepoTracked();
+  const mine = await repo.createBook({ name: "本卡书", characterId: CHAR, source: "character_book" });
+  await repo.create({ name: "本卡条目", characterId: CHAR, bookId: mine.id });
+  await repo.toggleBook(mine.id, false);
+  const eff = await repo.listEffectiveFor({ characterId: CHAR });
+  assert.ok(!eff.some(s => s.name === "本卡条目"), "全局停用的书不该进（与旧口径一致）");
+});
+
+await test("defaultBookIds：本卡书 + 全局书，不含别的卡", async () => {
+  const { repo } = await freshRepoTracked();
+  const mine = await repo.createBook({ name: "本卡书", characterId: CHAR, source: "character_book" });
+  const other = await repo.createBook({ name: "别卡书", characterId: OTHER, source: "character_book" });
+  const glob = await repo.createBook({ name: "全局书", source: "native" });
+  const ids = await repo.defaultBookIds(CHAR);
+  assert.ok(ids.includes(String(mine.id)) && ids.includes(String(glob.id)), "本卡书与全局书应在默认集");
+  assert.ok(!ids.includes(String(other.id)), "别卡书不该在默认集");
+});
+
+await test("语义迁移：历史 enabled=false 一次清掉（幂等，带备份）", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "eleckoi-books-mig-"));
+  tmpdirs.push(dir);
+  const repo = createSettingRepo(dir);
+  await repo.init();
+  const b1 = await repo.createBook({ name: "书一", source: "native" });
+  const b2 = await repo.createBook({ name: "书二", source: "native" });
+  await repo.toggleBook(b1.id, false);
+  await repo.toggleBook(b2.id, false);
+
+  const r1 = await repo.backfillBooks();
+  assert.equal(r1.migratedBooks, 2, `应迁移 2 本，实际 ${r1.migratedBooks}`);
+  const after = await repo.listBooks();
+  assert.ok(after.every(b => b.enabled !== false), "迁移后应全部启用");
+
+  // 幂等：再跑一次不再迁移（标记已写）
+  const r2 = await repo.backfillBooks();
+  assert.equal(r2.migratedBooks, 0, "第二次不应再迁");
+});
+
+await test("语义迁移：用户迁移后又手动全局停用，不会被再次覆盖", async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "eleckoi-books-mig2-"));
+  tmpdirs.push(dir);
+  const repo = createSettingRepo(dir);
+  await repo.init();
+  const b = await repo.createBook({ name: "书", source: "native" });
+  await repo.backfillBooks();          // 第一次：写标记
+  await repo.toggleBook(b.id, false);  // 用户有意全局停用
+  const r = await repo.backfillBooks();
+  assert.equal(r.migratedBooks, 0, "不应再迁（尊重用户后改的选择）");
+  const after = await repo.listBooks();
+  assert.equal(after.find(x => x.id === b.id).enabled, false, "用户停用状态应保留");
+});
+
 // ── 收尾 ───────────────────────────────────────────────
 
 for (const dir of tmpdirs) {
