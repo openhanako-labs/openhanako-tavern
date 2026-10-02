@@ -12,7 +12,7 @@
 
 import assert from "node:assert";
 
-const { extractProtocolBlocks } = await import("../ui/assets/modules/chat.js");
+const { extractProtocolBlocks } = await import("../ui/assets/modules/protocol.js");
 
 let pass = 0, fail = 0;
 async function okAsync(name, fn) {

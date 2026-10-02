@@ -15,6 +15,7 @@ import { openDrawer, boardColumnOpen } from "./shell.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
 import { getSpkColors, saveSpkColor } from "./display.js";
+import { extractProtocolBlocks } from "./protocol.js";
 
 
 /**
@@ -56,15 +57,13 @@ function lastAssistantIdOf() {
  * 渲染时整块折成 <details>：内容不丢（想看仍能展开），正文不再被淹没。
  * 是否真按 patch 应用变量，是「要不要兼容酒馆脚本协议」的产品决定，另议。
  */
-const PROTO_RE = /<UpdateVariable>([\s\S]*?)(?:<\/UpdateVariable>|$)/gi;
-export function extractProtocolBlocks(content) {
-  const blocks = [];
-  const text = String(content ?? "").replace(PROTO_RE, (_, inner) => {
-    blocks.push(inner.trim());
-    return "";
-  });
-  return { text, blocks };
-}
+/**
+ * 卡片自带的变量协议块（<UpdateVariable>/<Analysis>/<JSONPatch>）。
+ *
+ * 夜航船的变量账是另一套协议，这些标签没人处理——裸奍在正文里像排错日志。
+ * 抽取在 protocol.js（纯函数，regression-protocol-fold 锁行为）；
+ * 这里只负责把抽出的块折成 <details>：内容不丢，正文不再被淹没。
+ */
 function renderProtoDetails(blocks) {
   if (!blocks.length) return "";
   return blocks.map(b => `
