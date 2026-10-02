@@ -36,8 +36,16 @@ function speakerHueOf(key) {
   return SPEAKER_HUES[h % SPEAKER_HUES.length];
 }
 function speakerKeyOf(m) {
+  if (m.role === "system") return ""; // 旁白/系统提示不属于任何人，不染色
   if (m.role === "user") return "user";
   return m.speakerId || state.currentCharacter?.id || m.role;
+}
+
+/** 最后一条 assistant 消息的 id——换一版/重生只对它有效（后端截到最后一条用户消息为止）。 */
+function lastAssistantIdOf() {
+  const ms = state.currentConv?.messages || [];
+  for (let i = ms.length - 1; i >= 0; i--) if (ms[i].role === "assistant") return ms[i].id;
+  return null;
 }
 
 /**
@@ -551,8 +559,9 @@ export function renderMessages() {
         <button class="mini" data-act="speak" data-id="${m.id}" title="读出来">朗读</button>
         <button class="mini" data-act="edit" data-id="${m.id}">编辑</button>
         <button class="mini" data-act="del" data-id="${m.id}">删除</button>
-        ${m.role === "assistant" ? `<button class="mini" data-act="swipe" data-id="${m.id}">换一版</button>
-        <button class="mini" data-act="regen" data-id="${m.id}">重生</button>` : ""}
+        ${m.role === "assistant" && String(m.id) === String(lastAssistantIdOf()) ? `<button class="mini" data-act="swipe" data-id="${m.id}" title="保留这版，另生成一版（旧版进变体可切回）">换一版</button>
+        <button class="mini" data-act="regen" data-id="${m.id}" title="丢掉这版重新生成">重生</button>` : ""}
+        ${m.role === "assistant" && Array.isArray(m.variants) && m.variants.length > 1 ? `<span class="vsw"><button class="mini" data-act="vprev" data-id="${m.id}" title="上一版">‹</button><span class="vsw-n">${(Number.isInteger(m.variantIndex) ? m.variantIndex : m.variants.length - 1) + 1}/${m.variants.length}</span><button class="mini" data-act="vnext" data-id="${m.id}" title="下一版">›</button></span>` : ""}
       </div>`;
     // 本轮变量变化的账：正文下方一行小 chips。
     // 服务端连显示用的字都拼好了（text）——前端只负责印，
@@ -573,7 +582,9 @@ export function renderMessages() {
             ? "私语 · 谁都没给"
             : "私语 · 只给 " + m.audience.map(id => escapeHtml(charNameOf(id))).join("、")}</div>`
         : "");
-    return `<div class="message ${m.role}" data-id="${m.id}" style="--spk-h:${speakerHueOf(speakerKeyOf(m))}">
+    const spkKey = speakerKeyOf(m);
+    const spkStyle = spkKey ? ` style="--spk-h:${speakerHueOf(spkKey)}"` : "";
+    return `<div class="message ${m.role}" data-id="${m.id}"${spkStyle}>
       ${avaHtml(m)}
       <div class="msg-col">
         ${spk}
@@ -639,6 +650,8 @@ export function renderMessages() {
     el.querySelector('[data-act="del"]')?.addEventListener("click", () => deleteMessage(id));
     el.querySelector('[data-act="swipe"]')?.addEventListener("click", () => swipeVariant(id));
     el.querySelector('[data-act="regen"]')?.addEventListener("click", () => regenerateFrom(id));
+    el.querySelector('[data-act="vprev"]')?.addEventListener("click", () => switchVariant(id, -1));
+    el.querySelector('[data-act="vnext"]')?.addEventListener("click", () => switchVariant(id, 1));
   });
 
   dom.messagesContainer.scrollTop = dom.messagesContainer.scrollHeight;
@@ -1194,30 +1207,19 @@ export async function copyMessage(id) {
   }
 }
 
-/** 换一版：在同一条目下生成新回复（不动原回复）。 */
+/** 换一版：把这版收进变体，另生成一版——‹ › 可切回旧版。 */
 export async function swipeVariant(id) {
-  const msg = findMessage(id);
-  if (!msg || state.isGenerating) return;
-  const idx = state.currentConv.messages.indexOf(msg);
-  const prevUser = [...state.currentConv.messages.slice(0, idx)].reverse().find(m => m.role === "user");
+  if (!state.currentConv || state.isGenerating) return;
   state.isGenerating = true;
+  toast("正在生成另一版…", "info");
   try {
-    const res = await apiFetch(`conversations/${state.currentConv.id}/messages`, {
+    // 后端的 /regenerate 本来就会把旧回复存成变体（attachVariant）——
+    // 过去这里发 variantOf 去打 /messages，后端根本不认那个字段，静默无效。
+    await apiFetch(`conversations/${state.currentConv.id}/regenerate`, {
       method: "POST",
-      body: JSON.stringify({
-        role: "assistant",
-        content: "",
-        variantOf: id,
-        basedOn: prevUser ? prevUser.content : ""
-      })
+      body: JSON.stringify({})
     });
-    const data = res.data || res;
-    const created = data.assistantMessage || data;
-    if (created && created.id) {
-      // 插在原消息之后，作为新的一版
-      state.currentConv.messages.splice(idx + 1, 0, created);
-      renderMessages();
-    }
+    await openConversation(state.currentConv.id);
   } catch (e) {
     toast("换版失败: " + friendlyError(e), "error");
   } finally {
@@ -1225,33 +1227,45 @@ export async function swipeVariant(id) {
   }
 }
 
-/** 从这条 assistant 消息处重生（丢掉它自己，重新生成）。 */
+/** 重生：丢掉这版重新生成（旧版不保留，走 discardOld）。 */
 export async function regenerateFrom(id) {
-  const msg = findMessage(id);
-  if (!msg || state.isGenerating) return;
-  const idx = state.currentConv.messages.indexOf(msg);
-  const prevUser = [...state.currentConv.messages.slice(0, idx)].reverse().find(m => m.role === "user");
-  if (!prevUser) { toast("这条不是回复，没法重生——它前面还没有你的话", "error"); return; }
-
+  if (!state.currentConv || state.isGenerating) return;
+  if (String(id) !== String(lastAssistantIdOf())) {
+    toast("重生只对最后一条回复有效", "error");
+    return;
+  }
   state.isGenerating = true;
+  toast("正在重生…", "info");
   try {
-    // 先删掉旧的，再让它重新生成
-    state.currentConv.messages.splice(idx, 1);
-    renderMessages();
-    const res = await apiFetch(`conversations/${state.currentConv.id}/messages`, {
+    await apiFetch(`conversations/${state.currentConv.id}/regenerate`, {
       method: "POST",
-      body: JSON.stringify({ role: "assistant", content: "", regenerateFrom: prevUser.id })
+      body: JSON.stringify({ options: { discardOld: true } })
     });
-    const data = res.data || res;
-    const created = data.assistantMessage || data;
-    if (created && created.id) {
-      state.currentConv.messages.push(created);
-      renderMessages();
-    }
+    await openConversation(state.currentConv.id);
   } catch (e) {
     toast("重生失败: " + friendlyError(e), "error");
   } finally {
     state.isGenerating = false;
+  }
+}
+
+/** 切换这条例行的变体版本（服务端 switchVariant，本地跟着换显示）。 */
+async function switchVariant(id, dir) {
+  const msg = findMessage(id);
+  if (!msg || !Array.isArray(msg.variants) || msg.variants.length < 2) return;
+  const cur = Number.isInteger(msg.variantIndex) ? msg.variantIndex : msg.variants.length - 1;
+  const next = Math.min(msg.variants.length - 1, Math.max(0, cur + dir));
+  if (next === cur) return;
+  try {
+    await apiFetch(`conversations/${state.currentConv.id}/messages/${encodeURIComponent(String(id))}/variant`, {
+      method: "PUT",
+      body: JSON.stringify({ index: next })
+    });
+    msg.variantIndex = next;
+    msg.content = msg.variants[next];
+    renderMessages();
+  } catch (e) {
+    toast("切换失败: " + friendlyError(e), "error");
   }
 }
 

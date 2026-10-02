@@ -1308,9 +1308,11 @@ h1 {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--spk-c) 30%, transparent);
   pointer-events: none;
 }
-.message.assistant .bubble { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--spk-c) 26%, transparent); }
-/* 正文染色是开关（显示面板），默认关：满屏彩字会盖过暖纸底 */
-:root.spk-text-on .message .bubble { color: var(--spk-c); }
+/* 正文染色是开关（显示面板），默认关；system 行（旁白提示）不属于任何人，豁免 */
+:root.spk-text-on .message:not(.system) .bubble { color: var(--spk-c); }
+/* 换一版的变体切换器 */
+.vsw { display: inline-flex; align-items: center; gap: 2px; }
+.vsw-n { font-size: var(--fs-2xs); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 
 /* ── 角色库（2026-10-02）── */
 .lib-count { font-size: var(--fs-sm); color: var(--fg-muted); font-weight: 400; margin-left: 6px; }
@@ -6432,6 +6434,9 @@ main.ctx-open .drawer:not(.hidden) {
 }
 /* 图标跟着左轨走（command.js 从 #apprail 借 svg），这里只统一尺寸 */
 .cmd-item .ri { width: 14px; height: 14px; flex: 0 0 auto; opacity: .8; }
+/* 输入栏那颗放大镜：SVG 只有 viewBox 没有宽高时会被浏览器撑到默认尺寸（300×150）——
+   命令面板「巨图占屏」的根源。与条目图标同尺寸。 */
+.cmd-bar .ri { width: 15px; height: 15px; flex: 0 0 auto; color: var(--fg-muted); }
 /* 右侧说明：推到最右，长了省略 */
 .cn-sub {
   margin-left: auto;

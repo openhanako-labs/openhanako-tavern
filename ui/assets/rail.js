@@ -359,6 +359,8 @@ function bind() {
   $("rail-import")?.addEventListener("click", () => nav({ t: "import-char" }));
   // AI 生成：左栏只管发意图，生成台在主视图（跨 iframe 走后巷消息总线）
   $("gen-open")?.addEventListener("click", () => nav({ t: "gen-open" }));
+  // 角色库：全部角色（搜索/筛标签/翻页），主区全页打开
+  $("rail-library")?.addEventListener("click", () => nav({ t: "open-library", q: query }));
 
   // card 页新建/删除对话后，可能通知左栏刷新
   window.addEventListener("storage", (e) => {
