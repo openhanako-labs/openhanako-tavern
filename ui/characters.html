@@ -2421,7 +2421,12 @@
             <span>正文按说话人染色</span>
           </label>
         </div>
-        <p class="hint">说话人名字、头像环、左线始终带区分色；这里开的是把正文也染上。默认关——满屏彩字会盖过暖纸底。</p>
+        <p class="hint">说话人名字、头像环始终带区分色；这里开的是把正文也染上。默认关——满屏彩字会盖过暖纸底。</p>
+        <div class="bg-row">
+          <button type="button" id="display-spk-clear" class="btn btn-sm">清除自定义颜色</button>
+          <span class="hint" style="margin:0">点消息底行的 🎨 给那位说话人单独挑色；这里一键全部还原。</span>
+        </div>
+        <input type="color" id="spk-color-input" class="hidden">
       </section>
       <section class="tts-sec">
         <h3>预览</h3>

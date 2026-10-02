@@ -14,6 +14,7 @@ import { createMacroProcessor, contextFromCharacter } from "../lib/macros.js";
 import { openDrawer, boardColumnOpen } from "./shell.js";
 import { dom } from "./dom.js";
 import { state } from "./state.js";
+import { getSpkColors, saveSpkColor } from "./display.js";
 
 
 /**
@@ -562,6 +563,7 @@ export function renderMessages() {
         ${m.role === "assistant" && String(m.id) === String(lastAssistantIdOf()) ? `<button class="mini" data-act="swipe" data-id="${m.id}" title="保留这版，另生成一版（旧版进变体可切回）">换一版</button>
         <button class="mini" data-act="regen" data-id="${m.id}" title="丢掉这版重新生成">重生</button>` : ""}
         ${m.role === "assistant" && Array.isArray(m.variants) && m.variants.length > 1 ? `<span class="vsw"><button class="mini" data-act="vprev" data-id="${m.id}" title="上一版">‹</button><span class="vsw-n">${(Number.isInteger(m.variantIndex) ? m.variantIndex : m.variants.length - 1) + 1}/${m.variants.length}</span><button class="mini" data-act="vnext" data-id="${m.id}" title="下一版">›</button></span>` : ""}
+        ${spkKey ? `<button class="mini" data-act="spkcolor" data-id="${m.id}" title="给这位说话人挑个颜色">🎨</button>` : ""}
       </div>`;
     // 本轮变量变化的账：正文下方一行小 chips。
     // 服务端连显示用的字都拼好了（text）——前端只负责印，
@@ -583,7 +585,11 @@ export function renderMessages() {
             : "私语 · 只给 " + m.audience.map(id => escapeHtml(charNameOf(id))).join("、")}</div>`
         : "");
     const spkKey = speakerKeyOf(m);
-    const spkStyle = spkKey ? ` style="--spk-h:${speakerHueOf(spkKey)}"` : "";
+    const customColor = spkKey ? getSpkColors()[spkKey] : "";
+    const spkStyle = !spkKey ? ""
+      : (customColor
+        ? ` style="--spk-c:${escapeHtml(String(customColor))}"`
+        : ` style="--spk-h:${speakerHueOf(spkKey)}"`);
     return `<div class="message ${m.role}" data-id="${m.id}"${spkStyle}>
       ${avaHtml(m)}
       <div class="msg-col">
@@ -652,6 +658,16 @@ export function renderMessages() {
     el.querySelector('[data-act="regen"]')?.addEventListener("click", () => regenerateFrom(id));
     el.querySelector('[data-act="vprev"]')?.addEventListener("click", () => switchVariant(id, -1));
     el.querySelector('[data-act="vnext"]')?.addEventListener("click", () => switchVariant(id, 1));
+    el.querySelector('[data-act="spkcolor"]')?.addEventListener("click", () => {
+      const m = findMessage(id);
+      const key = m ? speakerKeyOf(m) : "";
+      if (!key) return;
+      const input = document.getElementById("spk-color-input");
+      if (!input) return;
+      input.value = getSpkColors()[key] || "#e08a3c";
+      input.onchange = () => { saveSpkColor(key, input.value); renderMessages(); };
+      input.click();
+    });
   });
 
   dom.messagesContainer.scrollTop = dom.messagesContainer.scrollHeight;

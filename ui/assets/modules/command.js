@@ -13,6 +13,7 @@
 import { openDrawer, closeDrawer } from "./shell.js";
 import { openBgModal } from "./appearance.js";
 import { openDisplayModal } from "./display.js";
+import { state } from "./state.js";
 
 /** 面板里的一条去处。 */
 const ITEMS = [
@@ -30,6 +31,15 @@ const ITEMS = [
   { id: "add-illus",   label: "补一张场景图", sub: "给当前这一场",  alias: "illustration butu scene", run: clickBySelector('[data-act="illustrate"]', "#more-menu") },
   { id: "display",     label: "文字与字体", sub: "字号 · 正文衬线",   alias: "display font ziti wenzi size daxiao", run: () => openDisplayModal() },
   { id: "bg",          label: "背景",       sub: "换一张底图",    alias: "background beijing bg", run: () => openBgModal() },
+  { id: "library",     label: "角色库",       sub: "全部角色 · 搜索 / 标签 / 翻页", alias: "library jueseku role all", run: () => import("./library.js").then(m => m.openLibrary()) },
+  { id: "userprofile", label: "用户人设",     sub: "全局 · 名字 / 人设 / 头像",   alias: "user persona renshе zhi touxiang", run: () => import("./user-profile.js").then(m => m.openUserProfile()) },
+  { id: "models",      label: "模型分选",     sub: "按用途覆盖",                  alias: "models moxing fenxuan", run: () => import("./models.js").then(m => m.openModels()) },
+  { id: "memory",      label: "记忆面板",     sub: "短期轮数 / 总结字数",         alias: "memory jiyi", run: () => import("./memory.js").then(m => m.openMemory()) },
+  { id: "tts",         label: "语音朗读",     sub: "引擎 / 声音表",               alias: "tts yuyin langdu", run: () => import("./tts.js").then(m => m.openTts()) },
+  { id: "image",       label: "出图引擎",     sub: "宿主供应商 / ComfyUI",        alias: "image chutu engine", run: () => import("./image.js").then(m => m.openImage()) },
+  { id: "scene",       label: "场景插图设置", sub: "三个开关",                    alias: "scene changjing inset", run: () => import("./scene.js").then(m => m.openScene()) },
+  { id: "import-char", label: "导入角色卡",   sub: ".json / ST 卡",               alias: "import daoru char", run: () => document.getElementById("file-input")?.click() },
+  { id: "new-conv",    label: "新建对话",     sub: "挑角色开一场",                alias: "new xinduihua conv", run: () => import("./chat.js").then(m => m.createConversation()) },
   { id: "reload",      label: "刷新界面",   sub: "改了配置之后",   alias: "reload shuaxin refresh", run: clickBySelector("#reload-link", "#app-more-menu") }
 ];
 
@@ -96,7 +106,7 @@ function renderList() {
   const list = $("cmd-list");
   if (!list) return;
   if (filtered.length === 0) {
-    list.innerHTML = '<div class="cmd-empty">没有这一条。<br>左轨上那些 + 对话 / 文字与字体 / 背景 / 刷新界面都可搜。</div>';
+    list.innerHTML = '<div class="cmd-empty">没有这一条。<br>面板能搜：入口、角色（开聊）、对话（打开）、设置弹窗。</div>';
     return;
   }
   list.innerHTML = filtered.map((it, i) =>
@@ -119,6 +129,36 @@ function paintCursor() {
   });
 }
 
+/**
+ * 动态条目：角色与对话。
+ *
+ * 面板从「找面板」长成「找任何东西」——搜角色名直接开聊，搜对话标题直接打开。
+ * 数据用 state 里现成的（init 时已拉），不为面板单独跑请求。
+ */
+function dynamicItems() {
+  const out = [];
+  for (const c of (state.charList || []).slice(0, 60)) {
+    out.push({
+      id: `char:${c.id}`,
+      label: c.name || "（未命名）",
+      sub: "角色 · 开聊",
+      alias: "char kaichiao juese",
+      run: () => import("./shell.js").then(m => m.startNewConversation(c.id))
+    });
+  }
+  for (const cv of (state.convList || []).slice(0, 20)) {
+    out.push({
+      id: `conv:${cv.id}`,
+      label: cv.title || "（无标题）",
+      sub: "对话 · 打开",
+      alias: "conv duihua open",
+      run: () => import("./chat.js").then(m => m.openConversation(cv.id))
+    });
+  }
+  return out;
+}
+function allItems() { return [...ITEMS, ...dynamicItems()]; }
+
 function runItem(i) {
   const it = filtered[i];
   closePalette();
@@ -129,7 +169,7 @@ function runItem(i) {
 export function openPalette() {
   const m = $("cmd-modal");
   if (!m) return;
-  filtered = ITEMS;
+  filtered = allItems();
   cursor = 0;
   const input = $("cmd-input");
   if (input) input.value = "";
@@ -158,7 +198,7 @@ export function bindCommand() {
   const input = $("cmd-input");
   input?.addEventListener("input", () => {
     const q = input.value.trim();
-    filtered = ITEMS.filter(it => matches(it, q));
+    filtered = allItems().filter(it => matches(it, q));
     cursor = 0;
     renderList();
   });

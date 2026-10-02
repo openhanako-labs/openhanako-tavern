@@ -17,6 +17,7 @@
 const SCALE_KEY = "eleckoi:text-scale";
 const FONT_KEY = "eleckoi:body-font";
 const SPK_TEXT_KEY = "eleckoi:spk-text";
+const SPK_COLORS_KEY = "eleckoi:spk-colors";
 
 // :root 里 6 档的设计基准（characters.css）。动 :root 时这里必须跟着改。
 const FS_BASE = { "2xs": 10.5, xs: 11, sm: 12, md: 13, lg: 15, xl: 20 };
@@ -86,6 +87,21 @@ function saveSpkText(v) {
   try { localStorage.setItem(SPK_TEXT_KEY, v ? "1" : "0"); } catch { /* 同上 */ }
 }
 
+/** 说话人自定义色：{ speakerKey: "#rrggbb" }。chat.js 渲染时读，显示面板可一键清。 */
+export function getSpkColors() {
+  try { return JSON.parse(localStorage.getItem(SPK_COLORS_KEY) || "{}") || {}; } catch { return {}; }
+}
+export function saveSpkColor(key, color) {
+  try {
+    const map = getSpkColors();
+    map[String(key)] = String(color);
+    localStorage.setItem(SPK_COLORS_KEY, JSON.stringify(map));
+  } catch { /* 同上 */ }
+}
+function clearSpkColors() {
+  try { localStorage.removeItem(SPK_COLORS_KEY); } catch { /* ignore */ }
+}
+
 /** 打开面板时把控件回填成当前值。 */
 function renderModal() {
   const scale = readScale();
@@ -137,6 +153,11 @@ export function bindDisplay() {
   $("display-spk-text")?.addEventListener("change", () => {
     saveSpkText($("display-spk-text").checked);
     applyDisplay();
+  });
+
+  $("display-spk-clear")?.addEventListener("click", () => {
+    clearSpkColors();
+    import("./chat.js").then(m => m.renderMessages()).catch(() => {});
   });
 
   $("display-reset")?.addEventListener("click", () => {
