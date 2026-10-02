@@ -25,6 +25,21 @@ function charNameOf(id) {
   return hit?.name || "（角色已删除）";
 }
 
+// ── 说话人区分色（群友需求：说话人一眼可辨）──
+// 色相按 speakerId 稳定哈希到 7 档池；饱和度/亮度钉死在 CSS（--spk-c）。
+// 同一角色全场同色；色板与纪律见 docs/spec-ui-tokens.md「说话人色板」。
+const SPEAKER_HUES = [18, 42, 96, 152, 205, 262, 320];
+function speakerHueOf(key) {
+  const s = String(key || "");
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return SPEAKER_HUES[h % SPEAKER_HUES.length];
+}
+function speakerKeyOf(m) {
+  if (m.role === "user") return "user";
+  return m.speakerId || state.currentCharacter?.id || m.role;
+}
+
 /**
  * 头像格里的那一个字。
  *
@@ -558,7 +573,7 @@ export function renderMessages() {
             ? "私语 · 谁都没给"
             : "私语 · 只给 " + m.audience.map(id => escapeHtml(charNameOf(id))).join("、")}</div>`
         : "");
-    return `<div class="message ${m.role}" data-id="${m.id}">
+    return `<div class="message ${m.role}" data-id="${m.id}" style="--spk-h:${speakerHueOf(speakerKeyOf(m))}">
       ${avaHtml(m)}
       <div class="msg-col">
         ${spk}
@@ -849,6 +864,11 @@ export async function sendMessageStream(content) {
       if (assistantMsgEl) return;
       assistantMsgEl = document.createElement("div");
       assistantMsgEl.className = "message assistant";
+      // 与静态渲染同构：说话人色相也带上——重绘前的那几秒也要有区分色
+      assistantMsgEl.style.setProperty("--spk-h", String(speakerHueOf(speakerKeyOf({
+        role: "assistant",
+        speakerId: state.speakerId || state.currentConv?.characterId
+      }))));
       /*
        * 与静态渲染同构：头像 + 列。
        * 不同构的代价是可见的——流式结束时 acceptSavedMessage 会整场重画，

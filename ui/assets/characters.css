@@ -1293,6 +1293,25 @@ h1 {
 }
 .up-avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
 
+/* ── 说话人区分色（2026-10-02，群友需求：说话人一眼可辨）──
+   色相由 JS 按 speakerId 稳定哈希注入行上的 --spk-h；
+   饱和度/亮度钉死在暖纸区间（色板见 docs/spec-ui-tokens.md 说话人色板）。 */
+.message { --spk-c: hsl(var(--spk-h, 24), 38%, 46%); }
+.message .msg-speaker { color: var(--spk-c); }
+.message .msg-ava { position: relative; }
+.message .msg-ava-uimg { overflow: hidden; }
+.message .msg-ava::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--spk-c) 30%, transparent);
+  pointer-events: none;
+}
+.message.assistant .bubble { box-shadow: inset 2px 0 0 color-mix(in srgb, var(--spk-c) 26%, transparent); }
+/* 正文染色是开关（显示面板），默认关：满屏彩字会盖过暖纸底 */
+:root.spk-text-on .message .bubble { color: var(--spk-c); }
+
 /* ── Footer ───────────────────────────────────────── */
 
 footer { margin-top: 28px; text-align: center; padding: 14px 0; }

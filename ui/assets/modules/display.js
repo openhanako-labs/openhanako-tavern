@@ -16,6 +16,7 @@
 
 const SCALE_KEY = "eleckoi:text-scale";
 const FONT_KEY = "eleckoi:body-font";
+const SPK_TEXT_KEY = "eleckoi:spk-text";
 
 // :root 里 6 档的设计基准（characters.css）。动 :root 时这里必须跟着改。
 const FS_BASE = { "2xs": 10.5, xs: 11, sm: 12, md: 13, lg: 15, xl: 20 };
@@ -68,6 +69,8 @@ export function applyDisplay() {
   const stack = BODY_FONTS[readFont()];
   if (!stack) root.removeProperty("--serif");
   else root.setProperty("--serif", stack);
+  // 说话人正文染色：一个类开关，默认关（名字/头像环/左线恒开，不受它管）
+  document.documentElement.classList.toggle("spk-text-on", readSpkText());
 }
 
 function saveScale(v) {
@@ -75,6 +78,12 @@ function saveScale(v) {
 }
 function saveFont(v) {
   try { localStorage.setItem(FONT_KEY, v); } catch { /* 同上 */ }
+}
+function readSpkText() {
+  try { return localStorage.getItem(SPK_TEXT_KEY) === "1"; } catch { return false; }
+}
+function saveSpkText(v) {
+  try { localStorage.setItem(SPK_TEXT_KEY, v ? "1" : "0"); } catch { /* 同上 */ }
 }
 
 /** 打开面板时把控件回填成当前值。 */
@@ -86,6 +95,8 @@ function renderModal() {
   if (val) val.textContent = `${scale}%`;
   const font = $("display-font");
   if (font) font.value = readFont();
+  const spk = $("display-spk-text");
+  if (spk) spk.checked = readSpkText();
 }
 
 export function openDisplayModal() {
@@ -123,10 +134,16 @@ export function bindDisplay() {
     applyDisplay();
   });
 
+  $("display-spk-text")?.addEventListener("change", () => {
+    saveSpkText($("display-spk-text").checked);
+    applyDisplay();
+  });
+
   $("display-reset")?.addEventListener("click", () => {
     try {
       localStorage.removeItem(SCALE_KEY);
       localStorage.removeItem(FONT_KEY);
+      localStorage.removeItem(SPK_TEXT_KEY);
     } catch { /* ignore */ }
     renderModal();
     applyDisplay();
