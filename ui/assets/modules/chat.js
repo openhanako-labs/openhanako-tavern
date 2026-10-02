@@ -50,6 +50,31 @@ function lastAssistantIdOf() {
 }
 
 /**
+ * 卡片自带的变量协议块（<UpdateVariable>/<Analysis>/<JSONPatch>）。
+ *
+ * 夜航船的变量账是另一套协议，这些标签没人处理——裸奍在正文里像排错日志。
+ * 渲染时整块折成 <details>：内容不丢（想看仍能展开），正文不再被淹没。
+ * 是否真按 patch 应用变量，是「要不要兼容酒馆脚本协议」的产品决定，另议。
+ */
+const PROTO_RE = /<UpdateVariable>([\s\S]*?)(?:<\/UpdateVariable>|$)/gi;
+export function extractProtocolBlocks(content) {
+  const blocks = [];
+  const text = String(content ?? "").replace(PROTO_RE, (_, inner) => {
+    blocks.push(inner.trim());
+    return "";
+  });
+  return { text, blocks };
+}
+function renderProtoDetails(blocks) {
+  if (!blocks.length) return "";
+  return blocks.map(b => `
+    <details class="proto-block">
+      <summary>变量指令 · 卡片协议（${b.length} 字，已折叠）</summary>
+      <pre>${escapeHtml(b)}</pre>
+    </details>`).join("");
+}
+
+/**
  * 头像格里的那一个字。
  *
  * 样张 v4 用「头像 + 说话人 + 直排正文」取代气泡——而头像**不是图片**，
@@ -550,10 +575,12 @@ export function renderMessages() {
       const card = renderStoryCard(m.story, { hasVarDetail: hasVarDiff });
       const rest = String(m.story.plainRemainder || "").trim();
       body = card + (rest ? `<div class="sc-rest">${renderAssistantBody(expand(rest))}</div>` : "");
+    } else if (m.role === "assistant") {
+      // 卡片协议块先抽出折叠，再走正文渲染——否则标签裸奍
+      const { text: protoClean, blocks } = extractProtocolBlocks(m.content);
+      body = renderAssistantBody(expand(protoClean)) + renderProtoDetails(blocks);
     } else {
-      body = m.role === "assistant"
-        ? renderAssistantBody(expand(m.content))
-        : escapeHtml(expand(m.content));
+      body = escapeHtml(expand(m.content));
     }
     // 说话人色相/自定义色：先于 acts 计算——🎨 按钮在 acts 里引用 spkKey，
     // 放在后面就是 TDZ，开对话直接炸（2026-10-02 热修）。

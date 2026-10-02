@@ -81,7 +81,8 @@ function saveFont(v) {
   try { localStorage.setItem(FONT_KEY, v); } catch { /* 同上 */ }
 }
 function readSpkText() {
-  try { return localStorage.getItem(SPK_TEXT_KEY) === "1"; } catch { return false; }
+  // 默认开：用户对「回复该染色」是有期待的（真机反馈两提）；嫌花可关
+  try { const v = localStorage.getItem(SPK_TEXT_KEY); return v === null ? true : v === "1"; } catch { return true; }
 }
 function saveSpkText(v) {
   try { localStorage.setItem(SPK_TEXT_KEY, v ? "1" : "0"); } catch { /* 同上 */ }

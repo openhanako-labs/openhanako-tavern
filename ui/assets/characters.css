@@ -1308,8 +1308,18 @@ h1 {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--spk-c) 30%, transparent);
   pointer-events: none;
 }
-/* 正文染色是开关（显示面板），默认关；system 行（旁白提示）不属于任何人，豁免 */
+/* 正文染色默认开；system 行（旁白提示）不属于任何人，豁免 */
 :root.spk-text-on .message:not(.system) .bubble { color: var(--spk-c); }
+/* 卡片变量协议块：折叠展示，不参与染色 */
+.proto-block {
+  margin: 6px 0;
+  border: 1px dashed var(--border-strong);
+  border-radius: 7px;
+  font-size: var(--fs-xs);
+  color: var(--fg-muted);
+}
+.proto-block summary { cursor: pointer; padding: 4px 8px; }
+.proto-block pre { margin: 0; padding: 8px; white-space: pre-wrap; word-break: break-all; border-top: 1px dashed var(--border); }
 /* 换一版的变体切换器 */
 .vsw { display: inline-flex; align-items: center; gap: 2px; }
 .vsw-n { font-size: var(--fs-2xs); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
