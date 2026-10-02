@@ -98,13 +98,15 @@ export function renderToolGroups(groups) {
   const totalTools = tools.length;
   const onTools = tools.filter(t => !offGroups.has(t.group)).length;
   if (dom.toolsCountEl) {
-    dom.toolsCountEl.textContent = `${arr.length} 组 · ${onTools}/${totalTools} 启用`;
+    // 自加工具组也是一张组卡，计数要算上——否则写着「5 组」，下面排着六张卡
+    const unclaimed = byGroup.has("") ? 1 : 0;
+    dom.toolsCountEl.textContent = `${arr.length + unclaimed} 组 · ${onTools}/${totalTools} 启用`;
   }
 
   el.innerHTML = arr.map(g => renderGroupCard(g, byGroup.get(g.id) || [], offGroups.has(g.id))).join("")
     + (byGroup.has("") ? renderUnclaimed(byGroup.get("") || [], tools) : "");
 
-  // 折叠：点组头展开/收起（默认展开）
+  // 折叠：点组头展开/收起（默认折叠，组头本身就是摘要：组名 + N 个 + 开关）
   el.querySelectorAll(".tool-group-card").forEach(card => {
     card.querySelector(".tool-group-hd")?.addEventListener("click", (e) => {
       // 点在开关上不算折叠
@@ -139,9 +141,9 @@ export function renderToolGroups(groups) {
 }
 
 function renderGroupCard(g, tools, isOff) {
-  const open = !isOff;  // 关了的组默认折叠，开着的展开
+  // 组默认折叠：工具名是展开后才需要的东西，平镇在一屏里是把导航淹了
   const count = tools.length;
-  return `<div class="tool-group-card${isOff ? " is-off" : ""}${open ? " is-open" : ""}" data-id="${escapeHtml(g.id)}">
+  return `<div class="tool-group-card${isOff ? " is-off" : ""}" data-id="${escapeHtml(g.id)}">
     <div class="tool-group-hd">
       <span class="tg-arrow">▸</span>
       <span class="tg-name">${escapeHtml(g.name || g.id)}</span>
@@ -161,7 +163,7 @@ function renderGroupCard(g, tools, isOff) {
  */
 function renderUnclaimed(tools, allTools) {
   if (tools.length === 0) return "";
-  return `<div class="tool-group-card is-open is-unclaimed" data-id="_unclaimed">
+  return `<div class="tool-group-card is-unclaimed" data-id="_unclaimed">
     <div class="tool-group-hd">
       <span class="tg-arrow">▸</span>
       <span class="tg-name">自加工具</span>
