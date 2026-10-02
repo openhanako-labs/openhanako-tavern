@@ -555,6 +555,14 @@ export function renderMessages() {
         ? renderAssistantBody(expand(m.content))
         : escapeHtml(expand(m.content));
     }
+    // 说话人色相/自定义色：先于 acts 计算——🎨 按钮在 acts 里引用 spkKey，
+    // 放在后面就是 TDZ，开对话直接炸（2026-10-02 热修）。
+    const spkKey = speakerKeyOf(m);
+    const customColor = spkKey ? getSpkColors()[spkKey] : "";
+    const spkStyle = !spkKey ? ""
+      : (customColor
+        ? ` style="--spk-c:${escapeHtml(String(customColor))}"`
+        : ` style="--spk-h:${speakerHueOf(spkKey)}"`);
     const acts = `<div class="msg-acts">
         <button class="mini" data-act="copy" data-id="${m.id}" title="复制">复制</button>
         <button class="mini" data-act="speak" data-id="${m.id}" title="读出来">朗读</button>
@@ -584,12 +592,7 @@ export function renderMessages() {
             ? "私语 · 谁都没给"
             : "私语 · 只给 " + m.audience.map(id => escapeHtml(charNameOf(id))).join("、")}</div>`
         : "");
-    const spkKey = speakerKeyOf(m);
-    const customColor = spkKey ? getSpkColors()[spkKey] : "";
-    const spkStyle = !spkKey ? ""
-      : (customColor
-        ? ` style="--spk-c:${escapeHtml(String(customColor))}"`
-        : ` style="--spk-h:${speakerHueOf(spkKey)}"`);
+    // （spkKey/customColor/spkStyle 已上移到 acts 之前）
     return `<div class="message ${m.role}" data-id="${m.id}"${spkStyle}>
       ${avaHtml(m)}
       <div class="msg-col">
