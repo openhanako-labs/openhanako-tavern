@@ -224,6 +224,8 @@ export async function openDrawer(name, opts = {}) {
 
 export function closeDrawer() {
   for (const node of Object.values(DRAWERS)) node?.classList.add("hidden");
+  // 专注模式随抽屉关闭收回——下次打开是常规宽度，不搞「记得上次是全屏」的惊喜
+  document.getElementById("drawer-settings")?.classList.remove("drawer-fullscreen");
   openDrawerName = null;
   syncTabs();
   document.querySelector("main")?.classList.remove("ctx-open");

@@ -1502,7 +1502,12 @@ export function renderUsageBar() {
   // 有对话但还没生成过 → 显示「—」：说不知道，比不显示诚实。
   if (genMetaOff() || !state.currentConv) { bar.classList.add("hidden"); return; }
 
-  const u = state.lastUsage;
+  // 会话里最后一条带 usage 的回复——换一版/重生（非流式）与刷新后没有流式事件，
+  // 读数从库里那条兑底，不然真生成过也显示「—」。
+  const lastWithUsage = (state.currentConv.messages || [])
+    .filter(m => m.role === "assistant" && m.usage)
+    .pop();
+  const u = state.lastUsage || lastWithUsage?.usage || null;
   const prompt = u?.prompt_tokens ?? u?.input_tokens ?? null;
   const cached = u?.cache_read_input_tokens ?? u?.prompt_tokens_details?.cached_tokens ?? 0;
 

@@ -242,6 +242,9 @@ document.getElementById("app-open-library")?.addEventListener("click", async () 
   const m = await import("./library.js");
   m.openLibrary();
 });
+document.getElementById("settings-fullscreen")?.addEventListener("click", () => {
+  document.getElementById("drawer-settings")?.classList.toggle("drawer-fullscreen");
+});
 document.getElementById("open-memory-settings")?.addEventListener("click", async () => {
   const m = await import("./memory.js");
   await m.openMemory();

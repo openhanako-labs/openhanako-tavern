@@ -1347,6 +1347,15 @@ h1 {
 .lib-pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; }
 .lib-page { font-size: var(--fs-sm); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 
+/* 设定库「专注模式」：条目多时把抽屉铺满视口（⤢ 切换，关抽屉收回） */
+#drawer-settings.drawer-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  width: auto;
+  max-width: none;
+}
+
 /* ── Footer ───────────────────────────────────────── */
 
 footer { margin-top: 28px; text-align: center; padding: 14px 0; }
