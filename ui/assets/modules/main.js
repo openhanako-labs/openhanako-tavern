@@ -13,7 +13,7 @@ import { loadConversations, renderConversations, openConversation, renderMessage
 import { bindChatMore, syncChatMore } from "./chat-more.js";
 import { bindShell, toggleSidebar } from "./shell.js";
 import { bindPresets } from "./presets.js";
-import { loadSettings, renderSettings, openSettingEditor, saveSetting, deleteSetting, toggleSetting, handleSettingAction, importSTWorldBook, exportSTWorldBook, handleSTImport, updateTriggerFields, runAutocategorize, view as settingsView } from "./settings.js";
+import { loadSettings, renderSettings, openSettingEditor, saveSetting, deleteSetting, toggleSetting, handleSettingAction, importSTWorldBook, exportSTWorldBook, handleSTImport, updateTriggerFields, runAutocategorize, bindSettingsControls, view as settingsView } from "./settings.js";
 import { openCatsModal } from "./settings-cats.js";
 import { newDirector, saveDirector, closeDirectorEditor, deleteEditingDirector, simulateDirector } from "./director.js";
 import { renderVariables, openVariableEditor, saveVariable, deleteVariable, handleVariableAction, testReplace } from "./variables.js";
@@ -85,25 +85,12 @@ document.getElementById("send-btn")?.addEventListener("click", sendMessage);
 document.getElementById("stop-btn")?.addEventListener("click", stopGeneration);
 document.getElementById("gen-meta-close")?.addEventListener("click", hideUsageBar);
 
-// 设定库 / 变量 / 预设 / 工具 / 迁移（抽屉在 shell.js 里开，这里绑它们内部按钮）
-document.getElementById("create-setting-btn")?.addEventListener("click", () => openSettingEditor(null));
-document.getElementById("import-st-btn")?.addEventListener("click", importSTWorldBook);
-document.getElementById("export-st-btn")?.addEventListener("click", exportSTWorldBook);
+// 设定库控件：统一走 settings.js 的 bindSettingsControls（单一来源）。
+// 此前 main.js 手工绑了一部分、settings.js 里另有一份 bindSettingsControls
+// 却从未被调用——结果 create-book-btn 和 settings-scope 两个控件根本没绑上
+//（月曦夜：「新建书点了没反应」；scope 切换也一直是死的）。
+bindSettingsControls();
 
-// 设定库 2.0：自动分类 / 类目管理 / 分组维度 / 排序。
-// 新控件直接绑，保持主链可读性；
-// 它们与 settings-cats.js 之间的状态同步靠 CustomEvent，不走 import。
-document.getElementById("autocategorize-btn")?.addEventListener("click", runAutocategorize);
-document.getElementById("settings-cats-btn")?.addEventListener("click", openCatsModal);
-document.getElementById("settings-groupby")?.addEventListener("change", (e) => {
-  settingsView.groupBy = e.target.value;
-  settingsView.page = 1;
-  renderSettings(state.settingList);
-});
-document.getElementById("settings-sortby")?.addEventListener("change", (e) => {
-  settingsView.sortBy = e.target.value;
-  renderSettings(state.settingList);
-});
 document.getElementById("create-director-btn")?.addEventListener("click", newDirector);
 // 「刷新」按钮已按基准 5 拿掉：打开抽屉与增删改后本来就会自动重载，
 // 它从来不需要被按（docs/spec-drawer.md 第三节·毛病 1）。
@@ -122,9 +109,8 @@ document.getElementById("dir-pacing-chips")?.addEventListener("click", (e) => {
   chip.classList.toggle("on");
 });
 
-// 设定库搜索：改一个字就重渲染。106 条重排不卡，不必防抖。
-// 重渲染用的是内存里那份 state.settingList——不重拉网络。
-document.getElementById("settings-search")?.addEventListener("input", () => renderSettings(state.settingList));
+// 设定库搜索已在 bindSettingsControls 里统一绑定（改一个字就重渲染，
+// 用内存里那份 state.settingList，不重拉网络）。
 
 document.getElementById("create-variable-btn")?.addEventListener("click", () => openVariableEditor(null));
 // 「刷新」按钮已按基准 5 拿掉（同上）。

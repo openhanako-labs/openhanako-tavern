@@ -123,6 +123,41 @@ function charNameOf(id) {
 }
 
 /**
+ * 填「书」筛选下拉（2026-10-02）。
+ *
+ * 月曦夜点出的缺口：设定库能折叠了，但**没有入口去看别的卡的书**——
+ * 默认「本场相关」把别的卡都收起来了，于是看起来「库里只剩这本」。
+ * 这个下拉把所有书列出来（含别的卡的），选一本就只看它。
+ *
+ * 保值重填：重拉书表后不能把用户选的那本丢掉（loadSettings 每次都跑）。
+ */
+function populateBookFilter() {
+  const sel = document.getElementById("settings-book");
+  if (!sel) return;
+  const books = Array.isArray(view.books) ? view.books : [];
+  const cur = view.bookFilter || "";
+  // 本卡的书排前，其余按名字——与书视图的排序口径一致
+  const cid = _bookCurrentCharId();
+  const sorted = books.slice().sort((a, b) => {
+    const am = String(a.characterId || "") === cid ? 0 : 1;
+    const bm = String(b.characterId || "") === cid ? 0 : 1;
+    if (am !== bm) return am - bm;
+    return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hans-CN");
+  });
+  sel.innerHTML = `<option value="">书：全部</option>` +
+    sorted.map(b => {
+      const scope = b.characterId
+        ? (String(b.characterId) === cid ? "本卡" : charNameOf(b.characterId))
+        : "全局";
+      const n = Number(b.entryCount) || 0;
+      return `<option value="${escapeHtml(String(b.id))}">${escapeHtml(String(b.name || "（未命名书）"))} · ${escapeHtml(scope)} · ${n} 条</option>`;
+    }).join("");
+  // 选中的那本还在就保住；不在（被删了）就退回「全部」
+  sel.value = books.some(b => String(b.id) === cur) ? cur : "";
+  if (sel.value !== cur) view.bookFilter = sel.value;
+}
+
+/**
  * 视图状态。放在模块级，不放 state——它属于设定库抽屉本身，
  * 不需要跨模块共享。state.settingList 才是共享的。
  */
@@ -138,6 +173,9 @@ const view = {
    * 不需要跨模块共享。
    */
   scopeFilter: "relevant",
+  // 按书过滤（2026-10-02）：空 = 不限；书 id = 只看这本（含别的卡的书）。
+  // 选了书就不受 scopeFilter 限制——「看另一张卡的书」和「只看本场」是两个正交意图。
+  bookFilter: "",
   // 书表：loadSettings 时与条目一起拉。book 视图直接用它渲染，
   // 其余视图（trigger / category / priority）不依赖它。
   books: [],
@@ -176,6 +214,7 @@ export async function loadSettings() {
     } catch {
       view.books = [];
     }
+    populateBookFilter();
 
     const res = await apiFetch("settings");
     const list = extractArray(res);
@@ -222,9 +261,15 @@ export function renderSettings(list) {
    * 背景：106 条里「其他」占 104 条——它们属于别的卡，默认也该让位。
    * 徽章和排序只是把归属标出来，过滤才真正把别的卡的条目收起来。
    * 定义照计划 B2：relevant = isOwn || !ownerOf（没选角色时退化成全局）。
+   *
+   * 按书过滤（2026-10-02）：选了具体的书就不再受 scope 限制——
+   * 「看另一张卡的书」和「只看本场」是两个正交的意图，选书优先。
    */
   const scopeOk = (s) => isOwn(s) || !ownerOf(s);
-  const pool = view.scopeFilter === "all" ? raw : raw.filter(scopeOk);
+  const bookOk = (s) => !view.bookFilter || String(s.bookId || "") === view.bookFilter;
+  const pool = view.bookFilter
+    ? raw.filter(bookOk)
+    : (view.scopeFilter === "all" ? raw : raw.filter(scopeOk));
 
   // 搜索（在过滤后的池子里搜——「全部」才搜得到别的卡的条目）
   const q = String(document.getElementById("settings-search")?.value || "").trim().toLowerCase();
@@ -247,6 +292,11 @@ export function renderSettings(list) {
   if (dom.settingsCountEl) {
     if (raw.length === 0) dom.settingsCountEl.textContent = "";
     else if (q) dom.settingsCountEl.textContent = `命中 ${shown.length} / 共 ${pool.length} 条`;
+    // 选了具体的书：报书名与条数——这时「全局 N」是干扰信息（看的不是全局）
+    else if (view.bookFilter) {
+      const bk = (view.books || []).find(b => String(b.id) === String(view.bookFilter));
+      dom.settingsCountEl.textContent = `《${bk?.name || "这本书"}》 ${pool.length} 条`;
+    }
     else if (view.scopeFilter === "all") dom.settingsCountEl.textContent = curId
       ? `${raw.length} 条 · 本卡 ${ownN} · 全局 ${globN} · 其他 ${otherN}`
       : `${raw.length} 条 · 全局 ${globN}`;
@@ -274,12 +324,19 @@ export function renderSettings(list) {
     /*
      * relevant 为 0：本卡没绑条目、也没有全局——不是「空」，是「不在本场」。
      * 库里还有别的卡的条目，文案要把路指出来（切「全部」）。
+     * 选了具体的书却是 0 条：那是「这本书是空的」，不是归属问题——两种空分开说。
      */
-    dom.settingsListEl.innerHTML = emptyHtml({
-      ico: "▤",
-      title: "本卡未绑定世界书条目",
-      desc: "本场相关（本卡 + 全局）是 0 条。库里还有别的卡的条目——把上面切到「全部」看。"
-    });
+    dom.settingsListEl.innerHTML = view.bookFilter
+      ? emptyHtml({
+          ico: "▤",
+          title: "这本书里没有条目",
+          desc: "选中的书是空的。新建条目时在表单里把「所属书」选成它，或从 ST 世界书导入。"
+        })
+      : emptyHtml({
+          ico: "▤",
+          title: "本卡未绑定世界书条目",
+          desc: "本场相关（本卡 + 全局）是 0 条。库里还有别的卡的条目——把上面切到「全部」，或在「书」下拉里选一本。"
+        });
     dom.settingsListEl.nextElementSibling?.classList.add("hidden");
     renderPager(0, 1);
     return;
@@ -369,7 +426,10 @@ function _bookCurrentCharId() { return currentCharacterId(); }
 /** 书视图渲染。不分页；直接扫全量条目。 */
 function renderBookView(shown) {
   const curId = _bookCurrentCharId();
-  const scopeAll = view.scopeFilter === "all";
+  // 选了具体的书时，scope 不再参与筛选——「看另一张卡的书」和「只看本场」
+  // 是两个正交的意图，选书优先（不这么做就会：pool 筛对了 85 条，
+  // 书视图却把这本跳过，只剩两本「空书」在屏幕上）。
+  const scopeAll = view.scopeFilter === "all" || !!view.bookFilter;
 
   // 本卡相关的书（本卡 + 全局）
   const relatedBookIds = new Set();
@@ -392,15 +452,17 @@ function renderBookView(shown) {
     else orphan.items.push(s);           // 空 bookId
   }
 
-  // scope 过滤：relevant 只留本卡 + 全局；all 展示全部
+  // scope 过滤：relevant 只留本卡 + 全局；all / 选了书 展示全部
   const sections = [];
   for (const [bookId, { book, items }] of byBook) {
+    // 选了具体的书：只留这一本（其余书一条不画，不拿「空书」充数）
+    if (view.bookFilter && bookId !== String(view.bookFilter)) continue;
     if (!scopeAll && !relatedBookIds.has(bookId)) continue;
     sections.push({ book, items, orphan: false });
   }
   // 未归档也遵 scope：它不属于任何卡，归全局，relevant 下就保留
   // （因为池过滤已经处理了 charId 属于别卡的条目，能到这里的都是本卡/全局）
-  if (orphan.items.length > 0) {
+  if (orphan.items.length > 0 && !view.bookFilter) {
     sections.push({ book: orphan.book, items: orphan.items, orphan: true });
   }
 
@@ -1396,12 +1458,12 @@ export async function runAutocategorize() {
 export function bindSettingsControls() {
   const s = dom;
   s.createSettingBtn?.addEventListener("click", () => openSettingEditor(null));
-  // 新建世界书（2026-10-01）：收进⋯菜单，不进工具条主位
+  // 新建世界书（2026-10-01）：工具条主位（月曦夜反馈藏在 ⋯ 里找不到）
   document.getElementById("create-book-btn")?.addEventListener("click", () => createBook());
   s.importStBtn?.addEventListener("click", () => importSTWorldBook());
   s.exportStBtn?.addEventListener("click", () => exportSTWorldBook());
-  s.autocategorizeBtn?.addEventListener("click", () => runAutocategorize());
-  s.catsBtn?.addEventListener("click", () => openCatsModal());
+  s.settingsAutocategorizeBtn?.addEventListener("click", () => runAutocategorize());
+  s.settingsCatsBtn?.addEventListener("click", () => openCatsModal());
   s.settingsSearch?.addEventListener("input", () => {
     view.page = 1;
     renderSettings(state.settingList || []);
@@ -1418,6 +1480,13 @@ export function bindSettingsControls() {
   // 归属过滤（2026-10-01）：本场相关 / 全部。切了回首页——过滤后的第一屏应当是「最靠前的」
   s.settingsScope?.addEventListener("change", () => {
     view.scopeFilter = s.settingsScope.value === "all" ? "all" : "relevant";
+    view.page = 1;
+    renderSettings(state.settingList || []);
+  });
+  // 按书过滤（2026-10-02）：选一本具体的书（含别的卡的书）——
+  // 月曦夜：「缺少搜索选择别的世界书」。选了书就不再受 scope 限制。
+  document.getElementById("settings-book")?.addEventListener("change", (e) => {
+    view.bookFilter = e.target.value || "";
     view.page = 1;
     renderSettings(state.settingList || []);
   });
