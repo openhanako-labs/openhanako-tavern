@@ -8241,3 +8241,18 @@ html.has-app-bg .shell {
 /* 书内子分类折叠箭头 + 子节折叠态 */
 #settings-list .book-section .section-head { cursor: pointer; }
 #settings-list .book-section .section-car { font-size: 11px; color: var(--fg-muted); margin-right: 2px; }
+
+/* ── 文字与字体（display-modal）───────────────────────
+   预览块故意不用任何新变量：它继承 documentElement 上的
+   inline --fs-*/--serif，跟正文气泡（.message.assistant .bubble）
+   完全同一条渲染路径——预览即所得，改滑块/字体时这里跟着变。 */
+.display-preview {
+  font-family: var(--serif);
+  font-size: var(--fs-lg);
+  line-height: 1.9;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+}

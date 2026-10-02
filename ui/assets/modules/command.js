@@ -12,6 +12,7 @@
 
 import { openDrawer, closeDrawer } from "./shell.js";
 import { openBgModal } from "./appearance.js";
+import { openDisplayModal } from "./display.js";
 
 /** 面板里的一条去处。 */
 const ITEMS = [
@@ -27,6 +28,7 @@ const ITEMS = [
   { id: "tools",       label: "工具",       sub: "右栏面板 · 设一次就不动", alias: "tools gongju", run: () => openDrawer("tools") },
   { id: "migration",   label: "迁移",       sub: "右栏面板 · 设一次就不动", alias: "migration qianyi", run: () => openDrawer("migration") },
   { id: "add-illus",   label: "补一张场景图", sub: "给当前这一场",  alias: "illustration butu scene", run: clickBySelector('[data-act="illustrate"]', "#more-menu") },
+  { id: "display",     label: "文字与字体", sub: "字号 · 正文衬线",   alias: "display font ziti wenzi size daxiao", run: () => openDisplayModal() },
   { id: "bg",          label: "背景",       sub: "换一张底图",    alias: "background beijing bg", run: () => openBgModal() },
   { id: "reload",      label: "刷新界面",   sub: "改了配置之后",   alias: "reload shuaxin refresh", run: clickBySelector("#reload-link", "#app-more-menu") }
 ];
@@ -79,6 +81,7 @@ function matches(item, q) {
 function iconFor(id) {
   const sel = id === "chat" ? "#topnav-chat .ri"
     : id === "bg" ? "#bg-open .ri"
+      : id === "display" ? "#display-open .ri"
       : `#apprail .rail-item[data-drawer="${id}"] .ri`;
   const src = document.querySelector(sel);
   if (src && src.tagName.toLowerCase() === "svg") {
@@ -93,7 +96,7 @@ function renderList() {
   const list = $("cmd-list");
   if (!list) return;
   if (filtered.length === 0) {
-    list.innerHTML = '<div class="cmd-empty">没有这一条。<br>左轨上那九个 + 对话 / 背景 / 刷新界面都可搜。</div>';
+    list.innerHTML = '<div class="cmd-empty">没有这一条。<br>左轨上那些 + 对话 / 文字与字体 / 背景 / 刷新界面都可搜。</div>';
     return;
   }
   list.innerHTML = filtered.map((it, i) =>

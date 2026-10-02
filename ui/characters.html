@@ -95,6 +95,15 @@
       <span>设置</span>
     </button>
     <div class="rail-grow"></div>
+    <!--
+      「文字」与「背景」是一对视觉偏好，并排站在配置组尾部：
+      都是一颗直达模态的 rail-item，都不属于任何抽屉。
+      字号/字体走 localStorage（见 display.js 头注），不进后端。
+    -->
+    <button type="button" class="rail-item" id="display-open" title="文字与字体">
+      <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13 7.4 3h1.2L13 13"/><path d="M4.9 9.3h6.2"/></svg>
+      <span>文字</span>
+    </button>
     <button type="button" class="rail-item" id="bg-open" title="自定义背景">
       <svg class="ri" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="3.4" width="10.8" height="9.2" rx="1.4"/><path d="M2.6 10.4 6 7.6l3 2.4 2.2-1.8 2.2 1.8"/></svg>
       <span>背景</span>
@@ -2296,6 +2305,53 @@
         <span class="hint" style="margin:0">这里就是朋友圈的统一流——所有角色的动态都在这条时间线里</span>
       </div>
       <div id="social-feed-list" style="margin-top:12px;display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 文字与字体 ──────────────────────────────── -->
+<!--
+  阅读偏好，即时生效即时存，没有「保存」：✕ 关闭就是完成，页脚只留恢复默认。
+  预览块不用任何新变量——它继承 documentElement 的 inline --fs-*/--serif，
+  跟正文气泡同一条渲染路径，预览即所得。
+-->
+<div id="display-modal" class="modal hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>文字与字体</h2>
+      <button id="display-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <section class="tts-sec">
+        <h3>文本大小</h3>
+        <div class="bg-row">
+          <label for="display-size">缩放</label>
+          <input type="range" id="display-size" min="90" max="130" step="5" value="100">
+          <span class="bg-val" id="display-size-val">100%</span>
+        </div>
+        <p class="hint">整个界面按比例缩放，100% 是设计基准。叙事正文的行高是倍数，放大不会挤行。</p>
+      </section>
+      <section class="tts-sec">
+        <h3>正文字体</h3>
+        <div class="field">
+          <label for="display-font">角色说的话用什么字</label>
+          <select id="display-font">
+            <option value="">默认 · 衬线（思源宋 / 宋体）</option>
+            <option value="song">宋体 SimSun</option>
+            <option value="kai">楷体 KaiTi</option>
+            <option value="sans">黑体 · 无衬线</option>
+          </select>
+        </div>
+        <p class="hint">只改叙事正文；界面按钮、菜单保持不变——谁在说话靠这两族字区分。</p>
+      </section>
+      <section class="tts-sec">
+        <h3>预览</h3>
+        <div id="display-preview" class="display-preview">夜色落在城墙上，她把披风拢了拢。风从垛口灌进来，带着铁和雪的味道。“还守着？”他问。“守着。”她说。</div>
+      </section>
+    </div>
+    <div class="modal-footer">
+      <button id="display-reset" class="btn" type="button">恢复默认</button>
+      <span class="sp"></span>
     </div>
   </div>
 </div>

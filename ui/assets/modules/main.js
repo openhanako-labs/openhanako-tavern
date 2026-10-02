@@ -29,6 +29,7 @@ import { bindScene } from "./scene.js";
 import { bindModels } from "./models.js";
 import { bindIllustrate } from "./illustrate.js";
 import { bindAppearance, loadAppearance } from "./appearance.js";
+import { bindDisplay, loadDisplay } from "./display.js";
 import { bindSocial } from "./social.js";
 import { bindBattle } from "./battle.js";
 import { bindSimulation } from "./simulation.js";
@@ -288,6 +289,10 @@ export async function init() {
   // 留代码不挂事件。等后续想法。
   bindSocial();
   loadAppearance().catch((e) => console.error("[bg] 初始化失败:", e));
+
+  // 文字与字体：绑事件 + 把上次的选择落回界面（localStorage，拉不到按默认跑）
+  bindDisplay();
+  loadDisplay();
 
   // 命令面板（Ctrl/⌘K）与“滚到底”
   bindCommand();
