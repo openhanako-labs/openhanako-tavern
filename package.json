@@ -1,0 +1,11 @@
+{
+  "name": "eleckoi-tavern",
+  "version": "1.0.0",
+  "description": "Hana v2 上的角色扮演伴侣 App —— 角色卡、对话、设定库、变量、提示词预设、图鉴、插图、语音，以及基于倒排索引 + 预算账本的记忆召回。",
+  "main": "index.js",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "msedge-tts": "^2.0.8"
+  }
+}

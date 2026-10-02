@@ -727,11 +727,17 @@ export async function openTts() {
     await ensureProviders();
     const box = $("tts-providers");
     if (box) {
-      box.innerHTML = providers.map((p) => `
+      box.innerHTML = providers.map((p) => {
+        // 三根管子三句话：卡片上的副标题要一眼分清“这根要填什么”（或者什么都不用填）
+        const sub = p.id === "azure" ? "要 key 与 region"
+          : p.id === "edge" ? "免费 · 零配置"
+          : "填 baseUrl 即可";
+        return `
         <button type="button" class="tts-prov${p.id === current?.provider ? " on" : ""}" data-id="${escapeHtml(p.id)}">
           <span class="tts-prov-name">${escapeHtml(p.label)}</span>
-          <span class="tts-prov-sub">${escapeHtml(p.id === "azure" ? "要 key 与 region" : "填 baseUrl 即可")}</span>
-        </button>`).join("");
+          <span class="tts-prov-sub">${escapeHtml(sub)}</span>
+        </button>`;
+      }).join("");
       box.querySelectorAll(".tts-prov").forEach((el) => {
         el.addEventListener("click", () => {
           current = { ...(current || {}), provider: el.dataset.id };
