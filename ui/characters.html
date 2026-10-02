@@ -683,8 +683,11 @@
       -->
       <div class="drawer-toolbar">
         <button id="preset-new-btn" class="btn btn-primary btn-sm">+ 新建</button>
+        <button id="preset-import-btn" class="btn btn-sm">导入</button>
         <button id="preset-duplicate-btn" class="btn btn-sm">复制当前</button>
       </div>
+      <!-- 预设导入专用 file input：不借 #file-input——那是角色卡导入器的，借道会被接手 -->
+      <input type="file" id="preset-import-input" accept=".json,application/json" class="hidden">
       <div class="drawer-body">
         <div id="preset-note" class="drawer-note"></div>
         <div id="preset-count" class="preset-count"></div>

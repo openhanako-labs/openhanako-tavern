@@ -319,25 +319,37 @@ function renderPresetBlocks(preset) {
 
   const readonly = !!state._peReadonly;
 
+  // 监听器不堆叠：每轮渲染换一个 AbortController，旧 signal 整体作废后再重挂。
+  // （#pe-blocks 是持久容器，innerHTML 只换子节点——过去每次渲染都 addEventListener，
+  //   监听按渲染次数叠层，toggle/expand 出现「点一下等于点 N 下」的奇偶失灵。）
+  wrap._peAC?.abort();
+  const ac = new AbortController();
+  wrap._peAC = ac;
+
+  // 第二参传的是块的 position 真值（"system"/"in_chat"），不是显示键——
+  // addBlock / moveBlockInZone 拿它跟 position 字段比对，传显示键会全体失配：
+  // 加块不可见、上下移静默返回（2026-10-02 修，2d06a05 引入）。
   wrap.innerHTML = `
-    ${renderZone(sys, "sys", "系统区", "拼成一段 systemPrompt", readonly)}
-    ${renderZone(chat, "chat", "插话区", "按 depth 插消息流", readonly)}
+    ${renderZone(sys, "system", "系统区", "拼成一段 systemPrompt", readonly)}
+    ${renderZone(chat, "in_chat", "插话区", "按 depth 插消息流", readonly)}
   `;
 
-  bindBlockEvents(wrap, preset, blocks, readonly);
+  bindBlockEvents(wrap, preset, blocks, readonly, ac.signal);
 }
 
 function renderZone(blocks, zone, title, subtitle, readonly) {
   const isEmpty = blocks.length === 0;
+  // zone 是 position 真值；样式类才是显示键，两套不能混用（.pe-zone.sys/.chat）。
+  const cls = zone === "in_chat" ? "chat" : "sys";
   const note = isEmpty
-    ? (zone === "chat"
+    ? (zone === "in_chat"
         ? "这里的块<b>不进 systemPrompt</b>，而是按 depth 插在对话倒数第 N 层——<b>插在第几层，模型看到它的位置就不同</b>。现在这套一个都没用。"
         : "这里没有块。系统区的块会按顺序拼进 systemPrompt。")
     : "";
   const rows = blocks.map(b => renderRow(b, zone, readonly)).join("");
-  const addLabel = zone === "chat" ? "＋ 加一个插话块" : "＋ 加一个系统块";
+  const addLabel = zone === "in_chat" ? "＋ 加一个插话块" : "＋ 加一个系统块";
   return `
-    <div class="pe-zone ${zone}" data-zone="${zone}">
+    <div class="pe-zone ${cls}" data-zone="${zone}">
       <div class="pe-zone-hd">
         <span class="zt">${title}</span>
         <span class="zr">${subtitle} · ${blocks.length} 块</span>
@@ -406,7 +418,7 @@ function renderRow(b, zone, readonly) {
 // 块事件绑定（委托）
 // ══════════════════════════════════════════════════════════════════
 
-function bindBlockEvents(wrap, preset, blocks, readonly) {
+function bindBlockEvents(wrap, preset, blocks, readonly, signal) {
   // 只读模式下所有交互都禁用——但块详情仍然显示（用户要看结构）。
   if (readonly) return;
 
@@ -446,7 +458,7 @@ function bindBlockEvents(wrap, preset, blocks, readonly) {
       renderPresetBlocks(preset);
       updateLivePreview();
     }
-  });
+  }, { signal });
 
   wrap.addEventListener("change", (e) => {
     const el = e.target.closest("[data-act]");
@@ -472,7 +484,7 @@ function bindBlockEvents(wrap, preset, blocks, readonly) {
       if (tag) tag.textContent = `depth ${b.depth}`;
       updateLivePreview();
     }
-  });
+  }, { signal });
 
   // 内容输入（literal）：防抖重算，避免每个字符都刷一次
   let debounce = null;
@@ -484,7 +496,7 @@ function bindBlockEvents(wrap, preset, blocks, readonly) {
     b.content = el.value;
     clearTimeout(debounce);
     debounce = setTimeout(() => updateLivePreview(), 200);
-  });
+  }, { signal });
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -708,11 +720,74 @@ export async function previewPreset(id) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// 导入（POST /presets/import 一直是幂等的，此前只是没有出口）
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * 吃一个 .json 文件：裸数组、{ presets: [...] }、或单套预设对象都认。
+ *
+ * 后端按 id 幂等覆盖（同 id = update，否则 create），并强制 builtin:false，
+ * 所以同一个文件反复导不会堆出一串，也动不了内置预设。非法条目被
+ * validatePreset 逐条拒绝并进结果明细，不拖垮整批。
+ */
+export async function importPresetFile(files) {
+  const file = files?.[0];
+  if (!file) return;
+
+  let list;
+  try {
+    const parsed = JSON.parse(await file.text());
+    if (Array.isArray(parsed)) list = parsed;
+    else if (Array.isArray(parsed?.presets)) list = parsed.presets;
+    else if (parsed && typeof parsed === "object" && parsed.name) list = [parsed];
+    else throw new Error("文件里没有预设——要 [ … ]、{ presets: [ … ] } 或单套预设对象");
+  } catch (e) {
+    toast(`导入失败: ${e?.message || e}`, "error");
+    return;
+  }
+  if (list.length === 0) { toast("文件里没有预设", "error"); return; }
+
+  const names = list.map(p => p?.name || "（未命名）").slice(0, 5).join("、");
+  const more = list.length > 5 ? ` …等 ${list.length} 套` : "";
+  const go = await confirmDialog({
+    title: `导入 ${list.length} 套预设？`,
+    body: `${names}${more}\n\n同 ID 的已有预设会被覆盖；内置预设不受影响。`
+  });
+  if (!go) return;
+
+  try {
+    const res = extractArray(await apiFetch("presets/import", {
+      method: "POST",
+      body: JSON.stringify({ presets: list })
+    }));
+    const okList = res.filter(r => r.ok);
+    const bad = res.filter(r => !r.ok);
+    const created = okList.filter(r => r.mode === "create").length;
+    const updated = okList.filter(r => r.mode === "update").length;
+    if (okList.length > 0) toast(`导入完成：新增 ${created}、覆盖 ${updated}`, "success");
+    if (bad.length > 0) {
+      const first = bad[0]?.name || "第一条";
+      toast(`${bad.length} 套没导进来（先从「${first}」看起）：${bad[0]?.error || "未知错误"}`, "error");
+    }
+    await loadPresets();
+  } catch (e) {
+    toast(`导入失败: ${friendlyError(e)}`, "error");
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
 // 装配
 // ══════════════════════════════════════════════════════════════════
 
 export function bindPresets() {
   document.getElementById("preset-new-btn")?.addEventListener("click", () => openPresetEditor(null));
+  document.getElementById("preset-import-btn")?.addEventListener("click", () => {
+    document.getElementById("preset-import-input")?.click();
+  });
+  document.getElementById("preset-import-input")?.addEventListener("change", (e) => {
+    if (e.target.files?.length) importPresetFile(e.target.files);
+    e.target.value = ""; // 清掉，同一个文件才能连续导第二次
+  });
   document.getElementById("preset-duplicate-btn")?.addEventListener("click", async () => {
     const list = state.presetList || [];
     const first = list.find(p => !p.builtin) || list[0];

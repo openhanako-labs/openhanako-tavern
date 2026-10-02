@@ -153,7 +153,7 @@ function doRename(name) {
   if (!row) return;
   const nameEl = row.querySelector(".cats-name");
   const oldText = name;
-  nameEl.replaceWith(() => {}); // 先移除原 span
+  nameEl.remove(); // 先移除原 span（replaceWith 不收函数，旧写法是空操作——旧名字和新输入框会同时挂在行里）
   const input = document.createElement("input");
   input.type = "text";
   input.value = oldText;
@@ -247,6 +247,7 @@ async function doDelete(name) {
 // ─── 分类浮层选择器（点小徽章时）───────────────────────
 
 let pickerPopEl = null;
+let pickerOutsideEl = null; // 浮层的 document 级 mousedown 监听——closePickerPop 摘 DOM 时连它一起摘
 
 /**
  * 在给定卡片右上角弹一个 dropdown，选一个类目。
@@ -281,8 +282,13 @@ export function openCategoryPicker(anchorEl, id) {
   pop.style.left = Math.max(8, rect.right - 160) + "px";
   pop.style.top = rect.top + "px";
 
-  const close = () => { pop.remove(); pickerPopEl = null; document.removeEventListener("mousedown", outside); };
+  const close = () => {
+    pop.remove(); pickerPopEl = null;
+    document.removeEventListener("mousedown", outside);
+    if (pickerOutsideEl === outside) pickerOutsideEl = null;
+  };
   const outside = (e) => { if (!pop.contains(e.target)) close(); };
+  pickerOutsideEl = outside;
   setTimeout(() => document.addEventListener("mousedown", outside), 0);
 
   pop.querySelector('[data-act="cancel"]')?.addEventListener("click", close);
@@ -296,6 +302,12 @@ export function openCategoryPicker(anchorEl, id) {
 
 function closePickerPop() {
   if (pickerPopEl) { pickerPopEl.remove(); pickerPopEl = null; }
+  // 只摘 DOM 不摘监听：document 上的 mousedown 会一路涨（旧闭包持有已移除的 pop），
+  // 每开关一次浮层就漏一个孤儿出去。
+  if (pickerOutsideEl) {
+    document.removeEventListener("mousedown", pickerOutsideEl);
+    pickerOutsideEl = null;
+  }
 }
 
 async function applySingleCategory(id, cat) {
