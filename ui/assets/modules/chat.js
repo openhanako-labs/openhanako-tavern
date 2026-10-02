@@ -1543,8 +1543,11 @@ export function renderUsageBar() {
     .filter(m => m.role === "assistant" && m.usage)
     .pop();
   const u = state.lastUsage || lastWithUsage?.usage || null;
-  const prompt = u?.prompt_tokens ?? u?.input_tokens ?? null;
-  const cached = u?.cache_read_input_tokens ?? u?.prompt_tokens_details?.cached_tokens ?? 0;
+  // 两系字段都认——Anthropic: cache_read_input_tokens；OpenAI 兼容: prompt_tokens_details.cached_tokens；
+  // 以及宿主契约的规范形状：{ input, output, cacheRead, cacheWrite, total }（app-contract models.d.ts）。
+  // 过去只认前两系，宿主形状永远映射不上——缓存读数结构性归零。
+  const prompt = u?.prompt_tokens ?? u?.input_tokens ?? u?.input ?? null;
+  const cached = u?.cache_read_input_tokens ?? u?.prompt_tokens_details?.cached_tokens ?? u?.cacheRead ?? 0;
 
   const tEl = document.getElementById("gen-tokens");
   const cEl = document.getElementById("gen-cache");
