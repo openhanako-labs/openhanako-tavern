@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "id": "eleckoi-tavern",
   "name": "夜航船 · Night Ferry Tavern",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "夜航船 · Night Ferry Tavern · Hana v2 App — 角色卡、对话、LLM、变量、设定库、提示词预设、工具、迁移。",
   "entry": "index.js",
   "icon": "assets/icon.png",

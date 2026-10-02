@@ -38,6 +38,22 @@ try {
   git archive --format=zip -o $Out $Ref
   if ($LASTEXITCODE -ne 0) { throw "git archive 失败（$Ref）" }
 
+  # node_modules 不在 git 里，但运行依赖必须随包走——
+  # 不然装上后 Edge 朗读直接报“依赖没装上”，用户还得手动 npm install。
+  # 存在就全量塞入（目前全量才 ~3MB，比让用户装一次依赖便宜得多）。
+  $nm = Join-Path $root "node_modules"
+  if (Test-Path $nm) {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $z = [System.IO.Compression.ZipFile]::Open($Out, "Update")
+    try {
+      Get-ChildItem $nm -Recurse -File | ForEach-Object {
+        $rel = "node_modules/" + $_.FullName.Substring($nm.Length + 1).Replace("\", "/")
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($z, $_.FullName, $rel) | Out-Null
+      }
+    } finally { $z.Dispose() }
+    Write-Host "已塞入 node_modules（运行依赖随包走）"
+  }
+
   $f = Get-Item $Out
   Write-Host ("已打包: " + $f.FullName)
   Write-Host ("版本: " + $ver + " · 来源: " + $Ref + " · 大小: " + [math]::Round($f.Length / 1KB, 1) + " KB")
@@ -56,6 +72,8 @@ try {
   foreach ($p in @("manifest.json", "index.js", "assets/icon.png", "assets/cover.png", "ui/characters.html", "ui/rail.html")) {
     if ($names -notcontains $p) { $missing += $p }
   }
+  # 运行依赖：msedge-tts 不在包里，Edge 朗读就是死路
+  if ($names -notcontains "node_modules/msedge-tts/package.json") { $missing += "node_modules/msedge-tts/package.json" }
   if ($missing) { throw ("manifest 引用但包里缺：" + ($missing -join "、")) }
 
   Write-Host "自检通过：manifest 在根、无 .git/host-backups/docs、引用文件齐全"
