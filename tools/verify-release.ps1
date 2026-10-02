@@ -1,7 +1,16 @@
 # 验证安装包可被宿主接受：stage → 检查 → discard（不真的装）
-param([string]$Zip = "W:\Games\Hanako\Work\已分类\工作\代码\eleckoi-tavern-v0.3.0.zip")
+# 默认不指定 -Zip 时自动取 App 目录旁边最新的 eleckoi-tavern-v*.zip——
+# 过去写死 v0.3.0 的旧路径，验的是历史包不是刚打的包（2026-10-02 修）。
+param([string]$Zip = "")
 
 $ErrorActionPreference = "Stop"
+$root = Split-Path $PSScriptRoot -Parent
+if (-not $Zip) {
+  $latest = Get-ChildItem (Split-Path $root -Parent) -Filter "eleckoi-tavern-v*.zip" -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  if (-not $latest) { throw "没找到安装包——先跑 tools\export-release.ps1，或显式传 -Zip" }
+  $Zip = $latest.FullName
+}
 $info = Get-Content "$env:USERPROFILE\.hanako\server-info.json" -Raw | ConvertFrom-Json
 $port = $info.port; if (-not $port) { $port = $info.network.actualPort }
 $base = "http://127.0.0.1:" + $port
