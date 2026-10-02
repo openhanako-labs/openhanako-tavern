@@ -14,6 +14,7 @@ import { bindChatMore, syncChatMore } from "./chat-more.js";
 import { bindShell, toggleSidebar } from "./shell.js";
 import { bindPresets } from "./presets.js";
 import { loadUserProfile, bindUserProfile } from "./user-profile.js";
+import { bindLibrary } from "./library.js";
 import { loadSettings, renderSettings, openSettingEditor, saveSetting, deleteSetting, toggleSetting, handleSettingAction, importSTWorldBook, exportSTWorldBook, handleSTImport, updateTriggerFields, runAutocategorize, bindSettingsControls, view as settingsView } from "./settings.js";
 import { openCatsModal } from "./settings-cats.js";
 import { newDirector, saveDirector, closeDirectorEditor, deleteEditingDirector, simulateDirector } from "./director.js";
@@ -237,6 +238,10 @@ document.getElementById("open-userprofile-settings")?.addEventListener("click", 
   await m.loadUserProfile();
   m.openUserProfile();
 });
+document.getElementById("app-open-library")?.addEventListener("click", async () => {
+  const m = await import("./library.js");
+  m.openLibrary();
+});
 document.getElementById("open-memory-settings")?.addEventListener("click", async () => {
   const m = await import("./memory.js");
   await m.openMemory();
@@ -303,6 +308,9 @@ export async function init() {
   // 全局用户人设：绑弹窗 + 拉数据（对话里用户侧头像/称呼读它）
   bindUserProfile();
   loadUserProfile().catch(() => {});
+
+  // 角色库：绑定弹窗内部控件
+  bindLibrary();
 
   // 命令面板（Ctrl/⌘K）与“滚到底”
   bindCommand();

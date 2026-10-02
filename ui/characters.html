@@ -242,6 +242,7 @@
     <button data-drawer="director"><span class="mi">▦</span>剧情公式</button>
               <button data-drawer="board"><span class="mi">▤</span>世界</button>
               <button data-drawer="variables"><span class="mi">◫</span>变量</button>
+              <button id="app-open-library"><span class="mi">👥</span>角色库</button>
               <button data-drawer="presets"><span class="mi">⌗</span>提示词预设</button>
               <button data-drawer="regex"><span class="mi">⁂</span>正则规则</button>
               <button data-drawer="gallery"><span class="mi">🖼</span>图库</button>
@@ -784,6 +785,29 @@
 </div><!-- /.shell -->
 
 <!-- ── 编辑弹窗（角色 / 设定 / 变量共用） ───────────── -->
+<!-- ── 角色库（全页网格）─── -->
+<!--
+  角色列表原本只有宿主 rail 一家，那是根窄柱——十几张能扫，上百张必须有一个
+  能搜索、能筛标签、能翻页的面子。数据口径与 rail 相同（GET characters?q=，
+  服务端筛文本）；标签与分页在本页做。入口：rail「全部 N 张」+ ⋯ 菜单。
+-->
+<div id="library-modal" class="modal hidden">
+  <div class="modal-content modal-fullscreen">
+    <div class="modal-header">
+      <h2>角色库 <span id="library-count" class="lib-count"></span></h2>
+      <button id="library-close" class="btn btn-ghost btn-sm">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="lib-toolbar">
+        <input type="search" id="library-search" placeholder="按名称 / 描述搜索…">
+        <div id="library-tags" class="lib-tags"></div>
+      </div>
+      <div id="library-grid" class="lib-grid"></div>
+      <div id="library-pager" class="lib-pager"></div>
+    </div>
+  </div>
+</div>
+
 <div id="modal" class="modal hidden">
   <div class="modal-content">
     <div class="modal-header">

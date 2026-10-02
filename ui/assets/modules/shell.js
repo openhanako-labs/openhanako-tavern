@@ -523,6 +523,12 @@ export function bindShell() {
 
   // ── 接收左栏（functionPanel）的导航意图 ──
   onNavigation(async (msg) => {
+    if (msg.t === "open-library") {
+      // 角色库：rail 的「全部 N 张」走这里，搜索词随行
+      const m = await import("./library.js");
+      await m.openLibrary(msg.q || "");
+      return;
+    }
     if (msg.t === "open-conv" && msg.id) {
       // 可见出口：这条链从 rail 跨 iframe 过来，断在哪一跳都要露脸——
       // 之前无 catch，链路断在半路时页面一声不吭，最难查

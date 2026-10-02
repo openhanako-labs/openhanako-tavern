@@ -93,6 +93,8 @@ async function loadConvs() {
 
 // ── 渲染 ──────────────────────────────────────────────
 
+const RAIL_CHAR_CAP = 15; // 窄柱扫得过来的上限；超出部分交给「查看全部」进角色库
+
 function renderChars() {
   const el = $("chars");
   if (!el) return;
@@ -100,7 +102,8 @@ function renderChars() {
     el.innerHTML = `<div class="empty">${query ? "没匹配的角色" : "还没有角色卡"}</div>`;
     return;
   }
-  el.innerHTML = chars.map(c => {
+  const shown = chars.slice(0, RAIL_CHAR_CAP);
+  el.innerHTML = shown.map(c => {
     // 点这张卡会发生什么，**点之前就要能看出来**：
     // 1 场 → 直接续；0 场 → 开新场；多条 → 弹选择器（openChar 的事）。
     // 不写这一行，三种行为在界面上长得一模一样。convs 已按 updatedAt 倒序，取 [0] 就是最近那场。
@@ -117,9 +120,17 @@ function renderChars() {
       </div>
     </div>
   `;
-  }).join("");
+  }).join("")
+    + (chars.length > RAIL_CHAR_CAP
+      ? `<div class="item lib-more" role="button" tabindex="0" title="打开角色库">
+          <div class="bd">
+            <div class="nm">查看全部 ${chars.length} 张 →</div>
+            <div class="mt">搜索、筛标签、翻页</div>
+          </div>
+        </div>`
+      : "");
   hydrateAvatars(el);
-  el.querySelectorAll(".item").forEach(item => {
+  el.querySelectorAll(".item[data-char]").forEach(item => {
     item.addEventListener("click", () => openChar(item.dataset.char));
     // 键盘与无障碍：role=button 必须可 Tab 可回车。
     // UIA 靠它拿 Invoke——裸 div 只有 text pattern，点击派发不到，
@@ -131,6 +142,15 @@ function renderChars() {
       }
     });
   });
+  // 「查看全部」：带上当前搜索词进角色库（rail 只封顶，不吞结果）
+  const more = el.querySelector(".lib-more");
+  if (more) {
+    const go = () => nav({ t: "open-library", q: query });
+    more.addEventListener("click", go);
+    more.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); }
+    });
+  }
 }
 
 function renderConvs() {

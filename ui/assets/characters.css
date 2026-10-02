@@ -1312,6 +1312,39 @@ h1 {
 /* 正文染色是开关（显示面板），默认关：满屏彩字会盖过暖纸底 */
 :root.spk-text-on .message .bubble { color: var(--spk-c); }
 
+/* ── 角色库（2026-10-02）── */
+.lib-count { font-size: var(--fs-sm); color: var(--fg-muted); font-weight: 400; margin-left: 6px; }
+.lib-toolbar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.lib-toolbar input[type="search"] {
+  width: 100%;
+  padding: 7px 11px;
+  font-family: inherit;
+  font-size: var(--fs-md);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--fg);
+}
+.lib-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.lib-tag {
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.lib-tag i { font-style: normal; opacity: .65; }
+.lib-tag:hover { border-color: var(--accent-line); color: var(--fg); }
+.lib-tag.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; align-items: start; }
+.lib-card { display: flex; flex-direction: column; }
+.lib-card .card-actions { margin-top: auto; }
+.lib-pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; }
+.lib-page { font-size: var(--fs-sm); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+
 /* ── Footer ───────────────────────────────────────── */
 
 footer { margin-top: 28px; text-align: center; padding: 14px 0; }
