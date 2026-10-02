@@ -1516,6 +1516,12 @@ export function hideUsageBar() {
   document.getElementById("gen-meta")?.classList.add("hidden");
 }
 
+/** 恢复读数条。过去 × 是永久记忆却没给恢复口——关了就找不回来（真机反馈）。 */
+export function showUsageBar() {
+  try { localStorage.removeItem(GEN_META_OFF_KEY); } catch { /* ignore */ }
+  renderUsageBar();
+}
+
 /**
  * 输入区上方的生成状态条：本轮 token 与缓存命中率。
  *

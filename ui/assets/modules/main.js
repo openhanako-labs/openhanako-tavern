@@ -242,6 +242,10 @@ document.getElementById("app-open-library")?.addEventListener("click", async () 
   const m = await import("./library.js");
   m.openLibrary();
 });
+document.getElementById("app-show-usage")?.addEventListener("click", async () => {
+  const m = await import("./chat.js");
+  m.showUsageBar();
+});
 document.getElementById("settings-fullscreen")?.addEventListener("click", () => {
   document.getElementById("drawer-settings")?.classList.toggle("drawer-fullscreen");
 });
